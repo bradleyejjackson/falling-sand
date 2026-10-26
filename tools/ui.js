@@ -26,12 +26,12 @@ cv.fire('pointerdown', at(160, 100)); cv.fire('pointerup', at(160, 100));
 p.run(1200);
 check('a seed dropped on painted dirt becomes a tree', g.trees.length >= 1, `${g.trees.length} trees`);
 
-for (const id of ['moistview', 'heatview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
+for (const id of ['moistview', 'heatview', 'windview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
 p.run(3);
 check('view toggles render without errors', true);
 
 p.els.save.fire('click'); const saved = p.store['sandfall.world'];
-check('save writes a 4-part world', saved && saved.split('|').length === 4, p.els.msg.textContent);
+check('save writes a 6-part world', saved && saved.split('|').length === 6, p.els.msg.textContent);
 const trees = g.trees.length; g.clear(); p.els.load.fire('click');
 check('load restores trees', g.trees.length === trees, `${g.trees.length}/${trees}; ${p.els.msg.textContent}`);
 p.els.export.fire('click'); const text = p.els.iotext.value;

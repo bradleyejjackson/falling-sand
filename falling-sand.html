@@ -65,13 +65,14 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <button class="btn" id="showchunks" aria-pressed="false">Chunks</button>
   <button class="btn" id="heatview" aria-pressed="false">Heat view</button>
   <button class="btn" id="moistview" aria-pressed="false">Moisture view</button>
+  <button class="btn" id="windview" aria-pressed="false">Wind view</button>
   <span class="msg" id="msg"></span>
 </div>
 <div class="io" id="io">
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Weather runs on temperature: warm lakes evaporate, vapour climbs and condenses into cloud in the cold upper air, clouds drift on a shifting wind and rain or snow from their undersides.</p>
+<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it.</p>
 
 <script>
 // ============================================================================
@@ -89,19 +90,20 @@ const Sim = (() => {
   // k: thermal conductivity 0..1.  cap: heat capacity (how slowly its own temperature moves).  t0: temperature when spawned.  hold: never cools below this while alive.
   // life: [min,max] ticks before decay (0 = immortal).  decay: what it becomes (array = random pick).
   // hi/lo: phase change when temperature crosses it → {at, to} (to may be 'explode').
+  // tension: surface tension, the chance a liquid refuses to step off on its own (drops bead, films don't creep).
   const EL = [];
-  // soil: the life value a freshly placed cell starts with when it has no lifetime (dirt's moisture and richness).
-  const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,k:0.2,cap:1,t0:20,hold:null,life:0,soil:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
+  // soil: the life value a freshly placed cell starts with when it has no lifetime (dirt's moisture and richness, brine's salt, acid's strength).
+  const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,tension:0,k:0.2,cap:1,t0:20,hold:null,life:0,soil:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
 
   const E     = def('Empty',    {kind:'static', k:0.05, rgb:[8,8,10], opaque:false});
   const SAND  = def('Sand',     {kind:'powder', density:1.6, k:0.2, rgb:[205,170,90], vary:30});
-  const WATER = def('Water',    {kind:'liquid', density:1.0, disperse:5, k:0.6, cap:3, rgb:[30,110,200], vary:30, opaque:false});
+  const WATER = def('Water',    {kind:'liquid', density:1.0, disperse:5, tension:0.995, k:0.6, cap:3, rgb:[30,110,200], vary:30, opaque:false});
   const STONE = def('Stone',    {kind:'static', k:0.15, rgb:[95,100,112], vary:25});
   const WOOD  = def('Wood',     {kind:'static', k:0.1, rgb:[100,62,32], vary:22});
   const OIL   = def('Oil',      {kind:'liquid', density:0.8, disperse:3, k:0.3, rgb:[70,58,36], vary:12, opaque:false});
   const FIRE  = def('Fire',     {kind:'gas', k:0.7, t0:700, hold:450, life:[40,80], rgb:[255,130,30], opaque:false, glow:1});
   const SMOKE = def('Smoke',    {kind:'gas', k:0.2, t0:120, life:[120,240], decay:E, rgb:[55,58,64], vary:18, opaque:false});
-  const ACID  = def('Acid',     {kind:'liquid', density:1.1, disperse:4, k:0.4, rgb:[130,240,60], vary:30, opaque:false, glow:0.15});
+  const ACID  = def('Acid',     {kind:'liquid', density:1.1, disperse:4, tension:0.98, soil:255, k:0.4, rgb:[130,240,60], vary:30, opaque:false, glow:0.15});
   const STEAM = def('Steam',    {kind:'gas', k:0.3, cap:14, t0:170, rgb:[165,180,195], vary:30, opaque:false});
   const EMBER = def('Ember',    {kind:'static', k:0.5, t0:650, hold:500, life:[180,320], decay:'burnout', rgb:[230,90,20], glow:0.8});
   const LAVA  = def('Lava',     {kind:'liquid', density:3.0, disperse:1, lazy:0.7, k:0.3, cap:25, t0:1300, rgb:[235,80,20], vary:40, glow:1});
@@ -110,10 +112,10 @@ const Sim = (() => {
   const SEED  = def('Seed',     {kind:'powder', density:0.9, k:0.1, life:[8,20], rgb:[150,120,60], vary:20});
   const PLANT = def('Plant',    {kind:'static', k:0.15, life:[8,20], rgb:[50,160,60], vary:40, opaque:false});
   const SALT  = def('Salt',     {kind:'powder', density:1.5, k:0.2, rgb:[235,235,240], vary:15});
-  const BRINE = def('Brine',    {kind:'liquid', density:1.2, disperse:4, k:0.6, rgb:[70,140,180], vary:20, opaque:false});
+  const BRINE = def('Brine',    {kind:'liquid', density:1.2, disperse:4, tension:0.995, soil:200, k:0.6, rgb:[70,140,180], vary:20, opaque:false});
   const GLASS = def('Glass',    {kind:'static', k:0.1, rgb:[140,190,200], vary:30, opaque:false});
   const GAS   = def('Gas',      {kind:'gas', k:0.2, rgb:[120,150,110], vary:20, opaque:false});
-  const CLOUD = def('Cloud',    {kind:'gas', k:0.15, cap:6, t0:10, life:[1200,2400], decay:WATER, rgb:[205,210,222], vary:25, opaque:false});
+  const CLOUD = def('Cloud',    {kind:'gas', k:0.15, cap:6, t0:10, rgb:[205,210,222], vary:25, opaque:false});
   const SNOW  = def('Snow',     {kind:'powder', density:0.5, lazy:0.5, k:0.2, t0:-6, rgb:[232,238,248], vary:12, opaque:false});
   const RUBBLE= def('Rubble',   {kind:'powder', density:2.4, k:0.15, rgb:[88,92,102], vary:30});
   const CHAR  = def('Charcoal', {kind:'static', k:0.12, rgb:[38,34,32], vary:16});
@@ -127,7 +129,7 @@ const Sim = (() => {
   const phase = (t,o) => Object.assign(EL[t],o);
   phase(WATER, {hi:{at:100,to:STEAM}, lo:{at:0,to:'freeze'}});   // snow if it is falling, ice if it is sitting
   phase(SNOW,  {hi:{at:2,to:WATER}});
-  phase(BRINE, {hi:{at:108,to:STEAM}, lo:{at:-20,to:ICE}});
+  phase(BRINE, {hi:{at:108,to:'boil'}, lo:{at:-20,to:ICE}});
   phase(ICE,   {hi:{at:40,to:WATER}});        // stable in ambient air; melts near anything burning
   phase(STEAM, {lo:{at:85,to:'condense'}});   // cloud under open sky, water in a cave
   phase(CLOUD, {hi:{at:120,to:STEAM}});
@@ -149,7 +151,15 @@ const Sim = (() => {
   phase(ROOT,  {hi:{at:300,to:EMBER}});
 
   const N = EL.length, AMB = 20;
-  const isLiquid = t => EL[t].kind==='liquid', isGas = t => EL[t].kind==='gas';
+  // flat per-type tables for the hot loops: kind code, heat capacity, hold floor, phase thresholds, and the pairwise conductance
+  const KIND = new Uint8Array(N), CAPT = new Float32Array(N), HOLDT = new Float32Array(N), HIAT = new Float32Array(N), LOAT = new Float32Array(N), KH = new Float32Array(N*N);
+  for (const e of EL){
+    KIND[e.id] = {static:0, powder:1, liquid:2, gas:3}[e.kind]; CAPT[e.id] = e.cap; HOLDT[e.id] = e.hold===null ? -Infinity : e.hold;
+    HIAT[e.id] = e.hi ? e.hi.at : Infinity; LOAT[e.id] = e.lo ? e.lo.at : -Infinity;
+    for (const f of EL) KH[e.id*N+f.id] = 2*e.k*f.k/(e.k+f.k)*0.24;   // harmonic mean: the poorer conductor limits the flow
+  }
+  const TENS = new Uint8Array(N); for (const e of EL) TENS[e.id] = e.tension>0 ? 1 : 0;   // wetting liquids cohere with each other
+  const isLiquid = t => KIND[t]===2, isGas = t => KIND[t]===3;
 
   // ---- chemical reactions (things temperature can't express) ---------------
   // react(A, B, prob, A', B') — A touches B in the 4-neighbourhood. null keeps a cell.
@@ -157,10 +167,13 @@ const Sim = (() => {
   const react = (a,b,p,na,nb) => { const k=a*N+b; (RX.get(k)||RX.set(k,[]).get(k)).push({p,na,nb}); };
   react(FIRE, WATER, 1.0, STEAM, null);        // instant quench
   react(FIRE, BRINE, 1.0, STEAM, null);
-  react(SALT, WATER, 0.15, E, BRINE);
   react(SEED, BRINE, 0.05, PLANT, E);
-  for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR,DIRT,LITTER,ROOT]) react(ACID, t, 0.08, [ACID,ACID,E], [E,SMOKE]);
   const has = new Uint8Array(N); for (const k of RX.keys()) has[(k/N)|0]=1;
+  // dissolution: salt dissolves into water as brine's salt content; acid eats these and is used up, and water dilutes it
+  const ACIDABLE = new Uint8Array(N); for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR,DIRT,LITTER,ROOT]) ACIDABLE[t]=1;
+  const SALT_UNIT = 128, SPENT = 24;                 // one salt grain's worth of salt; acid weaker than this is just water
+  // erosion: how readily running water picks up each loose material (dirt holds together better than sand)
+  const ERODE = new Float32Array(N); ERODE[SAND]=1; ERODE[DIRT]=0.4; ERODE[ASH]=1.2;
   // contact ignition: a flame licking fuel lights it faster than conduction alone would
   const FUEL = {[WOOD]:{p:0.02,to:EMBER},[TIP]:{p:0.03,to:EMBER},[OIL]:{p:0.35,to:FIRE},[PLANT]:{p:0.06,to:EMBER},[CHAR]:{p:0.01,to:EMBER},[SEED]:{p:0.1,to:FIRE},[GUNP]:{p:0.5,to:'explode',r:7},[GAS]:{p:0.5,to:'explode',r:3},[LITTER]:{p:0.12,to:FIRE},[ROOT]:{p:0.01,to:EMBER}};
   const SOURCE = new Set([FIRE,EMBER,LAVA]);
@@ -173,9 +186,16 @@ const Sim = (() => {
   const SEASONS = ['Spring','Summer','Autumn','Winter'], START = DAY*1.08;   // new worlds open on the second morning of spring
   const ROOT_INTO = new Set([DIRT,SAND,LITTER,ASH,WATER,SNOW]);   // what a root can push through
   const KEEP_LIFE = new Set([DIRT,WOOD,ROOT,SEED,ICE]);          // cells whose life value is state worth saving
+  const FLUID_LIFE = new Set([WATER,BRINE,ACID]);                // liquids whose life is state: sediment, salt, strength (saved separately)
+  // the air: vapour on a coarse grid of AC×AC cells, each row visited every AIRSLOW ticks; wind on the chunk grid, solved every WINDSLOW ticks.
+  // Vapour is counted in water cells. Water leaves a surface a sixteenth at a time (EVQ: each evaporation adds that much vapour and
+  // the cell itself goes with that chance), and a cloud cell is a tenth of a water cell (CQ), so water is conserved through the sky on average.
+  const AC = 4, AIRSLOW = 4, WINDSLOW = 4, S20 = 0.4, BG_RH = 0.55, EVQ = 1/16, CQ = 0.1, THERMAL = 80;   // how high a thermal can climb
+  const SAT = T => S20*Math.exp(0.065*(Math.min(T,150)-20));    // vapour a fully open coarse cell holds at T (doubles every ~11°)
 
   // ---- the grid --------------------------------------------------------------
   const CH = 16, G = 0.25, VMAX = 6;
+  const DX4 = [0,-1,1,0], DY4 = [-1,0,0,1];
   class Grid {
     constructor(W,H){
       this.W=W; this.H=H;
@@ -184,15 +204,26 @@ const Sim = (() => {
       this.temp=new Float32Array(n).fill(AMB); this.vx=new Float32Array(n); this.vy=new Float32Array(n);
       this.CW=Math.ceil(W/CH); this.CHh=Math.ceil(H/CH);
       this.dirty=new Uint8Array(this.CW*this.CHh); this.next=new Uint8Array(this.CW*this.CHh);
-      this.frame=0; this.wind=0.3;
-      this.skyY=(H*0.4)|0; this.cloudY=Math.max(16,this.skyY-100);      // where the air is cold enough for cloud
+      this.frame=0; this.wind=0.3; this.windHold=null;                   // windHold pins the prevailing wind (tests)
+      this.skyY=(H*0.4)|0; this.ambRow=new Float32Array(H);
       this.trees=[]; this.treeId=1; this.owner=new Uint16Array(n);       // tree entities and which tree owns a cell
-      this.bfsQ=new Int32Array(1300); this.bfsSeen=new Set();
+      this.bfsQ=new Int32Array(1300); this.bfsMark=new Int32Array(n); this.bfsStamp=0;
+      this.AW=Math.ceil(W/AC); this.AH=Math.ceil(H/AC); const na=this.AW*this.AH; this.sky=new Int16Array(this.AW);
+      this.hum=new Float32Array(na); this.cap=new Float32Array(na); this.airF=new Float32Array(na); this.airT=new Float32Array(na); this.chill=new Float32Array(na);
+      // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
+      const nw=this.CW*this.CHh;
+      this.u=new Float32Array(nw); this.v=new Float32Array(this.CW*(this.CHh+1)); this.pres=new Float32Array(nw);
+      this.uc=new Float32Array(nw); this.vc=new Float32Array(nw); this.wsolid=new Uint8Array(nw); this.wheat=new Float32Array(nw);
+      this.rain=0; this.precip=new Uint32Array(W);   // drops of rain or snow released, in all and per column (a rain gauge)
       this.clock=START; this.updateClimate();
-      this.resetTemp();
+      this.resetTemp(); this.initAir();
     }
     // air gets colder with altitude (lapse rate) and a little warmer deep underground
-    ambAt(y){ return (y<this.skyY ? 20-(this.skyY-y)*0.18 : Math.min(32, 20+(y-this.skyY)*0.05)) + this.climate; }
+    // (it stops cooling 140 rows up, so the top of a tall world isn't a cold lid that every bit of vapour condenses against)
+    ambAt(y){ return (y<this.skyY ? 20-Math.min(140,this.skyY-y)*0.18 : Math.min(32, 20+(y-this.skyY)*0.05)) + this.climate; }
+    ac(x,y){ return (y>>2)*this.AW+(x>>2); }                          // the coarse air cell holding (x,y)
+    wc(x,y){ return (y>>4)*this.CW+(x>>4); }                          // the wind cell holding (x,y)
+    rh(c){ return this.cap[c]>0 ? this.hum[c]/this.cap[c] : 1; }        // relative humidity
     resetTemp(){ for (let y=0;y<this.H;y++){ const a=this.ambAt(y); this.temp.fill(a, y*this.W, (y+1)*this.W); } }
     idx(x,y){ return y*this.W+x; }
     inb(x,y){ return x>=0&&x<this.W&&y>=0&&y<this.H; }
@@ -239,8 +270,10 @@ const Sim = (() => {
       this.wake(a%this.W,(a/this.W)|0); this.wake(b%this.W,(b/this.W)|0);
       if (SUPPORTS.has(T[b]) && !SUPPORTS.has(T[a])) this.unsettle(a%this.W,(a/this.W)|0);   // something load-bearing moved away
     }
-    clear(){ this.type.fill(0); this.life.fill(0); this.resetTemp(); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.wakeAll(); }
-    canSink(d,j){ const t=this.type[j]; return t===E || isGas(t) || (isLiquid(t) && EL[t].density<d); }
+    clear(){ this.type.fill(0); this.life.fill(0); this.resetTemp(); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll(); }
+    // density of the cell itself: muddy water, brine and acid get heavier with what they carry
+    dens(i,t){ return t===WATER ? 1+(this.life[i]&255)*0.002 : t===BRINE ? 1+this.life[i]*0.001 : t===ACID ? 1+this.life[i]*0.0004 : EL[t].density; }
+    canSink(d,j){ const t=this.type[j], k=KIND[t]; return t===E || k===3 || (k===2 && this.dens(j,t)<d-0.015); }
 
     explode(x,y,r){
       for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++){
@@ -259,19 +292,21 @@ const Sim = (() => {
 
     // ---- heat: diffusion, holds, phase changes ----
     stepHeat(x,y,i){
-      const t=this.type[i], el=EL[t], T=this.temp;
-      let v=T[i];
-      if (el.hold!==null && v<el.hold) v=el.hold;
+      const ty=this.type, t=ty[i], T=this.temp, W=this.W, row=t*N, h=HOLDT[t];
+      let v=T[i]; if (v<h) v=h;
       let d=0;
-      const nb=(j)=>{ const e=EL[this.type[j]]; d+=(T[j]-v)*(2*el.k*e.k/(el.k+e.k))*0.24; };   // harmonic mean: the poorer conductor limits the flow
-      if (x>0) nb(i-1); if (x<this.W-1) nb(i+1); if (y>0) nb(i-this.W); if (y<this.H-1) nb(i+this.W);
-      if (t===E) d+=(this.ambAt(y)-v)*0.03;                         // air bleeds heat toward the local ambient
-      d/=el.cap; v+=d; if (el.hold!==null && v<el.hold) v=el.hold;             // burning things stay hot while they burn
-      if (Math.abs(d)>0.05 || v!==T[i]){ T[i]=v; if (Math.abs(d)>0.3) this.wake(x,y); }
-      const ph = (el.hi && v>el.hi.at) ? el.hi : (el.lo && v<el.lo.at) ? el.lo : null;
-      if (!ph) return false;
+      if (x>0) d+=(T[i-1]-v)*KH[row+ty[i-1]];
+      if (x<W-1) d+=(T[i+1]-v)*KH[row+ty[i+1]];
+      if (y>0) d+=(T[i-W]-v)*KH[row+ty[i-W]];
+      if (y<this.H-1) d+=(T[i+W]-v)*KH[row+ty[i+W]];
+      if (t===E) d+=(this.ambRow[y]-v)*0.03;                        // air bleeds heat toward the local ambient
+      d/=CAPT[t]; v+=d; if (v<h) v=h;                               // burning things stay hot while they burn
+      T[i]=v; if (d>0.3 || d<-0.3) this.wake(x,y);
+      if (v<=HIAT[t] && v>=LOAT[t]) return false;
+      const el=EL[t], ph = v>HIAT[t] ? el.hi : el.lo;
       if (ph.to==='explode'){ this.explode(x,y,ph.r); return true; }
-      if (ph.to==='condense'){ this.set(i, this.openSky(x,y) ? CLOUD : WATER, v); return true; }
+      if (ph.to==='condense'){ if (this.openSky(x,y)){ this.set(i,E,v); this.hum[this.ac(x,y)]+=1; } else this.set(i,WATER,v); return true; }   // cooled steam joins the air's vapour; in a cave it drips
+      if (ph.to==='boil'){ const s=this.life[i]; this.set(i, R()<s/SALT_UNIT ? SALT : STEAM, v); if (this.type[i]===STEAM) T[i]=Math.max(v,130); return true; }   // boiling brine leaves its salt behind
       if (ph.to==='freeze'){ const b=y+1<this.H?this.type[this.idx(x,y+1)]:STONE; this.set(i, (b===E||isGas(b)||b===SNOW) ? SNOW : ICE, v); if (this.type[i]===ICE) this.life[i]=1; return true; }   // life 1 marks weather ice, which thaws in spring
       this.set(i, ph.to, v);
       if (ph.to===STEAM) T[i]=Math.max(v,130);
@@ -290,6 +325,8 @@ const Sim = (() => {
     stepReactions(x,y,i){
       const t=this.type[i];
       if (SOURCE.has(t)) this.ignite(x,y);
+      if (t===SALT) return this.dissolve(i);
+      if (t===ACID) return this.stepAcid(i);
       if(!has[t]) return false;
       const dirs=[[0,1],[-1,0],[1,0],[0,-1]];
       for (let k=0;k<4;k++){
@@ -304,73 +341,158 @@ const Sim = (() => {
       return false;
     }
 
-    // move cell i along (dx,dy) up to n steps; returns [newIndex, stepsTaken]
+    // move cell i along (dx,dy) up to n steps; returns the steps taken and leaves the cell's new place in tci/tcx/tcy
     travel(i,x,y,dx,dy,n,d){
       let ci=i,cx=x,cy=y,k=0;
+      const W=this.W, H=this.H, T=this.type;
       for (;k<n;k++){
-        const nx=cx+dx, ny=cy+dy; if(!this.inb(nx,ny)) break;
-        const j=this.idx(nx,ny);
-        const ok = dy>0 ? this.canSink(d,j) : (this.type[j]===E || isGas(this.type[j]));
+        const nx=cx+dx, ny=cy+dy; if (nx<0||nx>=W||ny<0||ny>=H) break;
+        const j=ny*W+nx;
+        const ok = dy>0 ? this.canSink(d,j) : (T[j]===E || KIND[T[j]]===3);
         if (!ok) break;
         this.swap(ci,j); ci=j; cx=nx; cy=ny;
       }
-      return [ci,cx,cy,k];
+      this.tci=ci; this.tcx=cx; this.tcy=cy;
+      return k;
     }
     stepMobile(x,y,i,t){
-      const el=EL[t], d=el.density, liquid=el.kind==='liquid';
+      const el=EL[t], liquid=KIND[t]===2;
       if (el.lazy && R()<el.lazy){ this.wake(x,y); return; }
-      const VX=this.vx, VY=this.vy;
+      const VX=this.vx, VY=this.vy, W=this.W, T=this.type, d=liquid ? this.dens(i,t) : el.density;
+      if (t===BRINE && R()<0.25) this.mixSalt(i);
       // horizontal momentum first
-      let ci=i,cx=x,cy=y;
+      let ci=i,cx=x,cy=y,k;
       if (Math.abs(VX[ci])>=0.5){
         const ax=Math.abs(VX[ci]), n=(ax|0)+(R()<ax%1?1:0), sx=Math.sign(VX[ci]);
-        let k; [ci,cx,cy,k]=this.travel(ci,cx,cy,sx,0,n,d);
+        k=this.travel(ci,cx,cy,sx,0,n,d); ci=this.tci; cx=this.tcx; cy=this.tcy;
         VX[ci] = k<n ? 0 : VX[ci]*(liquid?0.9:0.7);
       }
       // gravity
       VY[ci]=Math.min(VMAX, VY[ci]+G);
       const vy=VY[ci], n=(Math.abs(vy)|0)+(R()<Math.abs(vy)%1?1:0), sy=vy<0?-1:1;
-      let k; [ci,cx,cy,k]=this.travel(ci,cx,cy,0,sy,n,d);
+      k=this.travel(ci,cx,cy,0,sy,n,d); ci=this.tci; cx=this.tcx; cy=this.tcy;
       if (k===n && n>0) return;                                    // free fall
       if (vy<0){ VY[ci]=0; return; }                                 // hit a ceiling
       // blocked below: slide diagonally, or splash sideways
       const impact=VY[ci]; VY[ci]=0;
       const dir=R()<0.5?-1:1;
-      if (cy+1<this.H){
-        for (const dx of [dir,-dir]){
-          const nx=cx+dx; if(nx<0||nx>=this.W) continue;
-          const j=this.idx(nx,cy+1);
-          if (!this.done[j] && this.canSink(d,j) && (liquid || this.type[this.idx(nx,cy)]!==STONE)){ this.swap(ci,j); if (liquid && impact>1.5) VX[j]=dx*impact*0.6; return; }
+      // viscosity: lava is thick, and stiffens as it cools; it only slumps where it is piled up, so it heaps into mounds before it sets
+      const flow = t===LAVA ? Math.max(0.02, Math.min(0.3, (this.temp[ci]-500)/3000)) : 1;
+      const muddy = t===WATER && (this.life[ci]&255)>0;
+      // erosion: clean water landing hard, or running down a slope, picks up the loose grains it hits
+      if (t===WATER && !muddy && impact>1.5 && cy+1<this.H){ const b=ci+W; if (ERODE[T[b]] && R()<0.03*impact*ERODE[T[b]]) this.erode(b); }
+      // a wetting liquid sitting on its own kind won't run off the edge of its puddle as a lone drop (surface tension)
+      const held = el.tension && cy+1<this.H && TENS[T[ci+W]];
+      if (cy+1<this.H && (flow>=1 || R()<Math.max(flow,0.3))){
+        for (let q=0;q<2;q++){
+          const dx=q?-dir:dir, nx=cx+dx; if(nx<0||nx>=W) continue;
+          const j=(cy+1)*W+nx;
+          if (!this.done[j] && this.canSink(d,j) && (liquid || T[cy*W+nx]!==STONE)){
+            if (held && R()<el.tension && this.cohesion(j,ci)<2) continue;
+            this.swap(ci,j); if (liquid && impact>1.5 && flow>=1) VX[j]=dx*impact*0.6;
+            if (t===WATER && !muddy){ const lip=ci+W; if (ERODE[T[lip]] && R()<0.02*ERODE[T[lip]]) this.erode(lip); }   // the water cuts the lip it ran over
+            return;
+          }
         }
       }
       if (!liquid){ if (impact>2.5) VX[ci]=dir*impact*0.3*R(); return; }
       // liquid: spread sideways
-      if (impact>1.5){ VX[ci]=dir*impact*(0.4+R()*0.4); return; }
-      for (const dd of [dir,-dir]){
-        let last=-1;
-        for (let s=1;s<=el.disperse;s++){
-          const nx=cx+dd*s; if(nx<0||nx>=this.W) break;
-          const j=this.idx(nx,cy), tj=this.type[j];
-          if (tj===E || isGas(tj)) last=j; else break;
+      if (impact>1.5 && flow>=1){ VX[ci]=dir*impact*(0.4+R()*0.4); return; }   // splash (thick lava just lands)
+      if (flow>=1 || (R()<flow && this.head(ci,cy,t,3+((1300-this.temp[ci])/120|0)))){
+        // oil spreads into a thin film over water
+        const below = cy+1<this.H ? T[ci+W] : STONE, disp = (t===OIL && (below===WATER || below===BRINE)) ? 10 : el.disperse;
+        for (let q=0;q<2;q++){
+          const dd=q?-dir:dir; let last=-1;
+          for (let s=1;s<=disp;s++){
+            const nx=cx+dd*s; if(nx<0||nx>=W) break;
+            const j=cy*W+nx, tj=T[j];
+            if (tj===E || KIND[tj]===3) last=j; else break;
+          }
+          if (last>=0 && R()<0.95){
+            if (el.tension && R()<el.tension && this.cohesion(last,ci)<2) continue;   // surface tension: a drop won't pull away from its body, and a puddle won't thin to a film
+            this.swap(ci,last); return;
+          }
         }
-        if (last>=0 && R()<0.95){ this.swap(ci,last); return; }
       }
-      if (R()<0.01) this.pressureFlow(ci,cx,cy,t);           // boxed in: look for somewhere to surface under pressure
+      // at rest. Muddy water settles its load out where it stands still on a bed
+      if (muddy){
+        const b=cy+1<this.H ? T[ci+W] : STONE;
+        if (b!==E && KIND[b]!==2 && KIND[b]!==3 && R()<0.02){ this.deposit(ci); return; }
+        this.wake(cx,cy);
+      }
+      if (flow>=1 && R()<0.01) this.pressureFlow(ci,cx,cy,t);   // boxed in: look for somewhere to surface under pressure (lava is too thick to level itself)
+    }
+    head(i,y,t,need){   // is there at least `need` of the same liquid piled directly on top of cell i?
+      for (let k=1;k<=need;k++){ if (y-k<0 || this.type[i-k*this.W]!==t) return false; }
+      return true;
+    }
+    cohesion(j,from){   // how many wetting liquid cells would surround a drop at j (not counting the cell it came from)
+      const W=this.W, x=j%W, y=(j/W)|0, T=this.type; let n=0;
+      for (let dy=-1;dy<=1;dy++){ const ny=y+dy; if (ny<0||ny>=this.H) continue;
+        for (let dx=-1;dx<=1;dx++){ const nx=x+dx; if ((!dx&&!dy)||nx<0||nx>=W) continue; const k=ny*W+nx; if (k!==from && TENS[T[k]]) n++; } }
+      return n;
+    }
+    // ---- sediment: grains picked up by running water ride along inside it (as its life) and settle where it is still ----
+    erode(j){
+      const t=this.type[j]; if (this.owner[j]) return;
+      this.set(j, WATER); this.life[j]=255|(t===SAND?0:256);         // the grain is now suspended in a cell of muddy water
+    }
+    deposit(i){
+      const asDirt=this.life[i]&256;
+      this.set(i, asDirt ? DIRT : SAND); if (asDirt) this.life[i]=(140<<8)|MOIST;   // river silt is wet and rich
+    }
+    // ---- dissolution ----
+    dissolve(i){
+      // salt touching water or unsaturated brine dissolves into it, raising its salt content
+      if (R()>=0.12) return false;
+      const j=this.nb4(i); if (j<0) return false;
+      const tj=this.type[j];
+      if (tj===WATER && !(this.life[j]&255)){ this.type[j]=BRINE; this.life[j]=SALT_UNIT; }
+      else if (tj===BRINE && this.life[j]<=255-SALT_UNIT/2) this.life[j]=Math.min(255,this.life[j]+SALT_UNIT);
+      else return false;
+      this.wake(j%this.W,(j/this.W)|0); this.set(i,E); return true;
+    }
+    mixSalt(i){
+      // brine shares its salt with the water and weaker brine beside it, but only across a sharp difference,
+      // so a salty layer stays put under fresh water instead of thinning into the whole lake
+      const j=this.nb4(i); if (j<0) return;
+      const tj=this.type[j]; if (!((tj===WATER && !(this.life[j]&255)) || tj===BRINE)) return;
+      const sj=tj===BRINE?this.life[j]:0, f=(this.life[i]-sj)>>2; if (f<8) return;
+      this.life[i]-=f; this.type[j]=BRINE; this.life[j]=sj+f;
+      this.wake(j%this.W,(j/this.W)|0);
+    }
+    stepAcid(i){
+      // acid eats what it touches and is used up doing it; spent acid is salty water. Water dilutes it.
+      const j=this.nb4(i); if (j<0) return false;
+      const tj=this.type[j], s=this.life[i];
+      if (ACIDABLE[tj]){
+        if (R()>=0.3*s/255) return false;
+        this.set(j, R()<0.5?E:SMOKE);
+        if (s-70<SPENT){ this.set(i,BRINE); this.life[i]=40; return true; }
+        this.life[i]=s-70; return false;
+      }
+      if (tj===WATER && !(this.life[j]&255) && R()<0.1){
+        const half=s>>1;
+        if (half<SPENT){ this.type[i]=WATER; this.life[i]=0; return true; }
+        this.life[i]=half; this.type[j]=ACID; this.life[j]=half; this.wake(j%this.W,(j/this.W)|0);
+      }
+      return false;
     }
     pressureFlow(i,x,y,t){
       // head: how much of the same liquid sits directly on top of this cell
-      let head=0, gap=0; for (let k=1;k<=40;k++){ if (y-k<0) break; const a=this.type[this.idx(x,y-k)]; if (a===t){ head=k; gap=0; } else if (a===E && ++gap<=3) continue; else break; }   // bubbles don't break the column
+      const W=this.W, H=this.H, T=this.type;
+      let head=0, gap=0; for (let k=1;k<=40;k++){ if (y-k<0) break; const a=T[i-k*W]; if (a===t){ head=k; gap=0; } else if (a===E && ++gap<=3) continue; else break; }   // bubbles don't break the column
       if (head<3) return false;
       // breadth-first through the body for an air cell that is lower than the surface of this column
-      const W=this.W, limit=y-head+1, seen=this.bfsSeen, q=this.bfsQ; seen.clear(); let qs=0, qe=0;
-      q[qe++]=i; seen.add(i); let best=-1, bestY=0;
+      const limit=y-head+1, mark=this.bfsMark, q=this.bfsQ, stamp=++this.bfsStamp; let qs=0, qe=0;
+      q[qe++]=i; mark[i]=stamp; let best=-1, bestY=0;
       while (qs<qe && qe<1200){
         const c=q[qs++], cx=c%W, cy=(c/W)|0;
-        for (const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1]]){
-          const nx=cx+dx, ny=cy+dy; if (!this.inb(nx,ny)) continue; const j=ny*W+nx; if (seen.has(j)) continue;
-          const tj=this.type[j];
-          if (tj===E && ny<y && ny>=limit && (ny===0 || this.type[j-W]!==t) && (best<0 || ny<bestY)){ best=j; bestY=ny; }   // highest free surface of the body (not a bubble), below the head
-          if (tj===t && !seen.has(j)){ seen.add(j); q[qe++]=j; if (qe>=1200) break; }
+        for (let k=0;k<4;k++){
+          const nx=cx+DX4[k], ny=cy+DY4[k]; if (nx<0||nx>=W||ny<0||ny>=H) continue; const j=ny*W+nx; if (mark[j]===stamp) continue;
+          const tj=T[j];
+          if (tj===E && ny<y && ny>=limit && (ny===0 || T[j-W]!==t) && (best<0 || ny<bestY)){ best=j; bestY=ny; }   // highest free surface of the body (not a bubble), below the head
+          if (tj===t){ mark[j]=stamp; q[qe++]=j; if (qe>=1200) break; }
         }
       }
       if (best<0) return false;
@@ -380,20 +502,23 @@ const Sim = (() => {
       for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ if (this.inb(x+dx,y+dy) && FUEL[this.type[this.idx(x+dx,y+dy)]]) return true; }
       return false;
     }
+    gasMove(i,t,nx,ny){
+      if (nx<0||nx>=this.W||ny<0||ny>=this.H) return false;
+      const j=ny*this.W+nx, tj=this.type[j];
+      if (tj===E || (KIND[tj]===2 && t!==FIRE) || (t===SMOKE && tj===STEAM)){ this.swap(i,j); return true; }
+      return false;
+    }
     stepGas(x,y,i,t){
       if (t===FIRE && R()<0.8 && this.nearFuel(x,y)){ this.wake(x,y); return; }   // flames cling to fuel
-      const up = R() < (t===FIRE?0.6:t===STEAM?0.75:0.45);
-      const tryMove=(nx,ny)=>{
-        if(!this.inb(nx,ny)) return false;
-        const j=this.idx(nx,ny), tj=this.type[j];
-        if (tj===E || (isLiquid(tj) && t!==FIRE) || (t===SMOKE && tj===STEAM)){ this.swap(i,j); return true; }
-        return false;
-      };
-      if (up && tryMove(x,y-1)) return;
+      // the wind carries gases: sideways with the local flow, and faster upward in an updraft
+      const w=this.wc(x,y), wu=this.uc[w], wv=this.vc[w];
+      if (R()<Math.abs(wu)*2 && this.gasMove(i,t,x+(wu<0?-1:1),y)){ this.wake(x,y); return; }
+      const up = R() < (t===FIRE?0.6:t===STEAM?0.75:0.45) - wv;
+      if (up && this.gasMove(i,t,x,y-1)) return;
       const dir=R()<0.5?-1:1;
-      if (R()<0.5 && tryMove(x+dir,y-1)) return;
-      if (tryMove(x+dir,y)) return;
-      tryMove(x-dir,y);
+      if (R()<0.5 && this.gasMove(i,t,x+dir,y-1)) return;
+      if (this.gasMove(i,t,x+dir,y)) return;
+      this.gasMove(i,t,x-dir,y);
       this.wake(x,y);
     }
     // ---- trees are entities: a skeleton of segments, re-drawn into the grid as it grows ----
@@ -459,7 +584,7 @@ const Sim = (() => {
         for (let n=0;n<tries && roots.length;n++){
           const j=this.nb4(roots[(R()*roots.length)|0]); if (j<0) continue;
           const tj=this.type[j];
-          if (tj===DIRT){ const v=this.life[j], m=v&255, rich=v>>8; if (m>30){ const take=Math.min(m-20,40); this.life[j]=(Math.max(0,rich-3)<<8)|(m-take); t.water+=take/20*(1+rich/255); } }
+          if (tj===DIRT){ const v=this.life[j], m=v&255, rich=v>>8; if (m>30){ const take=Math.min(m-20,40); this.life[j]=(Math.max(0,rich-3)<<8)|(m-take); t.water+=take/20*(1+rich/255); this.hum[this.ac(t.x,Math.max(0,Math.round(t.y-segs[0].len)))]+=take*0.001; } }   // and breathes a little of it out through its leaves
           else if (tj===WATER){ this.set(j,E); t.water+=5; }
         }
       }
@@ -510,7 +635,7 @@ const Sim = (() => {
       const seg=t.segs[(R()*t.segs.length)|0]; if (!seg.alive || seg.root || seg.depth===0) return;
       const side=Math.sin(seg.ang)<0?-1:1, [ex,ey]=this.segEnd(t,seg,seg.len), x=ex+side*4, y=ey+1;
       if (!this.inb(x,y) || this.type[this.idx(x,y)]!==E) return;
-      const i=this.idx(x,y); this.set(i,SEED); this.vx[i]=side*(1+R()*2)+this.wind*3;
+      const i=this.idx(x,y); this.set(i,SEED); this.vx[i]=side*(1+R()*2)+this.uc[this.wc(x,y)]*12;
     }
     canSprout(x,y){   // room for a new tree: not too many, not crowded, and not in deep shade
       if (this.trees.length>=MAX_TREES) return false;
@@ -580,13 +705,24 @@ const Sim = (() => {
     }
     fallTree(t){
       // an uprooted tree drops as one piece until it lands, then dies where it fell
-      const W=this.W, n=this.type.length, list=[];
+      const W=this.W, n=this.type.length; let list=[];
       for (const [i,code] of t.cells) if (this.owner[i]===t.id && this.type[i]===this.kindOf(t,code)) list.push(i);
+      // it crashes through a neighbour's leaves and branches instead of hanging in its canopy, and its own leaves and branches
+      // snap off on whatever they hit; only its trunk or roots landing on something solid stop it
+      const brush=[], shed=new Set();
       for (const i of list){
         const j=i+W; if (j>=n){ this.releaseTree(t); return; }
         if (this.owner[j]===t.id) continue;
-        const tj=this.type[j]; if (!(tj===E || isGas(tj) || isLiquid(tj) || (EL[tj].kind==='powder' && EL[tj].density<1))){ this.releaseTree(t); return; }   // brushes light debris (seeds, litter, snow) aside
+        const tj=this.type[j];
+        if (tj===E || isGas(tj) || isLiquid(tj) || (KIND[tj]===1 && EL[tj].density<1)) continue;   // brushes light debris (seeds, litter, snow) aside
+        const o=this.owner[j], other=o ? this.trees.find(q=>q.id===o) : null, oc=other ? other.cells.get(j) : undefined;
+        if (other && oc!==undefined && ((oc&1) || other.segs[oc>>1].depth>0) && !other.segs[oc>>1].root){ brush.push(j); continue; }
+        const code=t.cells.get(i);
+        if (this.type[i]===PLANT || (code!==undefined && t.segs[code>>1].depth>0)){ shed.add(i); continue; }
+        this.releaseTree(t); return;
       }
+      for (const j of brush){ this.owner[j]=0; this.set(j, this.type[j]===PLANT && R()<0.5 ? LITTER : E); }
+      if (shed.size){ for (const i of shed){ this.owner[i]=0; this.set(i,LITTER); } list=list.filter(i=>!shed.has(i)); }
       list.sort((a,b)=>b-a);                                                   // bottom first, so each cell moves into a space already vacated
       for (const i of list){ this.swap(i,i+W); this.owner[i+W]=t.id; this.owner[i]=0; }
       const cells=new Map(), scars=new Map();
@@ -607,27 +743,32 @@ const Sim = (() => {
     }
     openSky(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return true; const t=this.type[this.idx(x,y-k)]; if (t!==E && !isGas(t)) return false; } return true; }
     stepCloud(x,y,i){
-      // clouds gather where the air is cold, drift with the wind, clump, and rain from their undersides when thick
-      const band=this.cloudY, wind=this.wind;
+      // a cloud cell is one water cell's worth of condensed vapour. It rides the wind, clumps, evaporates back into
+      // air that isn't saturated, and rains from the underside when it is thick
+      const W=this.W, T=this.type, c=this.ac(x,y), cp=this.cap[c];
+      if (this.hum[c]<cp*0.95 && R()<0.015*Math.min(1,(cp-this.hum[c])/CQ)){ this.set(i,E,this.temp[i]); this.hum[c]+=CQ; return; }
       let n=0, below=0, above=0;
-      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ if(!dx&&!dy) continue; const nx=x+dx, ny=y+dy; if (this.inb(nx,ny) && this.type[this.idx(nx,ny)]===CLOUD){ n++; if (dy===1) below++; } }
-      for (let k=1;k<=6;k++){ if (y-k<0) break; if (this.type[this.idx(x,y-k)]===CLOUD) above++; else break; }
-      if (n===0 && y<=band+8 && R()<0.01) this.life[i]=Math.min(this.life[i],200);   // lone wisps up in the band eventually drizzle away
-      const move=(nx,ny)=>{ if(!this.inb(nx,ny)) return false; const j=this.idx(nx,ny); if (this.type[j]!==E) return false; this.swap(i,j); return true; };
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ if(!dx&&!dy) continue; const nx=x+dx, ny=y+dy; if (nx>=0&&nx<W&&ny>=0&&ny<this.H && T[ny*W+nx]===CLOUD){ n++; if (dy===1) below++; } }
+      for (let k=1;k<=6;k++){ if (y-k<0) break; if (T[i-k*W]===CLOUD) above++; else break; }
+      const w=this.wc(x,y), wu=this.uc[w], wv=this.vc[w];
+      // a lone wisp in saturated air slowly drizzles out (a drop or a flake now and then)
+      if (n<=1 && R()<0.002){ this.set(i,E); if (R()<CQ && y+1<this.H && T[i+W]===E){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=1; this.rain++; this.precip[x]++; } return; }
       // rain falls from the underside of a thick cloud; heavier clouds rain harder
-      if (below===0 && n>=3 && y+1<this.H && this.type[this.idx(x,y+1)]===E && R()<0.0015*(1+above*1.2)){
-        const j=this.idx(x,y+1); this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=this.wind*1.5;
-        if (R()<0.6) this.set(i,E); else this.life[i]=Math.max(1,this.life[i]-200);
+      if (below===0 && n>=3 && above>=1 && y+1<this.H && T[i+W]===E && R()<0.004*(1+above)){   // (thin fog doesn't rain)
+        // a drop is ten cloud cells' worth: it gathers them from the column above, and only falls if it found enough
+        let got=1; this.set(i,E); for (let k=1;k<1/CQ && y-k>=0 && T[i-k*W]===CLOUD;k++){ this.set(i-k*W,E); got++; }
+        if (R()<got*CQ){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=wu*8; this.rain++; this.precip[x]++; }
+        else this.hum[c]+=got*CQ;
         return;
       }
-      // fresh cloud below the band keeps climbing until it reaches cold air
-      if (y>band+8 && R()<0.5){ if (move(x,y-1)) return; if (R()<0.5 && move(x+(R()<0.5?-1:1),y-1)) return; }
-      if (R()<0.35){
-        if (y<band-8 && R()<0.6){ if (move(x,y+1)) return; }
-        if (R()<Math.abs(wind)){ if (move(x+Math.sign(wind),y)) return; }
+      const move=(nx,ny)=>{ if (nx<0||nx>=W||ny<0||ny>=this.H) return false; const j=ny*W+nx; if (T[j]!==E) return false; this.swap(i,j); return true; };
+      // ride the wind
+      if (R()<Math.abs(wu)){ if (!move(x+(wu<0?-1:1),y) && (x===0 || x===W-1)){ this.set(i,E); this.hum[c]+=CQ; return; } }   // blown out of the world: it carries on as vapour (the air wraps round)
+      if (R()<Math.abs(wv) && move(x,y+(wv<0?-1:1))) return;
+      if (R()<0.2){
         const dir=R()<0.5?-1:1;
-        const hasN=(dx)=>this.inb(x+dx,y)&&this.type[this.idx(x+dx,y)]===CLOUD;
-        if (!hasN(dir) && hasN(-dir)){ /* stay with the cloud */ } else if (R()<0.5) move(x+dir,y); else if (R()<0.5) move(x,y+(R()<0.5?-1:1));
+        const hasN=(dx)=>x+dx>=0&&x+dx<W&&T[i+dx]===CLOUD;
+        if (!hasN(dir) && hasN(-dir)){ /* stay with the cloud */ } else if (R()<0.5) move(x+dir,y); else if (R()<0.3) move(x,y+(R()<0.5?-1:1));
       }
       this.wake(x,y);
     }
@@ -669,15 +810,16 @@ const Sim = (() => {
       this.seeding=p>0.3 && p<0.72;
       this.precipT=6+season;                                                 // rain in the warm months, snow in the cold ones
       this.yearPhase=p; this.dayPhase=d; this.seasonName=SEASONS[(p*4)|0];
+      for (let y=0;y<this.H;y++) this.ambRow[y]=this.ambAt(y);
     }
     // ---- the soil pass: slow ecology that has to keep running in chunks that are asleep ----
     // Each tick visits every SLOW-th row, so every cell is seen once per SLOW ticks; the rates below are per visit.
     stepSoil(){
       const {W,H,CW,type:T,temp,dirty}=this;
       const dry=0.35*Math.max(0,(this.climate+6)/20)*(0.25+0.75*this.sun);   // exposed soil dries fastest on warm sunny afternoons
-      const evap=0.018*Math.max(0.3, Math.min(1.2, (this.climate+14)/16))*(0.4+0.6*this.sun);   // open water evaporating, sleeping lakes included
+      const evap=0.1*(0.4+0.6*this.sun);   // open water evaporating into the air above it, sleeping lakes included
       for (let y=this.frame%SLOW;y<H;y+=SLOW){
-        const amb=this.ambAt(y), row=y*W, crow=((y/CH)|0)*CW;
+        const amb=this.ambRow[y], row=y*W, crow=((y/CH)|0)*CW;
         for (let x=0;x<W;x++){
           const i=row+x, t=T[i];
           const asleep=!dirty[crow+((x/CH)|0)];
@@ -695,10 +837,14 @@ const Sim = (() => {
               if (this.growth===0 && R()<0.01){ this.set(i,LITTER); break; }   // frost kills bushes back
               if (y+1<H && T[i+W]===DIRT && (this.life[i+W]&255)>=60 && this.life[i]<3 && R()<0.05){ this.life[i+W]-=20; this.life[i]++; this.wake(x,y); }
               break;
-            case WATER:
+            case WATER: case BRINE:
               if (y>0 && T[i-W]===E){
-                if (amb<0){ temp[i]+=(amb-temp[i])*0.05; if (temp[i]<0) this.wake(x,y); }   // a still surface chills in freezing air, then freezes over
-                else if (R()<evap && this.openSky(x,y)) this.set(i,STEAM,110);
+                if (amb<0 && t===WATER){ temp[i]+=(amb-temp[i])*0.05; if (temp[i]<0) this.wake(x,y); }   // a still surface chills in freezing air, then freezes over
+                else {
+                  // evaporation: faster from warm water into dry air; salt holds water back
+                  const a=this.ac(x,y-1), cp=this.cap[a], deficit=cp>0 ? 1-this.hum[a]/cp : 0;
+                  if (deficit>0 && R()<evap*deficit*Math.min(3, SAT(temp[i])/SAT(15))*(t===BRINE?1-this.life[i]/400:1) && this.openSky(x,y)) this.evaporate(i,a);
+                }
               }
               break;
             case SNOW: temp[i]+=(amb-temp[i])*0.05; if (temp[i]>2) this.wake(x,y); break;   // spring melt: warm snow goes back to the heat step
@@ -714,7 +860,7 @@ const Sim = (() => {
       if (m<=MOIST-100){
         for (const j of [i-W, i-1, i+1, i+W]){
           if (j<0 || j>=T.length || T[j]!==WATER || Math.abs(j%W-x)>1) continue;
-          if (R()<0.5){ this.set(j,E); m+=100; }
+          if (R()<0.5){ const sed=this.life[j]&255; if (sed) this.deposit(j); else this.set(j,E); m+=100; }   // the water soaks in and leaves its silt on top
           break;
         }
       }
@@ -724,8 +870,12 @@ const Sim = (() => {
       if (x+sx>=0 && x+sx<W && T[i+sx]===DIRT){ const s=L[i+sx], ms=s&255, f=((m-ms)/4)|0; if (f>0){ m-=f; L[i+sx]=s+f; } }
       const up=y>0?T[i-W]:STONE;
       if (up===DIRT){ const a=L[i-W], ma=a&255, f=((m-ma)/8)|0; if (f>0){ m-=f; L[i-W]=a+f; } }   // wicking up is slower than draining down
-      // dry out where open to the air, and fast when hot
-      else if ((up===E || isGas(up)) && m>0 && R()<dry) m--;
+      // open to the air: dry out into it (100 moisture is one water cell of vapour), or gather dew when it is saturated
+      else if (up===E || isGas(up)){
+        const a=this.ac(x,y-1), rh=this.rh(a);
+        if (rh<1){ if (m>0 && R()<dry*(1-rh)){ m--; this.hum[a]+=0.01; } }
+        else if (m<25 && this.hum[a]>0.02 && R()<0.25){ m++; this.hum[a]-=0.01; }   // dew dampens dry ground, but never soaks it
+      }
       if (this.temp[i]>60) m=Math.max(0,m-6);
       L[i]=(rich<<8)|m;
     }
@@ -759,58 +909,207 @@ const Sim = (() => {
       if (v===2){ this.set(i,to); if (life) this.life[i]=life; } else this.life[i]=v;
     }
 
+    evaporate(i,a){
+      // one water cell becomes one unit of vapour. Silt stays behind as a grain; brine hands its salt down, and a drying pan leaves a crust
+      const t=this.type[i], s=this.life[i];
+      this.hum[a]+=EVQ; if (R()>=EVQ) return;
+      if (t===WATER){ if (s&255) this.deposit(i); else this.set(i,E); return; }
+      let left=s; const b=i+this.W;
+      if (b<this.type.length){
+        const tb=this.type[b];
+        if (tb===WATER && !(this.life[b]&255)){ this.type[b]=BRINE; this.life[b]=Math.min(255,left); left-=this.life[b]; }
+        else if (tb===BRINE){ const give=Math.min(left,255-this.life[b]); this.life[b]+=give; left-=give; }
+      }
+      this.set(i, R()<left/SALT_UNIT ? SALT : E);
+    }
+
+    // ---- the air pass: each tick visits every AIRSLOW-th row of coarse air cells ----
+    // It samples how much of the cell is open air and how warm, lets cold air pool at night, moves vapour by diffusion and
+    // the wind, and condenses whatever the air can't hold into cloud (fog, near the ground).
+    stepAir(off, init){
+      const {W,H,AW,AH,type:T,temp,hum,cap,airF,airT,chill,CW}=this;
+      const night=1-Math.min(1,this.sun*3), burn=this.sun>0.15, mix=0.03+0.3*this.sun, lift=0.1*this.sun;   // still nights, stirred sunny days; and thermals carry vapour up to where it condenses
+      const sky=this.sky;
+      if (off===0) for (let ax=0; ax<AW; ax++){ const x=Math.min(W-1,ax*AC+1); let y=0; while (y<H && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++; sky[ax]=y; }   // where each column first meets ground, canopy or water
+      for (let ay=off; ay<AH; ay+=AIRSLOW){
+        const y0=ay*AC, ya=Math.min(H-1,y0+1), yb=Math.min(H-1,y0+3), wrow=(y0>>4)*CW;
+        for (let ax=0; ax<AW; ax++){
+          const c=ay*AW+ax, x0=ax*AC, xa=Math.min(W-1,x0+1), xb=Math.min(W-1,x0+3);
+          let n=0, ts=0, j, tj;
+          j=ya*W+xa; tj=T[j]; if (tj===E || KIND[tj]===3){ n++; ts+=temp[j]; }
+          j=ya*W+xb; tj=T[j]; if (tj===E || KIND[tj]===3){ n++; ts+=temp[j]; }
+          j=yb*W+xa; tj=T[j]; if (tj===E || KIND[tj]===3){ n++; ts+=temp[j]; }
+          j=yb*W+xb; tj=T[j]; if (tj===E || KIND[tj]===3){ n++; ts+=temp[j]; }
+          if (n===0){   // filled in: its vapour is pushed up out of the ground
+            airF[c]=0; cap[c]=0; chill[c]=0;
+            if (hum[c]>0){ if (ay>0) hum[c-AW]+=hum[c]; hum[c]=0; }
+            continue;
+          }
+          const f=n/4, at=ts/n; airF[c]=f; airT[c]=at;
+          // cold-air pools: ground loses heat at night, and the chilled air slides downhill into the hollows; the sun burns it off
+          let ch=chill[c];
+          const ground = (f<1 || (ay+1<AH && airF[c+AW]<1)) && y0<=sky[ax]+AC;   // open ground under the sky (not in caves, not under trees)
+          if (ground) ch+=0.2*night;
+          ch*= burn ? 0.85 : 0.998;
+          if (ch>0.05 && ay+1<AH && !init){
+            const b=c+AW;
+            if (airF[b]>0.5){ const m=ch*0.5; chill[b]+=m; ch-=m; }
+            else {   // slide off downhill: whichever side has open air below it
+              const s0=R()<0.5?-1:1;
+              for (let k=0;k<2;k++){ const s=k?-s0:s0, nx=ax+s; if (nx>=0 && nx<AW && airF[c+s]>0 && (airF[b+s]>0.5 || sky[nx]>sky[ax])){ const m=ch*0.6; chill[c+s]+=m; ch-=m; break; } }
+            }
+          }
+          ch=Math.min(ch,6); chill[c]=ch;
+          const cp=SAT(at-ch)*f; cap[c]=cp;
+          if (init){ hum[c]=BG_RH*cp; continue; }
+          // vapour: exchange with the neighbours to the right (wrapping round) and below — diffusion plus upwind transport on the wind
+          let h=hum[c];
+          const wcell=wrow+(x0>>4);
+          const r = ax+1<AW ? c+1 : c-ax;
+          if (airF[r]>0){
+            const adv=Math.max(-0.45,Math.min(0.45, this.uc[wcell]*AIRSLOW/AC));
+            let fl=(h/f-hum[r]/airF[r])*0.05*Math.min(f,airF[r]) + (adv>0 ? adv*h : adv*hum[r]);
+            fl=Math.max(-hum[r]*0.5, Math.min(h*0.5, fl)); h-=fl; hum[r]+=fl;
+          }
+          if (ay+1<AH){
+            const b=c+AW;
+            if (airF[b]>0){
+              const adv=Math.max(-0.45,Math.min(0.45, this.vc[wcell]*AIRSLOW/AC));
+              const mv = y0>sky[ax]-THERMAL ? mix : 0.01;   // stirring reaches up through the low air near the ground, not the sky above
+              let fl=(h/f-hum[b]/airF[b])*mv*Math.min(f,airF[b]) + (adv>0 ? adv*h : adv*hum[b]);
+              fl=Math.max(-hum[b]*0.5, Math.min(h*0.5, fl)); h-=fl; hum[b]+=fl;
+            }
+          }
+          // thermals: on a sunny day air warmed at the ground rises until it cools to its dew point, and drops its vapour there.
+          // Every patch with the same surface humidity lifts to the same height, which is what gives cumulus a flat base
+          if (lift>0 && ay+1<AH && y0+AC>sky[ax] && y0<=sky[ax] && h>0.01 && ay>2){
+            const dew=20+Math.log(h/f/S20)/0.065-2;   // a little past the dew point, so it condenses
+            const top=Math.max(AC*2, y0-THERMAL); let ty=y0-2*AC; while (ty>=top && this.ambRow[ty]>dew) ty-=AC;
+            if (ty>=top){ const tc=(ty>>2)*AW+ax, m=h*lift; if (airF[tc]>0){ hum[tc]+=m; h-=m; } }   // (air too dry to condense within a thermal's reach stays put: a clear blue day)
+          }
+          if (ay===0) h+=(BG_RH*cp-h)*0.01;   // the top of the world trades a little vapour with the sky beyond it
+          // condensation: what the air can't hold becomes cloud in an open cell of this patch
+          for (let k=0;k<3 && h>cp && R()<(h-cp)/CQ;k++){   // a little over saturation condenses now and then; a lot, at once
+            // it condenses onto cloud that is already there if it can, so clouds grow as clumps rather than a haze
+            let q=-1;
+            for (let tr=0;tr<4;tr++){
+              const cx=Math.min(W-1,x0+((R()*AC)|0)), cy=Math.min(H-1,y0+((R()*AC)|0)), j=cy*W+cx;
+              if (T[j]!==E) continue; q=j;
+              if ((cx>0 && T[j-1]===CLOUD) || (cx<W-1 && T[j+1]===CLOUD) || (cy>0 && T[j-W]===CLOUD) || (cy<H-1 && T[j+W]===CLOUD)) break;
+            }
+            if (q>=0){ this.set(q,CLOUD,temp[q]); h=Math.max(0,h-CQ); }
+          }
+          hum[c]=h;
+        }
+      }
+    }
+    initAir(){ this.chill.fill(0); this.hum.fill(0); for (let k=0;k<AIRSLOW;k++) this.stepAir(k,true); this.u.fill(0); this.v.fill(0); this.pres.fill(0); for (let k=0;k<6;k++) this.stepWind(); }
+
+    // ---- the wind: a coarse incompressible flow on the chunk grid ----
+    // The prevailing wind pushes along each row, warm cells push upward, and a pressure solve keeps the flow from piling
+    // into hills: it is deflected over them (lift on the windward side, sinking air behind), and air rushes in under an updraft.
+    stepWind(){
+      const {CW,CHh,AW,AH,airF,airT,u,v,pres:p,wsolid,wheat,uc,vc}=this, nw=CW*CHh;
+      // each wind cell summarises its 4×4 coarse air cells: open or ground, and how much warmer than the ambient
+      for (let cy=0;cy<CHh;cy++) for (let cx=0;cx<CW;cx++){
+        let f=0, hs=0;
+        for (let ay=cy*4; ay<Math.min(AH,cy*4+4); ay++) for (let ax=cx*4; ax<Math.min(AW,cx*4+4); ax++){ const a=ay*AW+ax; if (airF[a]>0){ f+=airF[a]; hs+=(airT[a]-this.ambRow[Math.min(this.H-1,ay*AC+2)])*airF[a]; } }
+        const w=cy*CW+cx; wsolid[w]= f<16*0.3 ? 1 : 0; wheat[w]= f>0 ? hs/f : 0;
+      }
+      const U=0.25*this.wind;
+      for (let cy=0;cy<CHh;cy++) for (let fx=0;fx<CW;fx++){
+        const w=cy*CW+fx, l=cy*CW+(fx+CW-1)%CW;
+        if (wsolid[w]||wsolid[l]) u[w]=0; else u[w]+=(U-u[w])*0.08;
+      }
+      for (let fy=0;fy<=CHh;fy++) for (let cx=0;cx<CW;cx++){
+        const f=fy*CW+cx;
+        if (fy===0 || fy===CHh){ v[f]=0; continue; }
+        const up=(fy-1)*CW+cx, dn=fy*CW+cx;
+        if (wsolid[up]||wsolid[dn]){ v[f]=0; continue; }
+        v[f]=(v[f]-0.0012*(wheat[up]+wheat[dn])*0.5)*0.85;       // buoyancy: warm air rises
+      }
+      // pressure projection (Gauss-Seidel, warm-started from last time's pressure)
+      for (let it=0;it<20;it++){
+        for (let cy=0;cy<CHh;cy++) for (let cx=0;cx<CW;cx++){
+          const w=cy*CW+cx; if (wsolid[w]) continue;
+          const xr=(cx+1)%CW, xl=(cx+CW-1)%CW, wr=cy*CW+xr, wl=cy*CW+xl;
+          const div=u[cy*CW+xr]-u[w]+v[(cy+1)*CW+cx]-v[w];
+          let s=0, k=0;
+          if (!wsolid[wr]){ s+=p[wr]; k++; } if (!wsolid[wl]){ s+=p[wl]; k++; }
+          if (cy>0 && !wsolid[w-CW]){ s+=p[w-CW]; k++; } if (cy<CHh-1 && !wsolid[w+CW]){ s+=p[w+CW]; k++; }
+          p[w]= k ? (s-div)/k : 0;
+        }
+      }
+      for (let cy=0;cy<CHh;cy++) for (let fx=0;fx<CW;fx++){ const w=cy*CW+fx, l=cy*CW+(fx+CW-1)%CW; if (!wsolid[w] && !wsolid[l]) u[w]-=p[w]-p[l]; }
+      for (let fy=1;fy<CHh;fy++) for (let cx=0;cx<CW;cx++){ const f=fy*CW+cx, up=f-CW; if (!wsolid[up] && !wsolid[f]) v[f]-=p[f]-p[up]; }
+      // cell-centred wind for everything that rides it, capped at one cell per tick
+      for (let cy=0;cy<CHh;cy++) for (let cx=0;cx<CW;cx++){
+        const w=cy*CW+cx;
+        if (wsolid[w]){ uc[w]=0; vc[w]=0; continue; }
+        uc[w]=Math.max(-1,Math.min(1,(u[w]+u[cy*CW+(cx+1)%CW])*0.5));
+        vc[w]=Math.max(-1,Math.min(1,(v[w]+v[w+CW])*0.5));
+      }
+    }
+
     step(){
       const {W,H,CW,type,done,dirty,next}=this;
       done.fill(0); dirty.set(next); next.fill(0);
-      const ltr=(this.frame&1)===0;
+      const ltr=(this.frame&1)===0, temp=this.temp;
       for (let cy=this.CHh-1;cy>=0;cy--){
-        const y1=Math.min(H-1,cy*CH+CH-1);
-        for (let y=y1;y>=cy*CH;y--){
-          for (let k=0;k<W;k++){
-            const x=ltr?k:W-1-k;
-            if (!dirty[cy*CW+((x/CH)|0)]) continue;
-            const i=y*W+x;
-            if (this.stepHeat(x,y,i)) continue;
-            const t=type[i];
-            if (t===E){ if (y>0 && !done[i]){ const a=i-W; if (type[a]===E && this.temp[i]>this.temp[a]+12 && R()<0.3){ const tt=this.temp[i]; this.temp[i]=this.temp[a]; this.temp[a]=tt; this.wake(x,y-1); } } continue; }
-            if (done[i]) continue;
-            if (this.stepReactions(x,y,i)) continue;
-            const tt=type[i], el=EL[tt];
-            switch(el.kind){
-              case 'powder': case 'liquid': this.stepMobile(x,y,i,tt); break;
-              case 'gas':    if (!this.stepLife(i,tt)) { if (tt===CLOUD) this.stepCloud(x,y,i); else this.stepGas(x,y,i,tt); } break;
-              case 'static': if (SPAN[tt] && this.stepSupport(x,y,i,tt)) break; if (!this.stepLife(i,tt)) this.stepStatic(x,y,i,tt); break;
+        const y0=cy*CH, y1=Math.min(H-1,y0+CH-1), crow=cy*CW;
+        for (let y=y1;y>=y0;y--){
+          for (let q=0;q<CW;q++){
+            const cx=ltr?q:CW-1-q; if (!dirty[crow+cx]) continue;   // whole sleeping chunks are skipped at once
+            const xa=cx*CH, xb=Math.min(W,xa+CH);
+            for (let k=xa;k<xb;k++){
+              const x=ltr?k:xa+xb-1-k, i=y*W+x;
+              if (this.stepHeat(x,y,i)) continue;
+              const t=type[i];
+              if (t===E){ if (y>0 && !done[i]){ const a=i-W; if (type[a]===E && temp[i]>temp[a]+12 && R()<0.3){ const tt=temp[i]; temp[i]=temp[a]; temp[a]=tt; this.wake(x,y-1); } } continue; }
+              if (done[i]) continue;
+              if (this.stepReactions(x,y,i)) continue;
+              const tt=type[i], kd=KIND[tt];
+              if (kd===1 || kd===2) this.stepMobile(x,y,i,tt);
+              else if (kd===3){ if (!this.stepLife(i,tt)) { if (tt===CLOUD) this.stepCloud(x,y,i); else this.stepGas(x,y,i,tt); } }
+              else { if (SPAN[tt] && this.stepSupport(x,y,i,tt)) continue; if (!this.stepLife(i,tt)) this.stepStatic(x,y,i,tt); }
             }
           }
         }
       }
       this.stepTrees();
       this.stepSoil();
+      this.stepAir(this.frame%AIRSLOW, false);
+      if (this.frame%WINDSLOW===2) this.stepWind();
       this.clock++; this.updateClimate();
-      this.frame++; this.wind=0.55*Math.sin(this.frame*0.0007)+0.15*Math.sin(this.frame*0.0031);
+      this.frame++; this.wind=this.windHold!==null ? this.windHold : 0.55*Math.sin(this.frame*0.0007)+0.15*Math.sin(this.frame*0.0031);
     }
 
-    // ---- serialisation: RLE of types | trees JSON | RLE of the life values that are state (soil moisture, rot) | clock ----
+    // ---- serialisation: RLE of types | trees JSON | RLE of the life values that are state (soil moisture, rot) | clock
+    //      | RLE of the liquids' life (sediment, salt, acid strength) | RLE of the vapour field in hundredths ----
     // temps are restored from element defaults
     save(){
       const rle=(len,get,out)=>{ let run=get(0), n=0; for (let i=0;i<len;i++){ const v=get(i); if (v===run && n<65535) n++; else { out.push(run,n); run=v; n=1; } } if (len) out.push(run,n); return out; };
       const pack=out=>{ const b=new Uint8Array(new Uint16Array(out).buffer); let s=''; for (let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); };
-      const keep=[]; for (let i=0;i<this.type.length;i++) if (KEEP_LIFE.has(this.type[i])) keep.push(this.life[i]);
-      return pack(rle(this.type.length,i=>this.type[i],[this.W,this.H]))+'|'+this.treesSave()+'|'+pack(rle(keep.length,i=>keep[i],[]))+'|'+Math.round(this.clock);
+      const keep=[], fluid=[]; for (let i=0;i<this.type.length;i++){ const t=this.type[i]; if (KEEP_LIFE.has(t)) keep.push(this.life[i]); else if (FLUID_LIFE.has(t)) fluid.push(this.life[i]); }
+      const hum=this.hum;
+      return pack(rle(this.type.length,i=>this.type[i],[this.W,this.H]))+'|'+this.treesSave()+'|'+pack(rle(keep.length,i=>keep[i],[]))+'|'+Math.round(this.clock)
+        +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]));
     }
     load(str){
-      const [rle,treeJson='',soil='',clock='']=str.split('|');
+      const [rle,treeJson='',soil='',clock='',fluids='',air='']=str.split('|');
       const unpack=b64=>{ const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); return new Uint16Array(bytes.buffer); };
       const u=unpack(rle);
       if (u[0]!==this.W||u[1]!==this.H) throw new Error('world size mismatch');
       if (clock) { this.clock=+clock; this.updateClimate(); }
       this.clear(); let i=0;
       for (let p=2;p<u.length;p+=2){ const t=u[p], n=u[p+1]; for (let k=0;k<n;k++,i++){ this.type[i]=t; this.temp[i]=t===E?this.ambAt((i/this.W)|0):EL[t].t0; this.shade[i]=(R()*64)|0; const l=EL[t].life; this.life[i]=l?l[0]:EL[t].soil; } }
-      if (soil){   // older saves have no soil section: dirt keeps its default moisture
-        const s=unpack(soil); let p=0, left=s.length?s[1]:0;
-        for (let j=0;j<this.type.length && p<s.length;j++){ if (!KEEP_LIFE.has(this.type[j])) continue; this.life[j]=s[p]; if (--left===0){ p+=2; left=s[p+1]; } }
-      }
+      const unrle=(b64,keep)=>{ const s=unpack(b64); let p=0, left=s.length?s[1]:0;
+        for (let j=0;j<this.type.length && p<s.length;j++){ if (!keep.has(this.type[j])) continue; this.life[j]=s[p]; if (--left===0){ p+=2; left=s[p+1]; } } };
+      if (soil) unrle(soil,KEEP_LIFE);     // older saves have no soil section: dirt keeps its default moisture
+      if (fluids) unrle(fluids,FLUID_LIFE); // nor liquid state: water is clean, brine and acid take their defaults
       this.treesLoad(treeJson);
+      this.initAir();
+      if (air){ const s=unpack(air); for (let p=0,c=0;p<s.length;p+=2) for (let k=0;k<s[p+1];k++,c++) this.hum[c]=s[p]/100; }
       this.wakeAll();
     }
   }
@@ -859,11 +1158,12 @@ const Sim = (() => {
     const grow=60+(R()*120|0);
     for (const t of g.trees){ t.water=20; for (let n=0;n<grow;n++) if (!g.growTree(t,true)) break; }
     g.stepTrees();
+    g.initAir();
     g.wakeAll();
     return surf;
   }
 
-  return {EL,N,CH,AMB,DAY,YEAR,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
+  return {EL,N,CH,AMB,DAY,YEAR,AC,SAT,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
 })();
 
 // ============================================================================
@@ -914,7 +1214,10 @@ function rgbOf(i,out){
     case FIRE:{ const a=l/80; if(a>0.6){out[0]=255;out[1]=220;out[2]=120;} else if(a>0.3){out[0]=255;out[1]=130+s*40;out[2]=30;} else {out[0]=200+s*40;out[1]=50;out[2]=10;} return; }
     case EMBER:{ const f=((g.frame+(s*20|0))%20)<10; if(f){out[0]=230;out[1]=90;out[2]=20;} else {out[0]=120;out[1]=40;out[2]=10;} return; }
     case SMOKE:{ const a=l/240; out[0]=50+a*40;out[1]=52+a*40;out[2]=58+a*40; return; }
-    case CLOUD:{ const a=Math.min(1,l/1200); out[0]=170+a*50;out[1]=176+a*48;out[2]=190+a*42; return; }
+    case CLOUD:{ const v=s*25; out[0]=190+v;out[1]=195+v;out[2]=208+v*0.8; return; }
+    case WATER:{ const m=(l&255)/255, v=EL[WATER].vary*s; out[0]=30+v*0.8+m*90;out[1]=110+v*0.7-m*30;out[2]=200+v*0.5-m*140; return; }   // muddy with silt
+    case BRINE:{ const k=l/255, v=EL[BRINE].vary*s; out[0]=40+v*0.8+k*50;out[1]=120+v*0.7+k*30;out[2]=200+v*0.5-k*20; return; }       // paler the saltier
+    case ACID:{ const k=l/255, v=EL[ACID].vary*s; out[0]=40+90*k+v*0.8;out[1]=120+120*k+v*0.7;out[2]=190-130*k+v*0.5; return; }       // fades toward water as it weakens
     case STEAM:{ const a=Math.min(1,(g.temp[i]-90)/60); out[0]=150+a*60;out[1]=165+a*60;out[2]=180+a*60; return; }
     case DIRT:{ const m=(l&255)/255, r=(l>>8)/255*0.15, v=EL[DIRT].vary*s, k=1-0.42*m-r; out[0]=(120+v)*k;out[1]=(86+v*0.7)*k;out[2]=(54+v*0.5)*k*(1-0.15*m); return; }   // darker when wet or rich
     case LAVA:{ const p=0.5+0.5*Math.sin((g.frame*0.1)+s*6), c=Math.min(1,(g.temp[i]-600)/600); out[0]=160+c*60+p*35;out[1]=30+c*40+p*50+s*20;out[2]=10+s*15; return; }
@@ -928,12 +1231,14 @@ function heatColor(T){
 }
 function moistColor(i){
   const t=g.type[i];
+  if (t===E){ const x=i%W, y=(i/W)|0, r=Math.min(1.2,g.rh(g.ac(x,y))); return C(10+30*r, 12+50*r, 18+140*r); }   // the air: brighter blue the closer to saturation
+  if (t===CLOUD) return C(235,240,255);
   if (t===DIRT){ const m=(g.life[i]&255)/255; return C(90*(1-m)+20, 70*(1-m)+60*m, 50+200*m); }
   if (t===WATER) return C(40,90,255);
   if (t===ROOT) return C(200,160,90);
   return t===E?C(10,10,14):C(32,32,38);
 }
-let showChunks=false, heatView=false, moistView=false;
+let showChunks=false, heatView=false, moistView=false, windView=false;
 const tmp=[0,0,0];
 function render(){
   if (!heatView && !moistView) computeLight();
@@ -944,6 +1249,13 @@ function render(){
     rgbOf(i,tmp);
     const gl=EL[g.type[i]].glow, L=gl>0?1:0.12+0.88*Math.max(0,light[o]);
     px[o]=C(tmp[0]*L,tmp[1]*L,tmp[2]*L);
+  }
+  if (windView){   // a streak per wind cell, from its centre along the flow (×24 for visibility)
+    for (let cy=0;cy<g.CHh;cy++) for (let cx=0;cx<g.CW;cx++){
+      const w=cy*g.CW+cx, u=g.uc[w], v=g.vc[w], sp=Math.hypot(u,v); if (sp<0.005) continue;
+      const x0=cx*CH+8-camX, y0=cy*CH+8-camY, len=Math.min(14,4+sp*60);
+      for (let k=0;k<=len;k++){ const vx=Math.round(x0+u/sp*k), vy=Math.round(y0+v/sp*k); if (vx>=0&&vx<VW&&vy>=0&&vy<VH) px[vy*VW+vx]= k<2 ? C(255,255,255) : C(240,178,74); }
+    }
   }
   if (showChunks){
     for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
@@ -1032,6 +1344,7 @@ document.getElementById('clear').addEventListener('click',()=>{ g.clear(); msg('
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
 document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
 document.getElementById('moistview').addEventListener('click',e=>{moistView=!moistView; e.target.setAttribute('aria-pressed',moistView);});
+document.getElementById('windview').addEventListener('click',e=>{windView=!windView; e.target.setAttribute('aria-pressed',windView);});
 let worldSeed=(Math.random()*1e9)|0;
 function newWorld(seedN){
   worldSeed=seedN; const surf=generate(g,worldSeed);

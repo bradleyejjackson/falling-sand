@@ -9,7 +9,9 @@ The script has two blocks: `Sim` (pure rules, no DOM; this is what ports to Godo
 Headless checks run in Node (no dependencies):
 
 ```
-node tools/validate.js        # stage 2 ecology scenarios (or name some: sapling soak topple rot seasons snow save)
+node tools/validate.js        # all scenarios, or name some: sapling sand soak topple rot seasons snow
+                              #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
+SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js              # runs the whole page against a stub DOM and pokes the UI
 node tools/perf.js [seed]     # generates the 960x480 world and times step() and render
 ```
