@@ -18,7 +18,7 @@ h1{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04e
 h1 span{color:var(--accent)}
 .stats{color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:16px;flex-wrap:wrap}
 .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden;
-  aspect-ratio:8/5;max-width:100%;max-height:60vh;margin:0 auto;width:100%}
+  aspect-ratio:8/5;max-width:100%;max-height:60vh;margin:0 auto;width:100%;flex-shrink:0}
 canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:crosshair}
 .groups{display:flex;flex-direction:column;gap:8px}
 .group{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
@@ -47,7 +47,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 
 <header>
   <h1>Sand<span>fall</span></h1>
-  <div class="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="wind"></span><span id="clock"></span></div>
+  <div class="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="threads"></span><span id="wind"></span><span id="clock"></span></div>
 </header>
 
 <div class="stage"><canvas id="c"></canvas></div>
@@ -72,7 +72,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it.</p>
+<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -83,6 +83,10 @@ const Sim = (() => {
   let seed = 1;
   const R = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const reseed = s => { seed = s|0; };
+  const seedNow = () => seed;
+  // an integer hash, for streams that must not depend on what ran before them (each tile each frame, each column of a region)
+  const mix = (a,b) => { let h = Math.imul(a ^ 0x5bd1e995, 0x9E3779B1) ^ Math.imul(b + 0x7f4a7c15 | 0, 0x85EBCA6B); h ^= h >>> 15; h = Math.imul(h, 0x2C1B3C6D); h ^= h >>> 12; h = Math.imul(h, 0x297A2D39); return (h ^ h >>> 15) | 0; };
+  const hash01 = (a,b) => (mix(a,b) >>> 0) / 4294967296;
 
   // ---- element registry ----------------------------------------------------
   // kind: powder | liquid | gas | static.  density: who sinks through whom.
@@ -196,25 +200,58 @@ const Sim = (() => {
   // ---- the grid --------------------------------------------------------------
   const CH = 16, G = 0.25, VMAX = 6;
   const DX4 = [0,-1,1,0], DY4 = [-1,0,0,1];
+  // Engine. The cell pass runs in TILE×TILE tiles. A tile's update may read and write only within REACH cells of the tile,
+  // so tiles two apart in both directions never touch the same cell: the four checkerboard phases (even/odd column ×
+  // even/odd row) each run all their tiles at once on any number of threads, and the result is the same on one thread or eight.
+  // (A two-colour checkerboard would run diagonal neighbours together, and they share a corner.)
+  const TILE = 64, TILE_H = TILE, REACH = TILE/2, PHASES = 4, DEFER_MAX = 4096;
+  // Streaming: the grid is a window onto a wider world and moves REGION columns at a time (a multiple of the tile, chunk and air cell)
+  const REGION = 320;
+  // Every field is a flat typed array (structure of arrays), carved out of one buffer so worker threads can share it.
+  // scope: cell W×H, air (AC×AC coarse cells), wind (one per chunk), vface (wind v faces), chunk, row, col, aircol, ctl.
+  const FIELDS = [
+    ['type',Uint8Array,'cell'], ['life',Uint16Array,'cell'], ['shade',Uint8Array,'cell'], ['done',Uint8Array,'cell'],
+    ['temp',Float32Array,'cell'], ['vx',Float32Array,'cell'], ['vy',Float32Array,'cell'], ['owner',Uint16Array,'cell'],   // owner: which tree a cell belongs to
+    ['dirty',Uint8Array,'chunk'], ['next',Uint8Array,'chunk'],
+    ['hum',Float32Array,'air'], ['cap',Float32Array,'air'], ['airF',Float32Array,'air'], ['airT',Float32Array,'air'], ['chill',Float32Array,'air'],
+    // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
+    ['u',Float32Array,'wind'], ['v',Float32Array,'vface'], ['pres',Float32Array,'wind'], ['uc',Float32Array,'wind'], ['vc',Float32Array,'wind'], ['wsolid',Uint8Array,'wind'], ['wheat',Float32Array,'wind'],
+    ['ambRow',Float32Array,'row'], ['precip',Uint32Array,'col'], ['sky',Int16Array,'aircol'],   // precip: drops of rain or snow released per column (a rain gauge)
+    ['ctl',Int32Array,'ctl'], ['gf',Float64Array,'gf'], ['jobs',Int32Array,'jobs'], ['deferred',Int32Array,'defer'],   // the job system's shared state
+  ];
+  // ctl slots: frame counter the workers wait on, finished frame, threads, per-phase next-tile and arrival counters, deferred count
+  const C_GEN=0, C_DONE=1, C_THREADS=2, C_NEXT=3, C_ARRIVE=C_NEXT+PHASES, C_DEFER=C_ARRIVE+PHASES, C_FRAME=C_DEFER+1, C_SEED=C_FRAME+1, C_START=C_SEED+1, C_COUNT=C_START+PHASES, C_READY=C_COUNT+PHASES, C_JX=C_READY+1, C_JY=C_JX+1, C_SIZE=C_JY+1;
+  const G_PRECIPT=0;   // gf slots: per-frame floats the cell pass reads
+  function layout(W,H){
+    const CW=Math.ceil(W/CH), CHh=Math.ceil(H/CH), AW=Math.ceil(W/AC), AH=Math.ceil(H/AC), TW=Math.ceil(W/TILE)+1, TH=Math.ceil(H/TILE_H)+1;   // (one spare: the tiling shifts each tick)
+    const len={cell:W*H, air:AW*AH, wind:CW*CHh, vface:CW*(CHh+1), chunk:CW*CHh, row:H, col:W, aircol:AW, ctl:C_SIZE, gf:4, jobs:TW*TH, defer:DEFER_MAX};
+    let off=0; const at={};
+    for (const [name,A,scope] of FIELDS){ off=Math.ceil(off/8)*8; at[name]=[off,len[scope],A]; off+=len[scope]*A.BYTES_PER_ELEMENT; }
+    return {at, bytes:off, CW, CHh, AW, AH, TW, TH};
+  }
+  // run-length coding of 16-bit values as (value, count) pairs, and base64 of the bytes for saves
+  function rle16(a){ const out=[]; let run=a[0], n=0; for (let i=0;i<a.length;i++){ const v=a[i]; if (v===run && n<65535) n++; else { out.push(run,n); run=v; n=1; } } if (a.length) out.push(run,n); return Uint16Array.from(out); }
+  function unrle16(r){ let n=0; for (let p=1;p<r.length;p+=2) n+=r[p]; const a=new Uint16Array(n); for (let p=0,i=0;p<r.length;p+=2){ a.fill(r[p],i,i+r[p+1]); i+=r[p+1]; } return a; }
+  function b64(u16){ const b=new Uint8Array(u16.buffer,u16.byteOffset,u16.byteLength); let s=''; for (let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); }
+  function unb64(s){ const bytes=Uint8Array.from(atob(s),c=>c.charCodeAt(0)); return new Uint16Array(bytes.buffer); }
+  const canShare = typeof SharedArrayBuffer!=='undefined' && (typeof crossOriginIsolated==='undefined' || crossOriginIsolated);
   class Grid {
-    constructor(W,H){
+    // opts.shared: put the fields in a SharedArrayBuffer (for worker threads). opts.buffer: attach to an existing world's fields (a worker does this).
+    constructor(W,H,opts={}){
       this.W=W; this.H=H;
-      const n=W*H;
-      this.type=new Uint8Array(n); this.life=new Uint16Array(n); this.shade=new Uint8Array(n); this.done=new Uint8Array(n);
-      this.temp=new Float32Array(n).fill(AMB); this.vx=new Float32Array(n); this.vy=new Float32Array(n);
-      this.CW=Math.ceil(W/CH); this.CHh=Math.ceil(H/CH);
-      this.dirty=new Uint8Array(this.CW*this.CHh); this.next=new Uint8Array(this.CW*this.CHh);
+      const L=layout(W,H);
+      this.buffer = opts.buffer || new (opts.shared && canShare ? SharedArrayBuffer : ArrayBuffer)(L.bytes);
+      this.shared = typeof SharedArrayBuffer!=='undefined' && this.buffer instanceof SharedArrayBuffer;
+      for (const name in L.at){ const [off,n,A]=L.at[name]; this[name]=new A(this.buffer,off,n); }
+      this.CW=L.CW; this.CHh=L.CHh; this.AW=L.AW; this.AH=L.AH; this.TW=L.TW; this.TH=L.TH;
+      this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;                    // the window the current tile may touch
       this.frame=0; this.wind=0.3; this.windHold=null;                   // windHold pins the prevailing wind (tests)
-      this.skyY=(H*0.4)|0; this.ambRow=new Float32Array(H);
-      this.trees=[]; this.treeId=1; this.owner=new Uint16Array(n);       // tree entities and which tree owns a cell
-      this.bfsQ=new Int32Array(1300); this.bfsMark=new Int32Array(n); this.bfsStamp=0;
-      this.AW=Math.ceil(W/AC); this.AH=Math.ceil(H/AC); const na=this.AW*this.AH; this.sky=new Int16Array(this.AW);
-      this.hum=new Float32Array(na); this.cap=new Float32Array(na); this.airF=new Float32Array(na); this.airT=new Float32Array(na); this.chill=new Float32Array(na);
-      // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
-      const nw=this.CW*this.CHh;
-      this.u=new Float32Array(nw); this.v=new Float32Array(this.CW*(this.CHh+1)); this.pres=new Float32Array(nw);
-      this.uc=new Float32Array(nw); this.vc=new Float32Array(nw); this.wsolid=new Uint8Array(nw); this.wheat=new Float32Array(nw);
-      this.rain=0; this.precip=new Uint32Array(W);   // drops of rain or snow released, in all and per column (a rain gauge)
+      this.skyY=(H*0.4)|0;
+      this.trees=[]; this.treeId=1;                                      // tree entities
+      this.bfsQ=new Int32Array(1300); this.bfsMark=new Int32Array(W*H); this.bfsStamp=0;   // per-thread scratch
+      this.ox=0; this.worldW=W; this.worldSeed=0; this.store=new Map(); this.storedTrees=new Map();   // streaming: where the window sits in a wider world
+      if (opts.buffer) return;                                           // attached: the owner of the world has set it up
+      this.temp.fill(AMB);
       this.clock=START; this.updateClimate();
       this.resetTemp(); this.initAir();
     }
@@ -270,7 +307,10 @@ const Sim = (() => {
       this.wake(a%this.W,(a/this.W)|0); this.wake(b%this.W,(b/this.W)|0);
       if (SUPPORTS.has(T[b]) && !SUPPORTS.has(T[a])) this.unsettle(a%this.W,(a/this.W)|0);   // something load-bearing moved away
     }
-    clear(){ this.type.fill(0); this.life.fill(0); this.resetTemp(); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll(); }
+    clear(){   // empties the whole world, the parts streamed out of the window included; regions not yet visited come in empty too
+      this.type.fill(0); this.life.fill(0); this.resetTemp(); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll();
+      this.store.clear(); this.storedTrees.clear(); this.blank=true; this.epoch=(this.epoch||0)+1; this.job=null;
+    }
     // density of the cell itself: muddy water, brine and acid get heavier with what they carry
     dens(i,t){ return t===WATER ? 1+(this.life[i]&255)*0.002 : t===BRINE ? 1+this.life[i]*0.001 : t===ACID ? 1+this.life[i]*0.0004 : EL[t].density; }
     canSink(d,j){ const t=this.type[j], k=KIND[t]; return t===E || k===3 || (k===2 && this.dens(j,t)<d-0.015); }
@@ -344,9 +384,9 @@ const Sim = (() => {
     // move cell i along (dx,dy) up to n steps; returns the steps taken and leaves the cell's new place in tci/tcx/tcy
     travel(i,x,y,dx,dy,n,d){
       let ci=i,cx=x,cy=y,k=0;
-      const W=this.W, H=this.H, T=this.type;
+      const W=this.W, T=this.type, {wx0,wx1,wy0,wy1}=this;
       for (;k<n;k++){
-        const nx=cx+dx, ny=cy+dy; if (nx<0||nx>=W||ny<0||ny>=H) break;
+        const nx=cx+dx, ny=cy+dy; if (nx<wx0||nx>=wx1||ny<wy0||ny>=wy1) break;
         const j=ny*W+nx;
         const ok = dy>0 ? this.canSink(d,j) : (T[j]===E || KIND[T[j]]===3);
         if (!ok) break;
@@ -385,7 +425,7 @@ const Sim = (() => {
       const held = el.tension && cy+1<this.H && TENS[T[ci+W]];
       if (cy+1<this.H && (flow>=1 || R()<Math.max(flow,0.3))){
         for (let q=0;q<2;q++){
-          const dx=q?-dir:dir, nx=cx+dx; if(nx<0||nx>=W) continue;
+          const dx=q?-dir:dir, nx=cx+dx; if(nx<this.wx0||nx>=this.wx1) continue;
           const j=(cy+1)*W+nx;
           if (!this.done[j] && this.canSink(d,j) && (liquid || T[cy*W+nx]!==STONE)){
             if (held && R()<el.tension && this.cohesion(j,ci)<2) continue;
@@ -404,7 +444,7 @@ const Sim = (() => {
         for (let q=0;q<2;q++){
           const dd=q?-dir:dir; let last=-1;
           for (let s=1;s<=disp;s++){
-            const nx=cx+dd*s; if(nx<0||nx>=W) break;
+            const nx=cx+dd*s; if(nx<this.wx0||nx>=this.wx1) break;
             const j=cy*W+nx, tj=T[j];
             if (tj===E || KIND[tj]===3) last=j; else break;
           }
@@ -480,8 +520,8 @@ const Sim = (() => {
     }
     pressureFlow(i,x,y,t){
       // head: how much of the same liquid sits directly on top of this cell
-      const W=this.W, H=this.H, T=this.type;
-      let head=0, gap=0; for (let k=1;k<=40;k++){ if (y-k<0) break; const a=T[i-k*W]; if (a===t){ head=k; gap=0; } else if (a===E && ++gap<=3) continue; else break; }   // bubbles don't break the column
+      const W=this.W, T=this.type, {wx0,wx1,wy0,wy1}=this;
+      let head=0, gap=0; for (let k=1;k<=40;k++){ if (y-k<wy0) break; const a=T[i-k*W]; if (a===t){ head=k; gap=0; } else if (a===E && ++gap<=3) continue; else break; }   // bubbles don't break the column
       if (head<3) return false;
       // breadth-first through the body for an air cell that is lower than the surface of this column
       const limit=y-head+1, mark=this.bfsMark, q=this.bfsQ, stamp=++this.bfsStamp; let qs=0, qe=0;
@@ -489,7 +529,7 @@ const Sim = (() => {
       while (qs<qe && qe<1200){
         const c=q[qs++], cx=c%W, cy=(c/W)|0;
         for (let k=0;k<4;k++){
-          const nx=cx+DX4[k], ny=cy+DY4[k]; if (nx<0||nx>=W||ny<0||ny>=H) continue; const j=ny*W+nx; if (mark[j]===stamp) continue;
+          const nx=cx+DX4[k], ny=cy+DY4[k]; if (nx<wx0||nx>=wx1||ny<wy0||ny>=wy1) continue; const j=ny*W+nx; if (mark[j]===stamp) continue;
           const tj=T[j];
           if (tj===E && ny<y && ny>=limit && (ny===0 || T[j-W]!==t) && (best<0 || ny<bestY)){ best=j; bestY=ny; }   // highest free surface of the body (not a bubble), below the head
           if (tj===t){ mark[j]=stamp; q[qe++]=j; if (qe>=1200) break; }
@@ -589,8 +629,8 @@ const Sim = (() => {
         }
       }
       // a wounded tree stops growing until it has been left alone for a while (so it can't out-grow a fire)
-      if (hit.size>0) t.stress=25; if (t.stress>0){ t.stress--; if (redraw) this.rasterTree(t); return true; }
-      if (t.water<=0 || (!force && R()>=this.growth)){ if (redraw) this.rasterTree(t); return true; }   // no water, or the wrong season: the tree waits
+      if (hit.size>0) t.stress=25; if (t.stress>0){ t.stress--; if (redraw) this.drawTree(t); return true; }
+      if (t.water<=0 || (!force && R()>=this.growth)){ if (redraw) this.drawTree(t); return true; }   // no water, or the wrong season: the tree waits
       const rate = 0.6; t.water--;
       t.age++;
       const MAXT=[3.8,2.4,1.5,1.0], MAXK=[4,3,2,0], RMAXT=[2.2,1.4,1.0,1.0], RMAXK=[4,3,1,0];
@@ -623,7 +663,7 @@ const Sim = (() => {
       // scars: a cell we lost stays bare for a while instead of healing instantly
       for (const [i,code] of t.cells){ if (this.type[i]!==this.kindOf(t,code) && !t.scars.has(i)) t.scars.set(i,60); }
       for (const [i,n] of t.scars){ if (n<=1) t.scars.delete(i); else t.scars.set(i,n-1); }
-      if (grew) this.rasterTree(t); return true;
+      if (grew) this.drawTree(t); return true;
     }
     nb4(i){   // a random 4-neighbour of cell i, or -1 off the edge
       const W=this.W, r=(R()*4)|0, j = r===0 ? i+W : r===1 ? i-W : r===2 ? i-1 : i+1;
@@ -642,6 +682,7 @@ const Sim = (() => {
       for (const t of this.trees) if (Math.abs(t.x-x)<7 && Math.abs(t.y-y)<30) return false;
       return this.openSky(x,y);
     }
+    drawTree(t){ if (this.sketch && (t.age&7)){ t.stale=true; return; } t.stale=false; this.rasterTree(t); }   // while a new world grows its trees, every 8th growth step is enough
     rasterTree(t){
       const W=this.W, next=new Map();
       const put=(x,y,code)=>{ x=Math.round(x); y=Math.round(y); if(!this.inb(x,y)) return; const i=y*W+x; const cur=next.get(i); if (cur!==undefined && !(cur&1)) return; next.set(i,code); };
@@ -732,14 +773,101 @@ const Sim = (() => {
     stepTrees(){
       for (let k=this.trees.length-1;k>=0;k--){ const t=this.trees[k]; if (t.dead){ this.trees.splice(k,1); continue; } if (t.falling) this.fallTree(t); else if ((this.frame+t.id)%TREE_TICK===0) this.growTree(t); }
     }
-    treesSave(){ return JSON.stringify(this.trees.map(t=>({id:t.id,x:t.x,y:t.y,age:t.age,water:t.water,leaf:t.leaf,span:t.span,falling:t.falling||undefined,segs:t.segs}))); }
+    treesSave(){ return JSON.stringify(this.trees.map(t=>this.treeRecord(t,0))); }
     treesLoad(json){
       this.trees=[]; this.owner.fill(0); if (!json) return;
-      for (const d of JSON.parse(json)){
-        const t={id:d.id,x:d.x,y:d.y,age:d.age,water:d.water,leaf:d.leaf??1,span:d.span??2400,falling:d.falling,cells:new Map(),scars:new Map(),segs:d.segs};
-        if (!t.segs.some(s=>s.root)) t.segs.push(this.newRoot(-1,0,Math.PI,8,0));   // saved before trees had roots
-        this.treeId=Math.max(this.treeId,t.id+1); this.trees.push(t); this.rasterTree(t);
+      for (const d of JSON.parse(json)){ const t=this.treeFrom(d,0); this.trees.push(t); this.rasterTree(t); }
+    }
+    // ---- streaming: the window moves a region at a time. The region that leaves is packed into the store with the trees
+    //      rooted in it; the region that enters comes back from the store, or is generated the first time. Regions outside
+    //      the window are frozen until they come back. ----
+    canShift(dir){ return this.W%REGION===0 && (dir>0 ? this.ox+this.W+REGION<=this.worldW : this.ox-REGION>=0); }
+    shift(dir){ const keep=seedNow(), ok=this.shiftWindow(dir); reseed(keep); return ok; }
+    shiftWindow(dir){
+      if (!this.canShift(dir)) return false;
+      const {W,H}=this, out = dir>0 ? 0 : W-REGION, inn = dir>0 ? W-REGION : 0, d=dir*REGION;
+      this.store.set((this.ox+out)/REGION, this.packRegion(out));
+      // slide every field along: cells, the coarse air, the wind and chunk grids, and the per-column gauges
+      const slide=(a,L,rows,k)=>{ for (let r=0;r<rows;r++){ const o=r*L; if (k>0) a.copyWithin(o,o+k,o+L); else a.copyWithin(o-k,o,o+L+k); } };
+      const L=layout(W,H), per={cell:[W,H,d], air:[L.AW,L.AH,d/AC], wind:[L.CW,L.CHh,d/CH], vface:[L.CW,L.CHh+1,d/CH], chunk:[L.CW,L.CHh,d/CH], col:[W,1,d], aircol:[L.AW,1,d/AC]};
+      for (const [name,,scope] of FIELDS) if (per[scope]) slide(this[name],...per[scope]);
+      for (const t of this.trees){
+        t.x-=d; const move=m=>{ const o=new Map(); for (const [i,c] of m){ const x=i%W-d; if (x>=0 && x<W) o.set(i-d,c); } return o; };
+        t.cells=move(t.cells); t.scars=move(t.scars);
       }
+      this.ox+=d;
+      this.blankColumns(inn,inn+REGION);
+      const key=(this.ox+inn)/REGION;
+      if (this.job && this.job.key===key) while (!this.job.it.next().done);   // being made ahead: finish it now
+      this.job=null;
+      const rec=this.store.get(key);
+      if (rec){ this.store.delete(key); this.unpackRegion(inn,rec); }
+      else if (!this.blank) generateColumns(this,inn,inn+REGION);
+      for (let k=0;k<AIRSLOW;k++) this.stepAir(k,true,inn/AC,(inn+REGION)/AC);
+      if (rec) this.humIn(inn,rec.hum);
+      this.wakeAll();
+      return true;
+    }
+    // make the regions just past each end of the window ahead of time, one slice of work per call (the main thread can do this
+    // while the workers run the cell pass); returns whether there was anything to do
+    prefetch(){
+      if (this.blank || this.W%REGION) return false;
+      if (!this.job) for (const gx0 of [this.ox+this.W, this.ox-REGION]){
+        if (gx0<0 || gx0+REGION>this.worldW || this.store.has(gx0/REGION)) continue;
+        this.job={key:gx0/REGION, it:regionJob(this,gx0)}; break;
+      }
+      if (!this.job) return false;
+      const keep=seedNow(); if (this.job.it.next().done) this.job=null; reseed(keep);   // (the world's own random stream doesn't notice)
+      return true;
+    }
+    blankColumns(x0,x1){
+      const {W,H}=this;
+      for (let y=0;y<H;y++){ const a=y*W+x0, b=y*W+x1, amb=this.ambRow[y]; this.type.fill(0,a,b); this.life.fill(0,a,b); this.shade.fill(0,a,b); this.temp.fill(amb,a,b); this.vx.fill(0,a,b); this.vy.fill(0,a,b); this.owner.fill(0,a,b); this.done.fill(0,a,b); }
+      for (let ay=0;ay<this.AH;ay++){ const a=ay*this.AW+x0/AC, b=ay*this.AW+x1/AC; this.hum.fill(0,a,b); this.chill.fill(0,a,b); }
+    }
+    packRegion(x0){
+      // run-length coded type, life, whole-degree temperature and owner, the region's vapour, and the trees rooted in it
+      const {W,H}=this, n=REGION*H, ty=new Uint16Array(n), li=new Uint16Array(n), te=new Uint16Array(n), ow=new Uint16Array(n);
+      for (let y=0;y<H;y++) for (let x=0;x<REGION;x++){ const k=y*REGION+x, i=y*W+x0+x; ty[k]=this.type[i]; li[k]=this.life[i]; te[k]=Math.round(this.temp[i])&0xffff; ow[k]=this.owner[i]; }
+      const ar=REGION/AC, hum=new Float32Array(ar*this.AH);
+      for (let ay=0;ay<this.AH;ay++) hum.set(this.hum.subarray(ay*this.AW+x0/AC, ay*this.AW+x0/AC+ar), ay*ar);
+      const key=(this.ox+x0)/REGION, trees=[];
+      for (let k=this.trees.length-1;k>=0;k--){
+        const t=this.trees[k]; if (t.x<x0 || t.x>=x0+REGION) continue;
+        trees.push(this.treeRecord(t,this.ox));
+        for (const [i] of t.cells){ const x=i%W; if ((x<x0 || x>=x0+REGION) && this.owner[i]===t.id){ this.owner[i]=0; this.set(i,E,this.ambRow[(i/W)|0]); } }   // its reach into the window goes with it (it is redrawn when it returns)
+        this.storedTrees.set(t.id,key); this.trees.splice(k,1);
+      }
+      return {type:rle16(ty), life:rle16(li), temp:rle16(te), owner:rle16(ow), hum, trees};
+    }
+    humIn(x0,hum){ const ar=REGION/AC; for (let ay=0;ay<this.AH;ay++) this.hum.set(hum.subarray(ay*ar,(ay+1)*ar), ay*this.AW+x0/AC); }
+    unpackRegion(x0,rec){
+      const {W,H}=this, ty=unrle16(rec.type), li=unrle16(rec.life), te=unrle16(rec.temp), ow=unrle16(rec.owner);
+      for (const d of rec.trees) this.storedTrees.delete(d.id);
+      const live=new Set(this.trees.map(t=>t.id)); for (const d of rec.trees) live.add(d.id);
+      for (let y=0;y<H;y++) for (let x=0;x<REGION;x++){
+        const k=y*REGION+x, i=y*W+x0+x, o=ow[k];
+        this.type[i]=ty[k]; this.life[i]=li[k]; this.temp[i]=(te[k]<<16)>>16; this.shade[i]=mix(this.ox+x0+x,y)&63;
+        this.owner[i] = (o && (live.has(o) || this.storedTrees.has(o))) ? o : 0;   // a tree that died while this region was away leaves its wood behind
+      }
+      for (const d of rec.trees){ const t=this.treeFrom(d,this.ox); this.trees.push(t); this.rasterTree(t); }
+    }
+    treeRecord(t,ox){ return {id:t.id,x:t.x+ox,y:t.y,age:t.age,water:t.water,leaf:t.leaf,span:t.span,falling:t.falling||undefined,segs:t.segs}; }
+    treeFrom(d,ox){
+      const t={id:d.id,x:d.x-ox,y:d.y,age:d.age,water:d.water,leaf:d.leaf??1,span:d.span??2400,falling:d.falling,cells:new Map(),scars:new Map(),segs:d.segs};
+      if (!t.segs.some(s=>s.root)) t.segs.push(this.newRoot(-1,0,Math.PI,8,0));   // saved before trees had roots
+      this.treeId=Math.max(this.treeId,t.id+1); return t;
+    }
+    // the stored regions as text for a save, and back
+    storeSave(){
+      const regions={}; for (const [k,r] of this.store) regions[k]={type:b64(r.type), life:b64(r.life), temp:b64(r.temp), owner:b64(r.owner), hum:b64(new Uint16Array(r.hum.buffer.slice(0))), trees:r.trees};
+      return JSON.stringify({ox:this.ox, worldW:this.worldW, seed:this.worldSeed, blank:this.blank||undefined, treeId:this.treeId, regions});
+    }
+    storeLoad(json){
+      this.store.clear(); this.storedTrees.clear();
+      if (!json){ this.ox=0; this.worldW=this.W; this.blank=true; return; }
+      const d=JSON.parse(json); this.ox=d.ox; this.worldW=d.worldW; this.worldSeed=d.seed; this.blank=!!d.blank; this.treeId=Math.max(this.treeId,d.treeId||1);
+      for (const k in d.regions){ const r=d.regions[k]; this.store.set(+k,{type:unb64(r.type), life:unb64(r.life), temp:unb64(r.temp), owner:unb64(r.owner), hum:new Float32Array(unb64(r.hum).buffer), trees:r.trees}); for (const t of r.trees) this.storedTrees.set(t.id,+k); }
     }
     openSky(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return true; const t=this.type[this.idx(x,y-k)]; if (t!==E && !isGas(t)) return false; } return true; }
     stepCloud(x,y,i){
@@ -752,12 +880,12 @@ const Sim = (() => {
       for (let k=1;k<=6;k++){ if (y-k<0) break; if (T[i-k*W]===CLOUD) above++; else break; }
       const w=this.wc(x,y), wu=this.uc[w], wv=this.vc[w];
       // a lone wisp in saturated air slowly drizzles out (a drop or a flake now and then)
-      if (n<=1 && R()<0.002){ this.set(i,E); if (R()<CQ && y+1<this.H && T[i+W]===E){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=1; this.rain++; this.precip[x]++; } return; }
+      if (n<=1 && R()<0.002){ this.set(i,E); if (R()<CQ && y+1<this.H && T[i+W]===E){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=1; Atomics.add(this.precip,x,1); } return; }
       // rain falls from the underside of a thick cloud; heavier clouds rain harder
       if (below===0 && n>=3 && above>=1 && y+1<this.H && T[i+W]===E && R()<0.004*(1+above)){   // (thin fog doesn't rain)
         // a drop is ten cloud cells' worth: it gathers them from the column above, and only falls if it found enough
         let got=1; this.set(i,E); for (let k=1;k<1/CQ && y-k>=0 && T[i-k*W]===CLOUD;k++){ this.set(i-k*W,E); got++; }
-        if (R()<got*CQ){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=wu*8; this.rain++; this.precip[x]++; }
+        if (R()<got*CQ){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=wu*8; Atomics.add(this.precip,x,1); }
         else this.hum[c]+=got*CQ;
         return;
       }
@@ -774,7 +902,7 @@ const Sim = (() => {
     }
     nearTip(x,y){ for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++){ const nx=x+dx, ny=y+dy; if (this.inb(nx,ny)){ const t=this.type[this.idx(nx,ny)]; if (t===TIP||t===WOOD) return true; } } return false; }
     stepStatic(x,y,i,t){
-      if (t===TIP){ this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); return; }   // a sapling needs ground under it
+      if (t===TIP){ this.defer(i); return; }   // becomes a tree after the cell pass
       if (t===EMBER && y>0 && R()<0.25 && this.type[this.idx(x,y-1)]===E) this.set(this.idx(x,y-1),FIRE);
       if (t===PLANT){                       // drink: nearby water is absorbed and becomes growth budget
         for (const [dx,dy] of [[0,1],[-1,0],[1,0],[0,-1]]){
@@ -926,14 +1054,14 @@ const Sim = (() => {
     // ---- the air pass: each tick visits every AIRSLOW-th row of coarse air cells ----
     // It samples how much of the cell is open air and how warm, lets cold air pool at night, moves vapour by diffusion and
     // the wind, and condenses whatever the air can't hold into cloud (fog, near the ground).
-    stepAir(off, init){
+    stepAir(off, init, ax0=0, ax1=this.AW){   // (a column range only when setting up the air over a region that just streamed in)
       const {W,H,AW,AH,type:T,temp,hum,cap,airF,airT,chill,CW}=this;
       const night=1-Math.min(1,this.sun*3), burn=this.sun>0.15, mix=0.03+0.3*this.sun, lift=0.1*this.sun;   // still nights, stirred sunny days; and thermals carry vapour up to where it condenses
       const sky=this.sky;
-      if (off===0) for (let ax=0; ax<AW; ax++){ const x=Math.min(W-1,ax*AC+1); let y=0; while (y<H && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++; sky[ax]=y; }   // where each column first meets ground, canopy or water
+      if (off===0) for (let ax=ax0; ax<ax1; ax++){ const x=Math.min(W-1,ax*AC+1); let y=0; while (y<H && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++; sky[ax]=y; }   // where each column first meets ground, canopy or water
       for (let ay=off; ay<AH; ay+=AIRSLOW){
         const y0=ay*AC, ya=Math.min(H-1,y0+1), yb=Math.min(H-1,y0+3), wrow=(y0>>4)*CW;
-        for (let ax=0; ax<AW; ax++){
+        for (let ax=ax0; ax<ax1; ax++){
           const c=ay*AW+ax, x0=ax*AC, xa=Math.min(W-1,x0+1), xb=Math.min(W-1,x0+3);
           let n=0, ts=0, j, tj;
           j=ya*W+xa; tj=T[j]; if (tj===E || KIND[tj]===3){ n++; ts+=temp[j]; }
@@ -1051,31 +1179,96 @@ const Sim = (() => {
       }
     }
 
-    step(){
-      const {W,H,CW,type,done,dirty,next}=this;
-      done.fill(0); dirty.set(next); next.fill(0);
-      const ltr=(this.frame&1)===0, temp=this.temp;
-      for (let cy=this.CHh-1;cy>=0;cy--){
-        const y0=cy*CH, y1=Math.min(H-1,y0+CH-1), crow=cy*CW;
-        for (let y=y1;y>=y0;y--){
-          for (let q=0;q<CW;q++){
-            const cx=ltr?q:CW-1-q; if (!dirty[crow+cx]) continue;   // whole sleeping chunks are skipped at once
-            const xa=cx*CH, xb=Math.min(W,xa+CH);
-            for (let k=xa;k<xb;k++){
-              const x=ltr?k:xa+xb-1-k, i=y*W+x;
-              if (this.stepHeat(x,y,i)) continue;
-              const t=type[i];
-              if (t===E){ if (y>0 && !done[i]){ const a=i-W; if (type[a]===E && temp[i]>temp[a]+12 && R()<0.3){ const tt=temp[i]; temp[i]=temp[a]; temp[a]=tt; this.wake(x,y-1); } } continue; }
-              if (done[i]) continue;
-              if (this.stepReactions(x,y,i)) continue;
-              const tt=type[i], kd=KIND[tt];
-              if (kd===1 || kd===2) this.stepMobile(x,y,i,tt);
-              else if (kd===3){ if (!this.stepLife(i,tt)) { if (tt===CLOUD) this.stepCloud(x,y,i); else this.stepGas(x,y,i,tt); } }
-              else { if (SPAN[tt] && this.stepSupport(x,y,i,tt)) continue; if (!this.stepLife(i,tt)) this.stepStatic(x,y,i,tt); }
-            }
+    // ---- one tick: the cell pass in tiles (any number of threads), then the passes that touch the whole world (main thread) ----
+    step(){ this.beginStep(); this.runTiles(); this.endStep(); }
+    beginStep(){
+      // wake what last tick woke, and list the awake tiles of each checkerboard phase for whoever runs them
+      const {CW,TW,TH,dirty,next,ctl,jobs}=this;
+      this.done.fill(0); dirty.set(next); next.fill(0);
+      let n=0;
+      // The tiling shifts by a random number of chunks each tick. Cells crossing a tile border meet neighbours that haven't
+      // moved yet this tick, which slows a stream a little there; with the borders moving, no spot is always a border.
+      const jit=mix(this.frame,0x7113);
+      ctl[C_JX]=(jit&3)*CH; ctl[C_JY]=((jit>>2)&3)*CH;
+      for (let p=0;p<PHASES;p++){
+        ctl[C_START+p]=n;
+        for (let ty=(p>>1);ty<TH;ty+=2) for (let tx=(p&1);tx<TW;tx+=2){
+          const r=this.tileRect(tx,ty); if (!r) continue;
+          let awake=0;
+          for (let cy=r[2]/CH;cy<Math.ceil(r[3]/CH) && !awake;cy++) for (let cx=r[0]/CH;cx<Math.ceil(r[1]/CH);cx++) if (dirty[cy*CW+cx]){ awake=1; break; }
+          if (awake) jobs[n++]=ty*TW+tx;
+        }
+        ctl[C_COUNT+p]=n-ctl[C_START+p]; ctl[C_NEXT+p]=0; ctl[C_ARRIVE+p]=0;
+      }
+      ctl[C_DEFER]=0; ctl[C_FRAME]=this.frame; ctl[C_SEED]=(R()*4294967296)|0;   // each tile's random stream comes from this, so the order tiles run in doesn't matter
+      this.gf[G_PRECIPT]=this.precipT;
+      this.awakeTiles=n;
+    }
+    runTiles(order){   // all four phases on this thread (order: optionally rearranges each phase's tiles, which must not matter)
+      const {ctl,jobs}=this, keep=seedNow();
+      for (let p=0;p<PHASES;p++){
+        let list=jobs.subarray(ctl[C_START+p], ctl[C_START+p]+ctl[C_COUNT+p]); if (order) list=order(Array.from(list));
+        for (const t of list) this.stepTile(t);
+      }
+      reseed(keep);
+    }
+    work(){   // a worker thread: wait for a frame, then take tiles from each phase until it runs dry and meet the others before the next
+      const {ctl,jobs}=this; let gen=Atomics.load(ctl,C_GEN);
+      Atomics.add(ctl,C_READY,1);
+      for (;;){
+        Atomics.wait(ctl,C_GEN,gen); gen=Atomics.load(ctl,C_GEN); if (gen<0) return;
+        const nt=ctl[C_THREADS];
+        for (let p=0;p<PHASES;p++){
+          const st=ctl[C_START+p], cnt=ctl[C_COUNT+p];
+          for (let k=Atomics.add(ctl,C_NEXT+p,1); k<cnt; k=Atomics.add(ctl,C_NEXT+p,1)) this.stepTile(jobs[st+k]);
+          if (Atomics.add(ctl,C_ARRIVE+p,1)===nt-1){ if (p===PHASES-1){ Atomics.store(ctl,C_DONE,gen); Atomics.notify(ctl,C_DONE); } else Atomics.notify(ctl,C_ARRIVE+p); }
+          else if (p<PHASES-1){ let v, spin=0; while ((v=Atomics.load(ctl,C_ARRIVE+p))<nt) if (++spin>4000) Atomics.wait(ctl,C_ARRIVE+p,v); }   // spin briefly first: a phase is a fraction of a millisecond
+        }
+      }
+    }
+    // the main thread's side: start a frame's tiles on the workers, and see whether they have finished
+    startTiles(threads){ const c=this.ctl; c[C_THREADS]=threads; Atomics.store(c,C_GEN,(c[C_GEN]+1)&0x3fffffff); Atomics.notify(c,C_GEN); }
+    tilesDone(){ return Atomics.load(this.ctl,C_DONE)===Atomics.load(this.ctl,C_GEN); }
+    workersReady(){ return Atomics.load(this.ctl,C_READY); }
+    stopWorkers(){ Atomics.store(this.ctl,C_GEN,-1); Atomics.notify(this.ctl,C_GEN); }
+    tileRect(tx,ty){   // the cells of tile (tx,ty) this tick, or null if it falls off the grid
+      const X0=Math.max(0,tx*TILE-this.ctl[C_JX]), X1=Math.min(this.W,(tx+1)*TILE-this.ctl[C_JX]), Y0=Math.max(0,ty*TILE_H-this.ctl[C_JY]), Y1=Math.min(this.H,(ty+1)*TILE_H-this.ctl[C_JY]);
+      return X1>X0 && Y1>Y0 ? [X0,X1,Y0,Y1] : null;
+    }
+    stepTile(tile){
+      const {W,H,CW,TW,type,done,dirty,ctl}=this, temp=this.temp;
+      const tx=tile%TW, ty=(tile/TW)|0, frame=ctl[C_FRAME];
+      reseed(mix(ctl[C_SEED],tile)); this.precipT=this.gf[G_PRECIPT];
+      const [X0,X1,Y0,Y1]=this.tileRect(tx,ty);
+      this.wx0=Math.max(0,X0-REACH); this.wx1=Math.min(W,X1+REACH); this.wy0=Math.max(0,Y0-REACH); this.wy1=Math.min(H,Y1+REACH);
+      const ltr=(frame&1)===0, cx0=X0/CH, cx1=Math.ceil(X1/CH);
+      for (let y=Y1-1;y>=Y0;y--){
+        const crow=((y/CH)|0)*CW;
+        for (let q=cx0;q<cx1;q++){
+          const cx=ltr?q:cx1-1-(q-cx0); if (!dirty[crow+cx]) continue;   // whole sleeping chunks are skipped at once
+          const xa=cx*CH, xb=Math.min(W,xa+CH);
+          for (let k=xa;k<xb;k++){
+            const x=ltr?k:xa+xb-1-k, i=y*W+x;
+            if (this.stepHeat(x,y,i)) continue;
+            const t=type[i];
+            if (t===E){ if (y>0 && !done[i]){ const a=i-W; if (type[a]===E && temp[i]>temp[a]+12 && R()<0.3){ const tt=temp[i]; temp[i]=temp[a]; temp[a]=tt; this.wake(x,y-1); } } continue; }
+            if (done[i]) continue;
+            if (this.stepReactions(x,y,i)) continue;
+            const tt=type[i], kd=KIND[tt];
+            if (kd===1 || kd===2) this.stepMobile(x,y,i,tt);
+            else if (kd===3){ if (!this.stepLife(i,tt)) { if (tt===CLOUD) this.stepCloud(x,y,i); else this.stepGas(x,y,i,tt); } }
+            else { if (SPAN[tt] && this.stepSupport(x,y,i,tt)) continue; if (!this.stepLife(i,tt)) this.stepStatic(x,y,i,tt); }
           }
         }
       }
+      this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;
+    }
+    defer(i){   // work the cell pass can't do inside a tile (planting a tree touches the shared tree list): the main thread does it after
+      const k=Atomics.add(this.ctl,C_DEFER,1); if (k<DEFER_MAX) this.deferred[k]=i; else this.wake(i%this.W,(i/this.W)|0);
+    }
+    endStep(){
+      const n=Math.min(DEFER_MAX,this.ctl[C_DEFER]), list=Array.from(this.deferred.subarray(0,n)).sort((a,b)=>a-b);
+      for (const i of list){ if (this.type[i]!==TIP) continue; const x=i%this.W, y=(i/this.W)|0; this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); }   // a sapling needs ground under it
       this.stepTrees();
       this.stepSoil();
       this.stepAir(this.frame%AIRSLOW, false);
@@ -1085,7 +1278,8 @@ const Sim = (() => {
     }
 
     // ---- serialisation: RLE of types | trees JSON | RLE of the life values that are state (soil moisture, rot) | clock
-    //      | RLE of the liquids' life (sediment, salt, acid strength) | RLE of the vapour field in hundredths ----
+    //      | RLE of the liquids' life (sediment, salt, acid strength) | RLE of the vapour field in hundredths
+    //      | JSON of the wider world: where the window sits, its width and seed, and the regions streamed out of the window ----
     // temps are restored from element defaults
     save(){
       const rle=(len,get,out)=>{ let run=get(0), n=0; for (let i=0;i<len;i++){ const v=get(i); if (v===run && n<65535) n++; else { out.push(run,n); run=v; n=1; } } if (len) out.push(run,n); return out; };
@@ -1093,10 +1287,10 @@ const Sim = (() => {
       const keep=[], fluid=[]; for (let i=0;i<this.type.length;i++){ const t=this.type[i]; if (KEEP_LIFE.has(t)) keep.push(this.life[i]); else if (FLUID_LIFE.has(t)) fluid.push(this.life[i]); }
       const hum=this.hum;
       return pack(rle(this.type.length,i=>this.type[i],[this.W,this.H]))+'|'+this.treesSave()+'|'+pack(rle(keep.length,i=>keep[i],[]))+'|'+Math.round(this.clock)
-        +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]));
+        +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]))+'|'+this.storeSave();
     }
     load(str){
-      const [rle,treeJson='',soil='',clock='',fluids='',air='']=str.split('|');
+      const [rle,treeJson='',soil='',clock='',fluids='',air='',stream='']=str.split('|');
       const unpack=b64=>{ const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); return new Uint16Array(bytes.buffer); };
       const u=unpack(rle);
       if (u[0]!==this.W||u[1]!==this.H) throw new Error('world size mismatch');
@@ -1107,6 +1301,7 @@ const Sim = (() => {
         for (let j=0;j<this.type.length && p<s.length;j++){ if (!keep.has(this.type[j])) continue; this.life[j]=s[p]; if (--left===0){ p+=2; left=s[p+1]; } } };
       if (soil) unrle(soil,KEEP_LIFE);     // older saves have no soil section: dirt keeps its default moisture
       if (fluids) unrle(fluids,FLUID_LIFE); // nor liquid state: water is clean, brine and acid take their defaults
+      this.storeLoad(stream);              // nor a wider world: it loads as a world the size of the window
       this.treesLoad(treeJson);
       this.initAir();
       if (air){ const s=unpack(air); for (let p=0,c=0;p<s.length;p+=2) for (let k=0;k<s[p+1];k++,c++) this.hum[c]=s[p]/100; }
@@ -1121,19 +1316,26 @@ const Sim = (() => {
     const v=(x,y)=>{ const x0=Math.floor(x),y0=Math.floor(y),fx=sm(x-x0),fy=sm(y-y0); return (h(x0,y0)*(1-fx)+h(x0+1,y0)*fx)*(1-fy)+(h(x0,y0+1)*(1-fx)+h(x0+1,y0+1)*fx)*fy; };
     return (x,y,oct=4)=>{ let s=0,a=1,f=1,m=0; for(let o=0;o<oct;o++){ s+=v(x*f,y*f)*a; m+=a; a*=0.5; f*=2; } return s/m; };
   }
-  function generate(g, worldSeed){
-    g.clock=START; g.updateClimate(); g.clear(); reseed(worldSeed);
-    const nz=noise2(worldSeed), cave=noise2(worldSeed+7), ore=noise2(worldSeed+13);
-    const {W,H}=g; const surf=new Int16Array(W);
-    for (let x=0;x<W;x++) surf[x]=(H*0.32 + (nz(x/90,0.5,4)-0.5)*H*0.35)|0;
-    for (let x=0;x<W;x++) for (let y=0;y<H;y++){
-      const i=g.idx(x,y); if (y<surf[x]) continue;
-      const depth=y-surf[x], dn=y/H;
+  // The world is generated a column range at a time, from noise in world coordinates and hashes of the world column,
+  // so a region comes out the same whether it is made with the whole window or streamed in on its own later.
+  function terrain(g){
+    if (g.noise && g.noise.seed===g.worldSeed) return g.noise;
+    const s=g.worldSeed, keep=seedNow(), nz=noise2(s), cave=noise2(s+7), ore=noise2(s+13); reseed(keep);
+    return g.noise={seed:s, nz, cave, ore, surf:gx=>(g.H*0.32 + (nz(gx/90,0.5,4)-0.5)*g.H*0.35)|0};
+  }
+  const LAKE=0x1a4e, TREE=0x7e3e, TREES_EVERY=12;
+  // (a generator: it yields between slices of work, so a region can be made a little at a time in spare moments)
+  function* columns(g, x0, x1){
+    const {W,H}=g, T=terrain(g), {nz,cave,ore}=T, gx0=g.ox+x0, gx1=g.ox+x1, s=g.worldSeed;
+    const surf=new Int16Array(x1-x0); for (let x=x0;x<x1;x++) surf[x-x0]=T.surf(g.ox+x);
+    for (let x=x0;x<x1;x++){ if (x>x0 && x%32===0) yield; reseed(mix(s, g.ox+x)); for (let y=0;y<H;y++){
+      const gx=g.ox+x, i=g.idx(x,y), sy=surf[x-x0]; if (y<sy) continue;
+      const depth=y-sy, dn=y/H;
       let t=STONE;
-      const soil=4+nz(x/20,y/20,2)*8;
-      if (depth<soil) t = surf[x]>H*0.42 ? SAND : DIRT;               // topsoil, with sandy shores in the low valleys
+      const soil=4+nz(gx/20,y/20,2)*8;
+      if (depth<soil) t = sy>H*0.42 ? SAND : DIRT;                    // topsoil, with sandy shores in the low valleys
       else {
-        const c=cave(x/48,y/32,3), o=ore(x/30,y/30,3);
+        const c=cave(gx/48,y/32,3), o=ore(gx/30,y/30,3);
         if (c>0.62 && depth>8){ t=E;
           if (dn>0.9 && c>0.66) t=LAVA;
           else if (c>0.7 && dn>0.55 && o<0.4) t=OIL;
@@ -1148,40 +1350,95 @@ const Sim = (() => {
       if (y>=H-3) t=STONE;
       if (t!==E) g.set(i,t, EL[t].t0===AMB ? g.ambAt(y) : undefined);   // the ground starts at the local ambient, so it doesn't spend its first minutes cooling
       if (t===DIRT) g.life[i]=(40<<8)|Math.min(MOIST, 70+depth*18);      // damper with depth
+    } }
+    // lakes: flood shallow dips in the surface (a dip just outside the range can still spill into it)
+    for (let c=Math.max(1,gx0-25); c<Math.min(g.worldW-1,gx1+25); c++){
+      const sc=T.surf(c), l=T.surf(c-1), r=T.surf(c+1);
+      if (!(sc>l && sc>r && hash01(s^LAKE,c)<0.5)) continue;
+      const lvl=Math.min(l,r);
+      for (let gx=Math.max(gx0,c-25); gx<Math.min(gx1,c+25); gx++){ const x=gx-g.ox, top=T.surf(gx); for (let y=lvl;y<top;y++){ const i=g.idx(x,y); if (g.type[i]===E) g.set(i,WATER); } }
     }
-    // lakes: flood shallow dips in the surface
-    for (let x=1;x<W-1;x++){ if (surf[x]>surf[x-1] && surf[x]>surf[x+1] && R()<0.5){ const lvl=Math.min(surf[x-1],surf[x+1]); for (let xx=x-25;xx<x+25;xx++){ if(xx<0||xx>=W)continue; for (let y=lvl;y<surf[xx];y++){ const i=g.idx(xx,y); if (g.type[i]===E) g.set(i,WATER); } } } }
     // soil under and beside water starts soaked, so lakes don't drain into their own beds
-    for (let x=0;x<W;x++){ let wet=0; for (let y=0;y<H;y++){ const i=g.idx(x,y), t=g.type[i]; if (t===WATER) wet=12; else if (t===DIRT && wet>0){ g.life[i]=(g.life[i]&0xff00)|MOIST; wet--; } else if (t!==DIRT) wet=0; } }
-    // trees: plant on the surface and let them grow up before the world is handed over
-    for (let x=8;x<W-8;x++){ if (R()<0.035 && g.type[g.idx(x,surf[x])]===DIRT && g.type[g.idx(x,surf[x]-1)]===E){ g.plantTree(x,surf[x]-1); x+=10; } }
-    const grow=60+(R()*120|0);
-    for (const t of g.trees){ t.water=20; for (let n=0;n<grow;n++) if (!g.growTree(t,true)) break; }
+    for (let x=x0;x<x1;x++){ let wet=0; for (let y=0;y<H;y++){ const i=g.idx(x,y), t=g.type[i]; if (t===WATER) wet=12; else if (t===DIRT && wet>0){ g.life[i]=(g.life[i]&0xff00)|MOIST; wet--; } else if (t!==DIRT) wet=0; } }
+    // trees: at most one in each run of TREES_EVERY columns, grown up before the world is handed over
+    const fresh=[];
+    for (let b=Math.floor(gx0/TREES_EVERY); b*TREES_EVERY<gx1; b++){
+      if (hash01(s^TREE,b)>=0.34) continue;
+      const gx=b*TREES_EVERY+((hash01(s^TREE,b+0x10000)*TREES_EVERY)|0), x=gx-g.ox, sy=surf[x-x0];
+      if (gx<gx0 || gx>=gx1 || gx<8 || gx>=g.worldW-8) continue;
+      reseed(mix(s^TREE,gx));
+      if (g.type[g.idx(x,sy)]===DIRT && g.type[g.idx(x,sy-1)]===E && g.plantTree(x,sy-1)) fresh.push(g.trees[g.trees.length-1]);
+    }
+    yield fresh;   // (tree ids are handed out by now, so whoever drives this can take them back)
+    for (const t of fresh){
+      yield; reseed(mix(s^TREE,t.x+g.ox)); const grow=60+(R()*120|0); t.water=20;
+      for (let n=0;n<grow;n++){ if (n && n%40===0){ const keep=seedNow(); yield; reseed(keep); } g.sketch=true; const ok=g.growTree(t,true); g.sketch=false; if (!ok) break; }
+      if (t.stale) g.rasterTree(t);
+    }
     g.stepTrees();
+    return surf;
+  }
+  function generateColumns(g, x0, x1){ const it=columns(g,x0,x1); for (;;){ const r=it.next(); if (r.done) return r.value; } }
+  // make the region at world column gx0 on a scratch grid, a slice per call, and leave it packed in g's store
+  function* regionJob(g, gx0){
+    const sc=g.scratch || (g.scratch=new Grid(REGION, g.H)), key=gx0/REGION, epoch=g.epoch;
+    sc.clock=g.clock; sc.updateClimate(); sc.clear(); sc.worldSeed=g.worldSeed; sc.worldW=g.worldW; sc.ox=gx0; sc.blank=false; sc.noise=g.noise;
+    sc.treeId=g.treeId;
+    const it=columns(sc,0,REGION);
+    for (;;){ const r=it.next(); if (r.done) break; if (r.value) g.treeId=Math.max(g.treeId,sc.treeId); yield; }
+    sc.initAir(); yield;
+    const rec=sc.packRegion(0);
+    if (g.epoch!==epoch || g.store.has(key) || (gx0>=g.ox && gx0<g.ox+g.W)) return;   // the world changed under us, or the region got made another way
+    g.store.set(key,rec); for (const t of rec.trees) g.storedTrees.set(t.id,key);
+  }
+  // a new world: worldW wide (the grid's own width unless it streams), with the window starting at ox
+  function generate(g, worldSeed, worldW=g.W, ox=0){
+    g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=worldSeed; g.worldW=worldW; g.ox=ox; g.blank=false;
+    const surf=generateColumns(g,0,g.W);
     g.initAir();
     g.wakeAll();
     return surf;
   }
 
-  return {EL,N,CH,AMB,DAY,YEAR,AC,SAT,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
+  return {EL,N,CH,AMB,DAY,YEAR,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
 })();
 
 // ============================================================================
 //  RENDER + INPUT — browser-specific; replaced wholesale in the engine port.
 // ============================================================================
 (() => {
-const {EL,Grid,CH,generate,ids}=Sim;
+const {EL,Grid,CH,generate,ids,REGION}=Sim;
 const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}=ids;
 const ERASE=255, PAN=254;
-const W=960, H=480, VW=320, VH=200;
-const g=new Grid(W,H);
+const W=960, H=480, VW=320, VH=200, WORLD_W=W*8;   // the grid is a 960-wide window that streams along a world eight times as wide
+const canThread=Sim.canShare && typeof Worker!=='undefined' && typeof Blob!=='undefined';
+const g=new Grid(W,H,{shared:canThread});
 window.sandfall={g,Sim};   // handy for poking at the world from the console
 let camX=0, camY=0;
+
+// --- worker threads: the cell pass runs on them when the page can share memory with them (it has to be cross-origin
+//     isolated for that); otherwise it runs here. The world comes out exactly the same either way. ---
+const pool={n:0, workers:[], why:''};
+const SCRIPT=document.currentScript ? document.currentScript.textContent : '';
+function startWorkers(){
+  if (!canThread){ pool.why=typeof Worker==='undefined' ? 'no workers here' : 'page not cross-origin isolated'; return; }
+  try{
+    const cut=SCRIPT.search(/\/\/\s+RENDER/), sim=SCRIPT.slice(0, SCRIPT.lastIndexOf('// ====',cut));
+    if (!sim) throw new Error('no source');
+    const url=URL.createObjectURL(new Blob([sim+'\nonmessage=e=>new Sim.Grid(e.data.W,e.data.H,{buffer:e.data.buffer}).work();'],{type:'text/javascript'}));
+    const n=Math.min(4, Math.max(1, ((typeof navigator!=='undefined' && navigator.hardwareConcurrency)||2)-1));
+    for (let k=0;k<n;k++){ const w=new Worker(url); w.onerror=()=>{ if (g.workersReady()<pool.n) stopWorkers('workers failed to start'); }; w.postMessage({W,H,buffer:g.buffer}); pool.workers.push(w); }
+    pool.n=n;
+  }catch(e){ stopWorkers('workers unavailable'); }
+}
+window.sandfall.pool=pool;
+function stopWorkers(why){ g.stopWorkers(); for (const w of pool.workers) w.terminate(); pool.workers=[]; pool.n=0; pool.why=why; }
+window.addEventListener('pagehide',()=>{ if (pool.n) stopWorkers('stopped'); });
 
 const cv=document.getElementById('c'), ctx=cv.getContext('2d');
 cv.width=VW; cv.height=VH;
 const img=ctx.createImageData(VW,VH), px=new Uint32Array(img.data.buffer);
-document.getElementById('dims').textContent='world '+W+'×'+H;
+const dims=()=>{ document.getElementById('dims').textContent='world '+g.worldW+'×'+H; };
 const msg=s=>{ document.getElementById('msg').textContent=s; };
 
 // --- lighting: sky from above + emitters, two relaxation sweeps over the viewport ---
@@ -1309,10 +1566,12 @@ let drawing=false,panning=false,lastX=-1,lastY=-1,panPX=0,panPY=0;
 const clampCam=()=>{ camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
 const pos=e=>{ const r=cv.getBoundingClientRect(); return [camX+((e.clientX-r.left)/r.width*VW)|0, camY+((e.clientY-r.top)/r.height*VH)|0]; };
 function stroke(e){
-  const [x,y]=pos(e);
-  if (lastX<0) paint(x,y);
-  else { const n=Math.max(Math.abs(x-lastX),Math.abs(y-lastY),1);
-    for (let k=0;k<=n;k++) paint(Math.round(lastX+(x-lastX)*k/n), Math.round(lastY+(y-lastY)*k/n)); }
+  const [x,y]=pos(e), x0=lastX, y0=lastY;
+  whenIdle(()=>{
+    if (x0<0) paint(x,y);
+    else { const n=Math.max(Math.abs(x-x0),Math.abs(y-y0),1);
+      for (let k=0;k<=n;k++) paint(Math.round(x0+(x-x0)*k/n), Math.round(y0+(y-y0)*k/n)); }
+  });
   lastX=x; lastY=y;
 }
 cv.addEventListener('contextmenu',e=>e.preventDefault());
@@ -1340,37 +1599,57 @@ const brushEl=document.getElementById('brush'), brushV=document.getElementById('
 brushEl.addEventListener('input',()=>{brush=+brushEl.value; brushV.textContent=brush;});
 let paused=false;
 document.getElementById('pause').addEventListener('click',e=>{paused=!paused; e.target.textContent=paused?'Resume':'Pause';});
-document.getElementById('clear').addEventListener('click',()=>{ g.clear(); msg('Cleared'); });
+document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ g.clear(); msg('Cleared'); }));
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
 document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
 document.getElementById('moistview').addEventListener('click',e=>{moistView=!moistView; e.target.setAttribute('aria-pressed',moistView);});
 document.getElementById('windview').addEventListener('click',e=>{windView=!windView; e.target.setAttribute('aria-pressed',windView);});
 let worldSeed=(Math.random()*1e9)|0;
 function newWorld(seedN){
-  worldSeed=seedN; const surf=generate(g,worldSeed);
-  camX=(W-VW)/2|0; camY=Math.max(0,surf[camX+VW/2|0]-VH*0.6|0); clampCam();
+  worldSeed=seedN; const ox=Math.floor((WORLD_W-W)/2/REGION)*REGION, surf=generate(g,worldSeed,WORLD_W,ox);   // start in the middle of the world
+  camX=(W-VW)/2|0; camY=Math.max(0,surf[camX+VW/2|0]-VH*0.6|0); clampCam(); dims();
   msg('World #'+worldSeed);
 }
-document.getElementById('newworld').addEventListener('click',()=>newWorld((Math.random()*1e9)|0));
-document.getElementById('save').addEventListener('click',()=>{ try{ localStorage.setItem('sandfall.world',g.save()); localStorage.setItem('sandfall.cam',camX+','+camY); msg('Saved to this browser'); }catch(e){ msg('Could not save in this browser'); } });
-document.getElementById('load').addEventListener('click',()=>{ try{ const s=localStorage.getItem('sandfall.world'); if(!s){msg('Nothing saved yet');return;} g.load(s); const c=(localStorage.getItem('sandfall.cam')||'0,0').split(',').map(Number); camX=c[0];camY=c[1];clampCam(); msg('Loaded'); }catch(e){ msg('Could not load: '+e.message); } });
+document.getElementById('newworld').addEventListener('click',()=>whenIdle(()=>newWorld((Math.random()*1e9)|0)));
+document.getElementById('save').addEventListener('click',()=>whenIdle(()=>{ try{ localStorage.setItem('sandfall.world',g.save()); localStorage.setItem('sandfall.cam',camX+','+camY); msg('Saved to this browser'); }catch(e){ msg('Could not save in this browser (the world may be too big for its storage: try Export)'); } }));
+document.getElementById('load').addEventListener('click',()=>whenIdle(()=>{ try{ const s=localStorage.getItem('sandfall.world'); if(!s){msg('Nothing saved yet');return;} g.load(s); const c=(localStorage.getItem('sandfall.cam')||'0,0').split(',').map(Number); camX=c[0];camY=c[1];clampCam(); dims(); msg('Loaded'); }catch(e){ msg('Could not load: '+e.message); } }));
 const io=document.getElementById('io'), iotext=document.getElementById('iotext');
-document.getElementById('export').addEventListener('click',()=>{ io.classList.toggle('open'); if (io.classList.contains('open')){ iotext.value=g.save(); msg('World text ready to copy ('+(iotext.value.length/1024|0)+' KB)'); } });
-document.getElementById('import').addEventListener('click',()=>{ try{ g.load(iotext.value.trim()); msg('Imported'); }catch(e){ msg('Could not import: '+e.message); } });
+document.getElementById('export').addEventListener('click',()=>whenIdle(()=>{ io.classList.toggle('open'); if (io.classList.contains('open')){ iotext.value=g.save(); msg('World text ready to copy ('+(iotext.value.length/1024|0)+' KB)'); } }));
+document.getElementById('import').addEventListener('click',()=>whenIdle(()=>{ try{ g.load(iotext.value.trim()); dims(); msg('Imported'); }catch(e){ msg('Could not import: '+e.message); } }));
 
 // --- loop ---
-let fpsT=performance.now(), frames=0;
-const fpsEl=document.getElementById('fps'), chunkEl=document.getElementById('chunks'), camEl=document.getElementById('cam');
+// With workers, a tick's cell pass runs while this thread renders; the tick is finished at the start of the next frame.
+// Anything that changes the world (painting, buttons, streaming) waits for a moment when no cell pass is running.
+let busy=false; const later=[];
+function whenIdle(f){ if (busy) later.push(f); else f(); }
+function stream(){   // keep the camera in the middle region of the window
+  const mid=camX+VW/2;
+  if (mid>=W-REGION && g.shift(1)) camX-=REGION;
+  else if (mid<REGION && g.shift(-1)) camX+=REGION;
+}
+function tick(){
+  g.beginStep();
+  if (pool.n && g.workersReady()>=pool.n && g.awakeTiles){ g.startTiles(pool.n); busy=true; }
+  else { g.runTiles(); g.endStep(); }
+}
+let fpsT=performance.now(), frames=0, stepMs=0, steps=0;
+const fpsEl=document.getElementById('fps'), chunkEl=document.getElementById('chunks'), camEl=document.getElementById('cam'), thrEl=document.getElementById('threads');
 function loop(now){
   keyPan();
-  if (drawing && lastX>=0) paint(lastX,lastY);
-  if (!paused) g.step();
+  if (busy && g.tilesDone()){ const t=performance.now(); busy=false; g.endStep(); stepMs+=performance.now()-t; while (later.length) later.shift()(); }
+  if (!busy){
+    if (drawing && lastX>=0) paint(lastX,lastY);
+    stream();
+    if (!paused){ const t=performance.now(); tick(); stepMs+=performance.now()-t; steps++; }
+  }
   render(); frames++;
+  g.prefetch();   // make the land just past the window ahead of time, a slice a frame (it never touches the shared world)
   if (now-fpsT>500){
     fpsEl.textContent=Math.round(frames*1000/(now-fpsT))+' fps'; fpsT=now; frames=0;
     let d=0; for (let i=0;i<g.dirty.length;i++) d+=g.dirty[i];
     chunkEl.textContent=d+'/'+g.dirty.length+' chunks awake';
-    camEl.textContent='cam '+camX+','+camY;
+    camEl.textContent='x '+(g.ox+camX)+', y '+camY+' · '+g.store.size+' regions stored';
+    thrEl.textContent=(pool.n ? pool.n+' worker threads' : '1 thread ('+pool.why+')')+(steps ? ', '+(stepMs/steps).toFixed(1)+' ms a tick on the main thread' : ''); stepMs=0; steps=0;
     document.getElementById('wind').textContent='wind '+(g.wind<0?'←':'→')+' '+Math.abs(g.wind).toFixed(2);
     const hr=(g.dayPhase*24+6)%24;   // the day starts at sunrise, 06:00
     const deg=Math.round(g.climate);
@@ -1379,8 +1658,9 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 function start(data){
-  if (data && data.world){ try{ g.load(data.world); camX=data.camX; camY=data.camY; clampCam(); }catch(e){ newWorld(worldSeed); } }
+  if (data && data.world){ try{ g.load(data.world); camX=data.camX; camY=data.camY; clampCam(); dims(); }catch(e){ newWorld(worldSeed); } }
   else newWorld(worldSeed);
+  startWorkers();
   requestAnimationFrame(loop);
 }
 window.claude?.hot?.snapshot?.(()=>({world:g.save(),camX,camY}));
