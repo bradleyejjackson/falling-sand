@@ -42,6 +42,28 @@ input[type=range]{accent-color:var(--accent);width:140px}
 .io.open{display:flex}
 textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;flex:1;min-width:0;height:60px;resize:vertical}
 .msg{color:var(--accent);min-height:1.2em}
+.el b{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--muted);letter-spacing:0}
+.el[aria-pressed="true"] b{color:var(--accent)}
+.el:disabled{opacity:.35;cursor:not-allowed}
+.el.scn{flex-direction:column;align-items:flex-start;gap:2px}
+.el.scn small{font-family:var(--mono);font-size:11px;letter-spacing:0;text-transform:none;color:var(--muted)}
+.mission{display:none;gap:10px 24px;flex-wrap:wrap;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.mission.on{display:flex}
+.mission h3{font-family:var(--display);font-size:15px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 4px}
+.mission p{margin:0;color:var(--muted);line-height:1.5;max-width:46ch}
+.mission ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;font-variant-numeric:tabular-nums}
+.mission li::before{content:"○ ";color:var(--muted)}
+.mission li.ok::before{content:"● ";color:var(--accent)}
+.mission li.bad::before{content:"✕ ";color:#e0604a}
+.mission .nums{display:flex;flex-direction:column;gap:3px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.mission .nums strong{color:var(--fg);font-weight:500}
+.mission .acts{display:flex;gap:8px;margin-left:auto}
+.banner{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,9,12,.62)}
+.banner.on{display:flex}
+.banner div{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:16px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;max-width:80%}
+.banner h3{font-family:var(--display);font-size:20px;letter-spacing:.08em;text-transform:uppercase;margin:0}
+.banner p{margin:0;color:var(--muted)}
+.banner .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -50,7 +72,16 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <div class="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="threads"></span><span id="wind"></span><span id="clock"></span></div>
 </header>
 
-<div class="stage"><canvas id="c"></canvas></div>
+<div class="stage"><canvas id="c"></canvas>
+  <div class="banner" id="banner" role="status"><div><h3 id="bannerh"></h3><p id="bannerp"></p><div class="acts" id="banneracts"></div></div></div>
+</div>
+
+<div class="mission" id="mission">
+  <div><h3 id="mname"></h3><p id="mbrief"></p></div>
+  <ul id="mgoals"></ul>
+  <div class="nums"><span>Time <strong id="mtime"></strong></span><span>Reactions <strong id="mpoints"></strong></span><span id="mchain"></span></div>
+  <div class="acts"><button class="btn" id="restart">Restart</button><button class="btn" id="leave">Sandbox</button></div>
+</div>
 
 <div class="groups" id="groups"></div>
 
@@ -72,7 +103,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -217,6 +248,7 @@ const Sim = (() => {
     // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
     ['u',Float32Array,'wind'], ['v',Float32Array,'vface'], ['pres',Float32Array,'wind'], ['uc',Float32Array,'wind'], ['vc',Float32Array,'wind'], ['wsolid',Uint8Array,'wind'], ['wheat',Float32Array,'wind'],
     ['ambRow',Float32Array,'row'], ['precip',Uint32Array,'col'], ['sky',Int16Array,'aircol'],   // precip: drops of rain or snow released per column (a rain gauge)
+    ['made',Int32Array,'types'],   // cells each element has been turned into (set), counted for the game's reaction scoring
     ['ctl',Int32Array,'ctl'], ['gf',Float64Array,'gf'], ['jobs',Int32Array,'jobs'], ['deferred',Int32Array,'defer'],   // the job system's shared state
   ];
   // ctl slots: frame counter the workers wait on, finished frame, threads, per-phase next-tile and arrival counters, deferred count
@@ -224,7 +256,7 @@ const Sim = (() => {
   const G_PRECIPT=0;   // gf slots: per-frame floats the cell pass reads
   function layout(W,H){
     const CW=Math.ceil(W/CH), CHh=Math.ceil(H/CH), AW=Math.ceil(W/AC), AH=Math.ceil(H/AC), TW=Math.ceil(W/TILE)+1, TH=Math.ceil(H/TILE_H)+1;   // (one spare: the tiling shifts each tick)
-    const len={cell:W*H, air:AW*AH, wind:CW*CHh, vface:CW*(CHh+1), chunk:CW*CHh, row:H, col:W, aircol:AW, ctl:C_SIZE, gf:4, jobs:TW*TH, defer:DEFER_MAX};
+    const len={cell:W*H, air:AW*AH, wind:CW*CHh, vface:CW*(CHh+1), chunk:CW*CHh, row:H, col:W, aircol:AW, types:64, ctl:C_SIZE, gf:4, jobs:TW*TH, defer:DEFER_MAX};
     let off=0; const at={};
     for (const [name,A,scope] of FIELDS){ off=Math.ceil(off/8)*8; at[name]=[off,len[scope],A]; off+=len[scope]*A.BYTES_PER_ELEMENT; }
     return {at, bytes:off, CW, CHh, AW, AH, TW, TH};
@@ -274,6 +306,7 @@ const Sim = (() => {
     pick(v){ return Array.isArray(v) ? v[(R()*v.length)|0] : v; }
     set(i,t,temp){
       const el=EL[t], was=this.type[i];
+      if (t!==was) Atomics.add(this.made,t,1);
       if (SUPPORTS.has(was) && !SUPPORTS.has(t)) this.unsettle(i%this.W,(i/this.W)|0);
       this.type[i]=t; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0;
       this.life[i] = el.life ? el.life[0]+((R()*(el.life[1]-el.life[0]))|0) : el.soil;
@@ -449,7 +482,10 @@ const Sim = (() => {
             if (tj===E || KIND[tj]===3) last=j; else break;
           }
           if (last>=0 && R()<0.95){
-            if (el.tension && R()<el.tension && this.cohesion(last,ci)<2) continue;   // surface tension: a drop won't pull away from its body, and a puddle won't thin to a film
+            if (el.tension && R()<el.tension && this.cohesion(last,ci)<2){   // surface tension: a drop won't pull away from its body, and a puddle won't thin to a film
+              const near=ci+dd; if (near!==last && cy>0 && T[ci-W]===t && this.cohesion(near,ci)>=2){ this.swap(ci,near); return; }   // but water pressed on from above still advances a step at a time
+              continue;
+            }
             this.swap(ci,last); return;
           }
         }
@@ -1400,14 +1436,193 @@ const Sim = (() => {
     return surf;
   }
 
-  return {EL,N,CH,AMB,DAY,YEAR,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
+  // ---- game loop: scenarios with goals, a material budget, reaction-chain scoring, and element unlocks ----------
+  // A scenario is played in BOX, a 320×200 pit at the bottom middle of the grid (one screen), dug into solid stone and open to
+  // the sky. Its goals and fails are data (element names, rectangles in box coordinates), so a scenario saves as JSON and a
+  // hand-edited one loads like a built-in. Each goal or fail measures one number and has a min and/or a max:
+  //   {count:'Water' | ['Fire','Ember'], rect:[x0,y0,x1,y1]}   cells of those elements in the rectangle
+  //   {trees:true, rect, tall:n}                                living trees rooted in the rectangle with a trunk at least n cells
+  //   {made:'Steam'}                                            cells of that element made by reactions since the start
+  // The scenario is won when every goal has held for HOLD_GOAL ticks, and lost when any fail's range is reached or time runs out.
+  const BOX = {x:320, y:280, w:320, h:200};
+  const byName = n => { const e=EL.find(e=>e.name===n); if (!e) throw new Error('no element '+n); return e.id; };
+  const ids = v => (Array.isArray(v) ? v : [v]).map(byName);
+  // what a reaction product is worth. Weather (cloud, rain, snow, melt) and movement score nothing.
+  const VALUE = {Fire:1, Steam:1, Ember:2, Charcoal:3, Ash:2, Glass:6, Stone:2, Lava:4, Rubble:1, Brine:2, Plant:3, Dirt:2, Ice:2, Litter:1};
+  // a chain: each different product made in the last CHAIN_WINDOW ticks adds CHAIN_STEP to the multiplier, up to CHAIN_MAX
+  const POINT = 0.01;   // reaction points per unit of VALUE (a big fire turns over hundreds of thousands of cells)
+  const CHAIN_WINDOW = 180, CHAIN_STEP = 0.5, CHAIN_MAX = 4, HOLD_GOAL = 90, CHECK = 6;
+  const STARTER = ['Sand','Dirt','Seed','Snow','Water','Stone','Wood','Fire','Smoke'];   // the sandbox rack before any unlocks
+
+  // building helpers for a scenario's layout, in box coordinates
+  function builder(g){
+    const at=(x,y)=>g.idx(BOX.x+x, BOX.y+y);
+    const b={
+      put(x,y,t,life){ if (x<0||y<0||x>=BOX.w||y>=BOX.h) return; const i=at(x,y); g.set(i,t, EL[t].t0===AMB ? g.ambAt(BOX.y+y) : undefined); if (life!==undefined) g.life[i]=life; },
+      warm(x,y){ const i=at(x,y); g.temp[i]=g.ambAt(BOX.y+y); },
+      rect(x0,y0,x1,y1,t,life){ for (let y=y0;y<y1;y++) for (let x=x0;x<x1;x++) b.put(x,y,t,life); },
+      tree(x,y,grow){   // a tree grown up in place, the way new worlds grow theirs
+        if (!g.plantTree(BOX.x+x, BOX.y+y)) return null; const t=g.trees[g.trees.length-1]; t.water=20;
+        for (let n=0;n<grow;n++){ g.sketch=true; const ok=g.growTree(t,true); g.sketch=false; if (!ok) break; }
+        g.rasterTree(t); return t;
+      },
+    };
+    return b;
+  }
+  const DAMP = (40<<8)|200, DRY = (40<<8)|15;
+  const SCENARIOS = [
+    { id:'irrigate', name:'Irrigation', seed:11, time:60*60,
+      brief:'The basin on the right is dry. Open the reservoir and fill the basin with water.',
+      budget:{Erase:120}, unlocks:['Oil','Ice','Steam','Cloud'],
+      goals:[{label:'Water in the basin', count:'Water', rect:[150,150,230,185], min:300}],
+      fails:[],
+      build(b){
+        b.rect(0,150,320,200,STONE);
+        b.rect(0,60,10,150,STONE); b.rect(0,130,70,150,STONE); b.rect(60,60,70,130,STONE);   // the reservoir
+        b.rect(60,112,70,130,WOOD);                                                           // its wooden sluice gate
+        b.rect(10,75,60,130,WATER);
+        b.rect(150,150,230,185,E);                                                            // the basin, sunk in the floor
+      } },
+    { id:'lava', name:'Lava crossing', seed:12, time:75*60,
+      brief:'Drain the reservoir into the cistern under the floor (open its wooden hatch), without letting the water touch the lava.',
+      budget:{Erase:160, Stone:250}, unlocks:['Lava','Glass','Rubble'],
+      goals:[{label:'Water in the cistern', count:'Water', rect:[100,165,200,192], min:250}],
+      fails:[{label:'Water touched the lava', made:'Steam', min:20}],
+      build(b){
+        b.rect(0,150,320,200,STONE); b.rect(0,130,66,150,STONE);
+        b.rect(0,60,6,130,STONE); b.rect(60,60,66,130,STONE);
+        b.rect(60,112,66,130,WOOD);                                                           // the sluice gate
+        b.rect(6,75,60,130,WATER);
+        b.rect(66,150,76,175,E); b.rect(66,157,76,175,LAVA);                                  // a lava well right under the gate
+        b.rect(100,165,200,192,E); b.rect(100,164,200,165,WOOD);                              // the cistern, with a timbered ceiling holding its roof up
+        b.rect(122,150,129,165,E); b.rect(122,150,129,156,WOOD);                              // its shaft and hatch
+      } },
+    { id:'blast', name:'Demolition', seed:13, time:75*60,
+      brief:'A wall of ice holds back the lake. Blow a hole in it and flood the basin.',
+      budget:{Gunpowder:160, Fire:20}, unlocks:['Gunpowder','Gas','Charcoal','Ash'],
+      goals:[{label:'Water in the basin', count:'Water', rect:[220,150,310,185], min:300}],
+      fails:[],
+      build(b){
+        b.rect(0,150,320,200,STONE); b.rect(0,40,10,150,STONE);
+        b.rect(140,70,148,150,ICE); for (let y=70;y<150;y++) for (let x=140;x<148;x++) b.warm(x,y);   // an ice dam, at the air's temperature
+        b.rect(10,96,140,150,WATER);
+        b.rect(220,150,310,185,E);
+      } },
+    { id:'fire', name:'Firebreak', seed:14, time:90*60,
+      brief:'Lightning has set the east end of the wood alight. Stop the fire before it reaches the west.',
+      budget:{Water:900, Erase:400}, unlocks:['Plant','Litter','Sapling'],
+      goals:[{label:'Trees standing in the west', trees:true, rect:[0,0,130,200], min:3},
+             {label:'Fire left burning', count:['Fire','Ember'], rect:[0,0,320,200], max:0}],
+      fails:[{label:'Trees standing in the west', trees:true, rect:[0,0,130,200], max:2}],
+      build(b){
+        b.rect(0,170,320,200,STONE); b.rect(0,150,320,170,DIRT,(40<<8)|50);                   // late-summer soil, too dry for the grass to grow
+        for (let x=0;x<320;x++){ const h=1+(R()*3|0); for (let y=149;y>149-h;y--) b.put(x,y,PLANT,1); }   // dry grass carries the fire along the ground
+        for (const x of [16,46,76,106, 214,244,274,304]) b.tree(x, 148, 120);                   // the west wood and the east wood, with a meadow between
+        b.rect(300,135,316,149,FIRE);                                                          // the strike
+      } },
+    { id:'grow', name:'Green the valley', seed:15, time:120*60,
+      brief:'Nothing grows on the sand. Make soil, water it, and get four trees growing in the valley.',
+      budget:{Dirt:1200, Water:900, Seed:10}, unlocks:['Acid','Salt','Brine'],
+      goals:[{label:'Trees 16+ cells tall in the valley', trees:true, tall:16, rect:[60,0,260,200], min:4}],
+      fails:[],
+      build(b){
+        b.rect(0,150,320,200,STONE);
+        for (let x=0;x<320;x++){ const top=150-Math.round(28*Math.pow(Math.abs(x-160)/160,2)); b.rect(x,top,x+1,150,SAND); }   // a sandy valley
+      } },
+  ];
+
+  // which elements the sandbox rack offers, and which scenarios are open, given progress {best:{id:score}}
+  function unlocked(progress){ const s=new Set(STARTER); for (const sc of SCENARIOS) if (progress.best && progress.best[sc.id]!==undefined) for (const n of sc.unlocks) s.add(n); return s; }
+  function scenarioOpen(progress,k){ return k===0 || !!(progress.best && progress.best[SCENARIOS[k-1].id]!==undefined); }
+  // a scenario's data without its build function: what a save carries
+  const defOf = sc => ({id:sc.id, name:sc.name, brief:sc.brief, time:sc.time, budget:sc.budget, goals:sc.goals, fails:sc.fails, unlocks:sc.unlocks||[]});
+
+  class Game {
+    constructor(g, sc){
+      this.g=g; this.sc=sc; this.t=0; this.state='play'; this.why=''; this.held=0;
+      this.spent={}; this.got=new Float64Array(64); this.last=Int32Array.from(g.made); this.seen=new Int32Array(64).fill(-1e9);
+      this.points=0; this.chain=0; this.mult=1; this.chainNames=[]; this.score=0;
+      this.goals=sc.goals.map(c=>this.prep(c)); this.fails=(sc.fails||[]).map(c=>this.prep(c));
+      this.value=new Float32Array(64); for (const n in VALUE) this.value[byName(n)]=VALUE[n];
+      this.evaluate();
+    }
+    // start a built-in scenario: an empty world the size of the grid with the box dug into stone at the bottom middle
+    static start(g, sc){
+      reseed(sc.seed||1);
+      g.clear(); g.worldW=g.W; g.ox=0; g.worldSeed=0; g.clock=START; g.updateClimate(); g.resetTemp();
+      for (let y=BOX.y;y<g.H;y++) for (let x=0;x<g.W;x++) if (x<BOX.x || x>=BOX.x+BOX.w) g.set(g.idx(x,y),STONE,g.ambAt(y));
+      sc.build(builder(g));
+      g.initAir(); g.wakeAll();
+      return new Game(g, sc);
+    }
+    prep(c){ return Object.assign({}, c, {ids: c.count ? ids(c.count) : c.made ? ids(c.made) : null, value:0}); }
+    left(name){ const b=this.sc.budget[name]; return b===undefined ? 0 : b-(this.spent[name]||0); }
+    inBox(x,y){ return x>=BOX.x && x<BOX.x+BOX.w && y>=BOX.y && y<BOX.y+BOX.h; }
+    // the god-hand inside a scenario: place element t (E erases) at cell i, if the budget allows; false if nothing happened
+    paint(i,t){
+      const g=this.g, x=i%g.W, y=(i/g.W)|0, name=t===E ? 'Erase' : EL[t].name;
+      if (this.state!=='play' || !this.inBox(x,y) || this.left(name)<=0) return false;
+      if (t===E){ if (g.type[i]===E) return false; g.set(i,E); }
+      else { if (g.type[i]!==E) return false; g.set(i,t); this.last[t]++; }   // (painted cells are not reaction products)
+      this.spent[name]=(this.spent[name]||0)+1; return true;
+    }
+    measure(c){
+      const g=this.g;
+      if (c.made){ let s=0; for (const id of c.ids) s+=this.got[id]; return s; }
+      const [x0,y0,x1,y1]=c.rect, X0=BOX.x+x0, X1=BOX.x+x1, Y0=BOX.y+y0, Y1=BOX.y+y1;
+      if (c.trees){ let n=0; for (const t of g.trees) if (!t.dead && !t.falling && t.segs[0].alive && t.x>=X0 && t.x<X1 && t.y>=Y0 && t.y<Y1 && t.segs[0].len>=(c.tall||0)) n++; return n; }
+      const want=new Uint8Array(64); for (const id of c.ids) want[id]=1;
+      let n=0; for (let y=Y0;y<Y1;y++){ const r=y*g.W; for (let x=X0;x<X1;x++) n+=want[g.type[r+x]]; } return n;
+    }
+    met(c){ return (c.min===undefined || c.value>=c.min) && (c.max===undefined || c.value<=c.max); }
+    evaluate(){ for (const c of this.goals) c.value=this.measure(c); for (const c of this.fails) c.value=this.measure(c); }
+    // after each step: count what reactions made, keep the chain going, and check the goals
+    tick(){
+      if (this.state!=='play') return;
+      const g=this.g, made=g.made; this.t++;
+      let pts=0, names=[];
+      for (let t=1;t<64;t++){ const d=made[t]-this.last[t]; this.last[t]=made[t]; if (d<=0) continue; this.got[t]+=d; if (this.value[t]>0){ this.seen[t]=this.t; pts+=d*this.value[t]*POINT; } }
+      let chain=0; for (let t=1;t<64;t++) if (this.value[t]>0 && this.t-this.seen[t]<CHAIN_WINDOW){ chain++; names.push(EL[t].name); }
+      this.chain=chain; this.chainNames=names; this.mult=Math.min(CHAIN_MAX, 1+CHAIN_STEP*Math.max(0,chain-1));
+      this.points+=pts*this.mult;
+      if (this.t%CHECK) return;
+      this.evaluate();
+      const lost=this.fails.find(c=>this.met(c));
+      if (lost){ this.finish('lost', lost.label); return; }
+      if (this.goals.every(c=>this.met(c))){ this.held+=CHECK; if (this.held>=HOLD_GOAL){ this.finish('won'); return; } } else this.held=0;
+      if (this.t>=this.sc.time) this.finish('lost','Out of time');
+    }
+    finish(state, why=''){
+      this.state=state; this.why=why;
+      if (state!=='won'){ this.score=0; return; }
+      // a win scores 1000, up to 500 more for time left and 500 for material left over, plus the reaction points
+      let total=0, left=0; for (const n in this.sc.budget){ total+=this.sc.budget[n]; left+=this.left(n); }
+      this.score=Math.round(1000 + 500*(1-this.t/this.sc.time) + (total ? 500*left/total : 0) + this.points);
+    }
+    timeLeft(){ return Math.max(0, this.sc.time-this.t); }
+    // the scenario as text: its definition, the world, and how far into it the player is
+    save(){ return JSON.stringify({sandfall:'scenario', v:1, def:defOf(this.sc), world:this.g.save(),
+      game:{t:this.t, state:this.state, why:this.why, held:this.held, spent:this.spent, got:Array.from(this.got), points:this.points, score:this.score}}); }
+    static load(g, text){
+      const d=JSON.parse(text); if (!d || d.sandfall!=='scenario') throw new Error('not a scenario');
+      g.load(d.world);
+      const sc=Object.assign({}, SCENARIOS.find(s=>s.id===d.def.id)||{}, d.def), game=new Game(g, sc), s=d.game||{};
+      for (const k of ['t','state','why','held','points','score']) if (s[k]!==undefined) game[k]=s[k];
+      game.spent=s.spent||{}; if (s.got) game.got.set(s.got);
+      game.evaluate(); return game;
+    }
+  }
+  // is a piece of saved text a scenario (rather than a plain world)?
+  const isScenario = text => /^\s*\{/.test(text);
+
+  return {EL,N,CH,AMB,DAY,YEAR,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
 })();
 
 // ============================================================================
 //  RENDER + INPUT — browser-specific; replaced wholesale in the engine port.
 // ============================================================================
 (() => {
-const {EL,Grid,CH,generate,ids,REGION}=Sim;
+const {EL,Grid,CH,generate,ids,REGION,BOX,SCENARIOS,Game}=Sim;
 const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}=ids;
 const ERASE=255, PAN=254;
 const W=960, H=480, VW=320, VH=200, WORLD_W=W*8;   // the grid is a 960-wide window that streams along a world eight times as wide
@@ -1499,12 +1714,13 @@ let showChunks=false, heatView=false, moistView=false, windView=false;
 const tmp=[0,0,0];
 function render(){
   if (!heatView && !moistView) computeLight();
+  const dark=game ? 0.5 : 0.12;   // a puzzle stays readable through the night
   for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
     const i=(camY+vy)*W+camX+vx, o=vy*VW+vx;
     if (heatView){ px[o]=g.type[i]===E?C(10,10,14):heatColor(g.temp[i]); continue; }
     if (moistView){ px[o]=moistColor(i); continue; }
     rgbOf(i,tmp);
-    const gl=EL[g.type[i]].glow, L=gl>0?1:0.12+0.88*Math.max(0,light[o]);
+    const gl=EL[g.type[i]].glow, L=gl>0?1:dark+(1-dark)*Math.max(0,light[o]);
     px[o]=C(tmp[0]*L,tmp[1]*L,tmp[2]*L);
   }
   if (windView){   // a streak per wind cell, from its centre along the flow (×24 for visibility)
@@ -1531,10 +1747,27 @@ const GROUPS=[
   ['Gases',  [FIRE,SMOKE,STEAM,CLOUD,GAS]],
   ['Tools',  [ERASE,PAN]],
 ];
-let current=SAND, brush=4;
+let current=SAND, brush=4, game=null;
+let progress={best:{}};
+try{ progress=Object.assign(progress, JSON.parse(localStorage.getItem('sandfall.progress')||'{}')); }catch(e){}
+const saveProgress=()=>{ try{ localStorage.setItem('sandfall.progress',JSON.stringify(progress)); }catch(e){} };
 const sw=t=>t===ERASE?'#15181f':t===PAN?'#f0b24a':`rgb(${EL[t].rgb.join(',')})`;
 const nameOf=t=>t===ERASE?'Erase':t===PAN?'Pan':EL[t].name;
-const groupsEl=document.getElementById('groups'); const buttons=[];
+const groupsEl=document.getElementById('groups'); const buttons=[], rows=[];
+const choose=t=>{ current=t; for (const r of buttons) r.b.setAttribute('aria-pressed',r.t===t); cv.style.cursor=t===PAN?'grab':'crosshair'; };
+// the Play row: the sandbox and each scenario, opened in order as they are won
+const play=document.createElement('div'); play.className='group';
+{ const h=document.createElement('h2'); h.textContent='Play'; play.appendChild(h); }
+const playRack=document.createElement('div'); playRack.className='rack'; play.appendChild(playRack); groupsEl.appendChild(play);
+const scnButtons=[];
+for (const [k,sc] of [[-1,null],...SCENARIOS.map((sc,k)=>[k,sc])]){
+  const b=document.createElement('button'); b.className='el scn'; b.type='button';
+  b.addEventListener('click',()=>whenIdle(()=> sc ? startScenario(sc) : leaveScenario()));
+  playRack.appendChild(b); scnButtons.push({b,k,sc});
+}
+const unlockAll=document.createElement('button'); unlockAll.className='btn'; unlockAll.type='button'; unlockAll.id='unlockall';
+unlockAll.addEventListener('click',()=>{ progress.all=!progress.all; saveProgress(); refreshRack(); });
+playRack.appendChild(unlockAll);
 for (const [label,list] of GROUPS){
   const grp=document.createElement('div'); grp.className='group';
   const h=document.createElement('h2'); h.textContent=label; grp.appendChild(h);
@@ -1543,27 +1776,52 @@ for (const [label,list] of GROUPS){
     const b=document.createElement('button'); b.className='el'; b.type='button';
     b.style.setProperty('--sw',sw(t)); b.innerHTML='<i></i>'+nameOf(t);
     b.setAttribute('aria-pressed',t===current);
-    b.addEventListener('click',()=>{current=t; buttons.forEach(e=>e.setAttribute('aria-pressed',e===b)); cv.style.cursor=t===PAN?'grab':'crosshair';});
-    rack.appendChild(b); buttons.push(b);
+    b.addEventListener('click',()=>choose(t));
+    rack.appendChild(b); buttons.push({b,t,name:nameOf(t)});
   }
-  grp.appendChild(rack); groupsEl.appendChild(grp);
+  grp.appendChild(rack); groupsEl.appendChild(grp); rows.push({grp,list});
+}
+const unlockedBy=n=>{ const sc=SCENARIOS.find(s=>s.unlocks.includes(n)); return sc ? 'Win '+sc.name+' to unlock' : ''; };
+// sandbox: unlocked elements, the rest greyed out. Scenario: only what its budget holds, with the count left on each button.
+function refreshRack(){
+  const open=progress.all ? null : Sim.unlocked(progress);
+  for (const r of buttons){
+    let show=true, dis=false, label=r.name, title='';
+    if (game){ const key=r.t===ERASE?'Erase':r.name; show=r.t!==PAN && game.sc.budget[key]!==undefined; if (show){ const n=game.left(key); label+=' <b>'+n+'</b>'; dis=n<=0; } }
+    else if (open && r.t!==ERASE && r.t!==PAN && !open.has(r.name)){ dis=true; title=unlockedBy(r.name); }
+    r.b.style.display=show?'':'none'; r.b.disabled=dis; r.b.title=title;
+    const html='<i></i>'+label; if (r.b.innerHTML!==html) r.b.innerHTML=html;
+  }
+  for (const row of rows) row.grp.style.display=row.list.some(t=>buttons.find(r=>r.t===t).b.style.display!=='none')?'':'none';
+  for (const {b,k,sc} of scnButtons){
+    const on = sc ? game && game.sc.id===sc.id : !game, best=sc && progress.best[sc.id];
+    const avail=!sc || progress.all || Sim.scenarioOpen(progress,k);
+    b.disabled=!avail; b.setAttribute('aria-pressed',!!on);
+    b.innerHTML=(sc ? (k+1)+'. '+sc.name : 'Sandbox')+'<small>'+(!sc ? 'free play' : !avail ? 'locked' : best!==undefined ? 'best '+best : 'not won yet')+'</small>';
+  }
+  unlockAll.textContent=progress.all ? 'Use progress' : 'Unlock all';
+  unlockAll.setAttribute('aria-pressed',!!progress.all);
+  const cur=buttons.find(r=>r.t===current);
+  if (!cur || cur.b.disabled || cur.b.style.display==='none'){ const first=buttons.find(r=>!r.b.disabled && r.b.style.display!=='none' && r.t!==PAN); if (first) choose(first.t); }
 }
 
 function paint(cx,cy){
   const r=brush, t=current===ERASE?E:current;
+  if (current===PAN || (game && game.state!=='play')) return;
+  const put=(i,t)=>{ if (game) return game.paint(i,t); g.set(i,t); return true; };   // in a scenario the brush draws on its budget
   // solids fill the circle; powders and liquids fill it too, so a held brush is a steady spout; gases puff
-  if (t===TIP){ const i=g.idx(cx,cy); if (g.inb(cx,cy) && g.type[i]===E && !g.nearTip(cx,cy)) g.set(i,t); return; }   // one sapling at a time
+  if (t===TIP){ const i=g.idx(cx,cy); if (g.inb(cx,cy) && g.type[i]===E && !g.nearTip(cx,cy)) put(i,t); return; }   // one sapling at a time
   const fill = t===E ? 1 : EL[t].kind==='gas' ? 0.3 : 1;
   for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++){
     if (dx*dx+dy*dy>r*r) continue;
     const x=cx+dx,y=cy+dy; if(!g.inb(x,y)) continue;
     const i=g.idx(x,y);
-    if (t===E){ if (g.type[i]!==E) g.set(i,E); continue; }
-    if (g.type[i]===E && Math.random()<fill){ g.set(i,t); if (EL[t].kind!=='static'&&EL[t].kind!=='gas') g.vy[i]=1; }
+    if (t===E){ if (g.type[i]!==E) put(i,E); continue; }
+    if (g.type[i]===E && Math.random()<fill && put(i,t) && EL[t].kind!=='static' && EL[t].kind!=='gas') g.vy[i]=1;
   }
 }
 let drawing=false,panning=false,lastX=-1,lastY=-1,panPX=0,panPY=0;
-const clampCam=()=>{ camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
+const clampCam=()=>{ if (game){ camX=BOX.x; camY=BOX.y; return; } camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
 const pos=e=>{ const r=cv.getBoundingClientRect(); return [camX+((e.clientX-r.left)/r.width*VW)|0, camY+((e.clientY-r.top)/r.height*VH)|0]; };
 function stroke(e){
   const [x,y]=pos(e), x0=lastX, y0=lastY;
@@ -1577,7 +1835,7 @@ function stroke(e){
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 cv.addEventListener('pointerdown',e=>{
   cv.setPointerCapture(e.pointerId);
-  if (e.button===2 || current===PAN){ panning=true; const r=cv.getBoundingClientRect(); panPX=e.clientX; panPY=e.clientY; return; }
+  if (e.button===2 || current===PAN){ if (game) return; panning=true; const r=cv.getBoundingClientRect(); panPX=e.clientX; panPY=e.clientY; return; }
   drawing=true; lastX=-1; stroke(e);
 });
 cv.addEventListener('pointermove',e=>{
@@ -1590,6 +1848,7 @@ const keys=new Set();
 window.addEventListener('keydown',e=>{ if (e.target.tagName==='TEXTAREA') return; keys.add(e.key.toLowerCase()); if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault(); });
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 function keyPan(){
+  if (game) return;
   const s=4; if (keys.has('arrowleft')||keys.has('a')) camX-=s; if (keys.has('arrowright')||keys.has('d')) camX+=s;
   if (keys.has('arrowup')||keys.has('w')) camY-=s; if (keys.has('arrowdown')||keys.has('s')) camY+=s; clampCam();
 }
@@ -1599,23 +1858,77 @@ const brushEl=document.getElementById('brush'), brushV=document.getElementById('
 brushEl.addEventListener('input',()=>{brush=+brushEl.value; brushV.textContent=brush;});
 let paused=false;
 document.getElementById('pause').addEventListener('click',e=>{paused=!paused; e.target.textContent=paused?'Resume':'Pause';});
-document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ g.clear(); msg('Cleared'); }));
+document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ if (game) leaveScenario(true); g.clear(); msg('Cleared'); }));
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
 document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
 document.getElementById('moistview').addEventListener('click',e=>{moistView=!moistView; e.target.setAttribute('aria-pressed',moistView);});
 document.getElementById('windview').addEventListener('click',e=>{windView=!windView; e.target.setAttribute('aria-pressed',windView);});
 let worldSeed=(Math.random()*1e9)|0;
 function newWorld(seedN){
+  if (game) leaveScenario(true);
   worldSeed=seedN; const ox=Math.floor((WORLD_W-W)/2/REGION)*REGION, surf=generate(g,worldSeed,WORLD_W,ox);   // start in the middle of the world
   camX=(W-VW)/2|0; camY=Math.max(0,surf[camX+VW/2|0]-VH*0.6|0); clampCam(); dims();
   msg('World #'+worldSeed);
 }
 document.getElementById('newworld').addEventListener('click',()=>whenIdle(()=>newWorld((Math.random()*1e9)|0)));
-document.getElementById('save').addEventListener('click',()=>whenIdle(()=>{ try{ localStorage.setItem('sandfall.world',g.save()); localStorage.setItem('sandfall.cam',camX+','+camY); msg('Saved to this browser'); }catch(e){ msg('Could not save in this browser (the world may be too big for its storage: try Export)'); } }));
-document.getElementById('load').addEventListener('click',()=>whenIdle(()=>{ try{ const s=localStorage.getItem('sandfall.world'); if(!s){msg('Nothing saved yet');return;} g.load(s); const c=(localStorage.getItem('sandfall.cam')||'0,0').split(',').map(Number); camX=c[0];camY=c[1];clampCam(); dims(); msg('Loaded'); }catch(e){ msg('Could not load: '+e.message); } }));
+// a save is a plain world, or (in a scenario) the scenario with its goals and progress as JSON
+const saveText=()=>game ? game.save() : g.save();
+function loadText(s){
+  if (Sim.isScenario(s)){ game=Game.load(g,s); enterScenario(); return 'scenario'; }
+  if (game) leaveScenario(true);
+  g.load(s); return 'world';
+}
+document.getElementById('save').addEventListener('click',()=>whenIdle(()=>{ try{ localStorage.setItem('sandfall.world',saveText()); localStorage.setItem('sandfall.cam',camX+','+camY); msg(game ? 'Scenario saved to this browser' : 'Saved to this browser'); }catch(e){ msg('Could not save in this browser (the world may be too big for its storage: try Export)'); } }));
+document.getElementById('load').addEventListener('click',()=>whenIdle(()=>{ try{ const s=localStorage.getItem('sandfall.world'); if(!s){msg('Nothing saved yet');return;} if (loadText(s)==='world'){ const c=(localStorage.getItem('sandfall.cam')||'0,0').split(',').map(Number); camX=c[0];camY=c[1]; } clampCam(); dims(); msg('Loaded'); }catch(e){ msg('Could not load: '+e.message); } }));
 const io=document.getElementById('io'), iotext=document.getElementById('iotext');
-document.getElementById('export').addEventListener('click',()=>whenIdle(()=>{ io.classList.toggle('open'); if (io.classList.contains('open')){ iotext.value=g.save(); msg('World text ready to copy ('+(iotext.value.length/1024|0)+' KB)'); } }));
-document.getElementById('import').addEventListener('click',()=>whenIdle(()=>{ try{ g.load(iotext.value.trim()); dims(); msg('Imported'); }catch(e){ msg('Could not import: '+e.message); } }));
+document.getElementById('export').addEventListener('click',()=>whenIdle(()=>{ io.classList.toggle('open'); if (io.classList.contains('open')){ iotext.value=saveText(); msg((game?'Scenario':'World')+' text ready to copy ('+(iotext.value.length/1024|0)+' KB)'); } }));
+document.getElementById('import').addEventListener('click',()=>whenIdle(()=>{ try{ loadText(iotext.value.trim()); clampCam(); dims(); msg('Imported'); }catch(e){ msg('Could not import: '+e.message); } }));
+
+// --- scenarios ---
+const mission=document.getElementById('mission'), banner=document.getElementById('banner');
+const fmt=t=>{ const s=Math.ceil(t/60); return (s/60|0)+':'+String(s%60).padStart(2,'0'); };
+function startScenario(sc){ game=Game.start(g,sc); enterScenario(); msg(sc.name); }
+function enterScenario(){
+  clampCam(); dims(); shown=null; banner.classList.remove('on');
+  document.getElementById('mname').textContent=game.sc.name; document.getElementById('mbrief').textContent=game.sc.brief;
+  mission.classList.add('on'); refreshRack(); showMission();
+}
+function leaveScenario(keepWorld){
+  game=null; mission.classList.remove('on'); banner.classList.remove('on'); shown=null;
+  if (!keepWorld) newWorld((Math.random()*1e9)|0);
+  refreshRack();
+}
+document.getElementById('restart').addEventListener('click',()=>whenIdle(()=>{ if (game){ const sc=SCENARIOS.find(s=>s.id===game.sc.id); if (sc) startScenario(sc); else msg('A loaded scenario restarts from Load'); } }));
+document.getElementById('leave').addEventListener('click',()=>whenIdle(()=>leaveScenario()));
+let shown=null;
+function showMission(){
+  if (!game) return;
+  const li=(c,fail)=>{ const ok=game.met(c), tgt=c.min!==undefined&&c.max!==undefined ? c.min+'–'+c.max : c.min!==undefined ? (fail?'reaches ':'')+c.min : (fail?'falls to ':'at most ')+c.max;
+    return '<li class="'+(fail ? (ok?'bad':'') : (ok?'ok':''))+'">'+(fail?'Lose if: ':'')+c.label+' <strong>'+Math.round(c.value)+'</strong> / '+tgt+'</li>'; };
+  document.getElementById('mgoals').innerHTML=game.goals.map(c=>li(c,false)).join('')+game.fails.map(c=>li(c,true)).join('');
+  document.getElementById('mtime').textContent=fmt(game.timeLeft());
+  document.getElementById('mpoints').textContent=Math.round(game.points);
+  document.getElementById('mchain').textContent=game.chain>1 ? 'Chain ×'+game.mult.toFixed(1)+': '+game.chainNames.join(', ') : '';
+  for (const r of buttons){ if (r.b.style.display==='none') continue; const key=r.t===ERASE?'Erase':r.name; if (game.sc.budget[key]!==undefined){ const n=game.left(key), html='<i></i>'+r.name+' <b>'+n+'</b>'; if (r.b.innerHTML!==html){ r.b.innerHTML=html; r.b.disabled=n<=0; } } }
+  if (game.state!==shown){ shown=game.state; if (game.state!=='play') finished(); }
+}
+function finished(){
+  const won=game.state==='won', sc=game.sc, k=SCENARIOS.findIndex(s=>s.id===sc.id);
+  let unlockedNow=[];
+  if (won && k>=0){
+    const before=Sim.unlocked(progress), first=progress.best[sc.id]===undefined;
+    progress.best[sc.id]=Math.max(progress.best[sc.id]||0, game.score); saveProgress();
+    if (first) unlockedNow=sc.unlocks.filter(n=>!before.has(n));
+  }
+  document.getElementById('bannerh').textContent=won ? 'Scenario won' : 'Scenario lost';
+  document.getElementById('bannerp').textContent=won ? 'Score '+game.score+' ('+Math.round(game.points)+' from reactions)'+(unlockedNow.length ? '. Unlocked in the sandbox: '+unlockedNow.join(', ') : '') : game.why;
+  const acts=document.getElementById('banneracts'); acts.innerHTML=''; 
+  const add=(label,f,primary)=>{ const b=document.createElement('button'); b.className='btn'+(primary?' primary':''); b.type='button'; b.textContent=label; b.addEventListener('click',()=>whenIdle(f)); acts.appendChild(b); };
+  if (won && k>=0 && k+1<SCENARIOS.length) add('Next: '+SCENARIOS[k+1].name,()=>startScenario(SCENARIOS[k+1]),true);
+  if (k>=0) add(won?'Play again':'Try again',()=>startScenario(SCENARIOS[k]),!won);
+  add('Sandbox',()=>leaveScenario());
+  banner.classList.add('on'); refreshRack();
+}
 
 // --- loop ---
 // With workers, a tick's cell pass runs while this thread renders; the tick is finished at the start of the next frame.
@@ -1623,6 +1936,7 @@ document.getElementById('import').addEventListener('click',()=>whenIdle(()=>{ tr
 let busy=false; const later=[];
 function whenIdle(f){ if (busy) later.push(f); else f(); }
 function stream(){   // keep the camera in the middle region of the window
+  if (game) return;
   const mid=camX+VW/2;
   if (mid>=W-REGION && g.shift(1)) camX-=REGION;
   else if (mid<REGION && g.shift(-1)) camX+=REGION;
@@ -1630,13 +1944,14 @@ function stream(){   // keep the camera in the middle region of the window
 function tick(){
   g.beginStep();
   if (pool.n && g.workersReady()>=pool.n && g.awakeTiles){ g.startTiles(pool.n); busy=true; }
-  else { g.runTiles(); g.endStep(); }
+  else { g.runTiles(); g.endStep(); if (game) game.tick(); }
 }
 let fpsT=performance.now(), frames=0, stepMs=0, steps=0;
 const fpsEl=document.getElementById('fps'), chunkEl=document.getElementById('chunks'), camEl=document.getElementById('cam'), thrEl=document.getElementById('threads');
 function loop(now){
   keyPan();
-  if (busy && g.tilesDone()){ const t=performance.now(); busy=false; g.endStep(); stepMs+=performance.now()-t; while (later.length) later.shift()(); }
+  if (busy && g.tilesDone()){ const t=performance.now(); busy=false; g.endStep(); if (game) game.tick(); stepMs+=performance.now()-t; while (later.length) later.shift()(); }
+  if (game && (game.state!==shown || frames%10===0)) showMission();
   if (!busy){
     if (drawing && lastX>=0) paint(lastX,lastY);
     stream();
@@ -1658,12 +1973,14 @@ function loop(now){
   requestAnimationFrame(loop);
 }
 function start(data){
-  if (data && data.world){ try{ g.load(data.world); camX=data.camX; camY=data.camY; clampCam(); dims(); }catch(e){ newWorld(worldSeed); } }
+  refreshRack();
+  if (data && data.world){ try{ if (loadText(data.world)==='world'){ camX=data.camX; camY=data.camY; } clampCam(); dims(); }catch(e){ newWorld(worldSeed); } }
   else newWorld(worldSeed);
   startWorkers();
   requestAnimationFrame(loop);
 }
-window.claude?.hot?.snapshot?.(()=>({world:g.save(),camX,camY}));
+window.claude?.hot?.snapshot?.(()=>({world:saveText(),camX,camY}));
+window.sandfall.game=()=>game; window.sandfall.progress=()=>progress;
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
 </script>
