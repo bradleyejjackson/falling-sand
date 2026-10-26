@@ -1,0 +1,822 @@
+<title>Sandfall</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen lab bench — a dark cabinet with the sim as the lit specimen, element rack beneath it. Single dark world by choice. */
+:root{
+  --bg:#0d0f14; --panel:#161a22; --line:#262c38; --fg:#e6e3d8; --muted:#8b92a3;
+  --accent:#f0b24a; --accent-ink:#1a1206;
+  --display:"Chakra Petch",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04em;margin:0;text-transform:uppercase}
+h1 span{color:var(--accent)}
+.stats{color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:16px;flex-wrap:wrap}
+.stage{position:relative;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden;
+  aspect-ratio:8/5;max-width:100%;max-height:60vh;margin:0 auto;width:100%}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:crosshair}
+.groups{display:flex;flex-direction:column;gap:8px}
+.group{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.group h2{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0;width:62px;padding-top:9px;flex-shrink:0}
+.rack{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
+.el{font-family:var(--display);font-weight:500;font-size:13px;letter-spacing:.06em;text-transform:uppercase;
+  background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:7px 10px;
+  display:flex;align-items:center;gap:8px;cursor:pointer}
+.el i{width:12px;height:12px;border-radius:2px;background:var(--sw);display:inline-block}
+.el[aria-pressed="true"]{border-color:var(--accent);background:#2a2411;color:#fff}
+.el:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;color:var(--muted)}
+.ctl label{display:flex;align-items:center;gap:8px}
+input[type=range]{accent-color:var(--accent);width:140px}
+.btn{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;font-size:12px;background:transparent;color:var(--fg);
+  border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
+.btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.hint{color:var(--muted);margin:0;line-height:1.5}
+.io{display:none;gap:8px;align-items:flex-start}
+.io.open{display:flex}
+textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;flex:1;min-width:0;height:60px;resize:vertical}
+.msg{color:var(--accent);min-height:1.2em}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header>
+  <h1>Sand<span>fall</span></h1>
+  <div class="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="wind"></span></div>
+</header>
+
+<div class="stage"><canvas id="c"></canvas></div>
+
+<div class="groups" id="groups"></div>
+
+<div class="ctl">
+  <label>Brush <input type="range" id="brush" min="1" max="24" value="4"><span id="brushv">4</span></label>
+  <button class="btn" id="pause">Pause</button>
+  <button class="btn" id="newworld">New world</button>
+  <button class="btn" id="clear">Clear</button>
+  <button class="btn" id="save">Save</button>
+  <button class="btn" id="load">Load</button>
+  <button class="btn" id="export">Export / Import</button>
+  <button class="btn" id="showchunks" aria-pressed="false">Chunks</button>
+  <button class="btn" id="heatview" aria-pressed="false">Heat view</button>
+  <span class="msg" id="msg"></span>
+</div>
+<div class="io" id="io">
+  <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
+  <button class="btn" id="import">Import</button>
+</div>
+<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Trees are living things: plant a Sapling or drop a Seed in water; they grow only while their roots can drink, thicken with age, branch, and carry their leaves outward. Weather runs on temperature: warm lakes evaporate, vapour climbs and condenses into cloud in the cold upper air, clouds drift on a shifting wind and rain or snow from their undersides.</p>
+
+<script>
+// ============================================================================
+//  SIM MODULE — pure data + rules, no DOM. This is the part that ports to Godot.
+// ============================================================================
+const Sim = (() => {
+  // ---- seeded RNG (mulberry32) — deterministic given a seed ----------------
+  let seed = 1;
+  const R = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const reseed = s => { seed = s|0; };
+
+  // ---- element registry ----------------------------------------------------
+  // kind: powder | liquid | gas | static.  density: who sinks through whom.
+  // disperse: liquid sideways scan.  lazy: viscosity (chance to skip a tick).
+  // k: thermal conductivity 0..1.  cap: heat capacity (how slowly its own temperature moves).  t0: temperature when spawned.  hold: never cools below this while alive.
+  // life: [min,max] ticks before decay (0 = immortal).  decay: what it becomes (array = random pick).
+  // hi/lo: phase change when temperature crosses it → {at, to} (to may be 'explode').
+  const EL = [];
+  const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,k:0.2,cap:1,t0:20,hold:null,life:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
+
+  const E     = def('Empty',    {kind:'static', k:0.05, rgb:[8,8,10], opaque:false});
+  const SAND  = def('Sand',     {kind:'powder', density:1.6, k:0.2, rgb:[205,170,90], vary:30});
+  const WATER = def('Water',    {kind:'liquid', density:1.0, disperse:5, k:0.6, cap:3, rgb:[30,110,200], vary:30, opaque:false});
+  const STONE = def('Stone',    {kind:'static', k:0.15, rgb:[95,100,112], vary:25});
+  const WOOD  = def('Wood',     {kind:'static', k:0.1, rgb:[100,62,32], vary:22});
+  const OIL   = def('Oil',      {kind:'liquid', density:0.8, disperse:3, k:0.3, rgb:[70,58,36], vary:12, opaque:false});
+  const FIRE  = def('Fire',     {kind:'gas', k:0.7, t0:700, hold:450, life:[40,80], rgb:[255,130,30], opaque:false, glow:1});
+  const SMOKE = def('Smoke',    {kind:'gas', k:0.2, t0:120, life:[120,240], decay:E, rgb:[55,58,64], vary:18, opaque:false});
+  const ACID  = def('Acid',     {kind:'liquid', density:1.1, disperse:4, k:0.4, rgb:[130,240,60], vary:30, opaque:false, glow:0.15});
+  const STEAM = def('Steam',    {kind:'gas', k:0.3, cap:14, t0:170, rgb:[165,180,195], vary:30, opaque:false});
+  const EMBER = def('Ember',    {kind:'static', k:0.5, t0:650, hold:500, life:[180,320], decay:'burnout', rgb:[230,90,20], glow:0.8});
+  const LAVA  = def('Lava',     {kind:'liquid', density:3.0, disperse:1, lazy:0.7, k:0.3, cap:25, t0:1300, rgb:[235,80,20], vary:40, glow:1});
+  const ICE   = def('Ice',      {kind:'static', k:0.4, t0:-30, rgb:[170,215,245], vary:25, opaque:false});
+  const GUNP  = def('Gunpowder',{kind:'powder', density:1.4, k:0.2, rgb:[40,38,42], vary:14});
+  const SEED  = def('Seed',     {kind:'powder', density:0.9, k:0.1, life:[8,20], rgb:[150,120,60], vary:20});
+  const PLANT = def('Plant',    {kind:'static', k:0.15, life:[8,20], rgb:[50,160,60], vary:40, opaque:false});
+  const SALT  = def('Salt',     {kind:'powder', density:1.5, k:0.2, rgb:[235,235,240], vary:15});
+  const BRINE = def('Brine',    {kind:'liquid', density:1.2, disperse:4, k:0.6, rgb:[70,140,180], vary:20, opaque:false});
+  const GLASS = def('Glass',    {kind:'static', k:0.1, rgb:[140,190,200], vary:30, opaque:false});
+  const GAS   = def('Gas',      {kind:'gas', k:0.2, rgb:[120,150,110], vary:20, opaque:false});
+  const CLOUD = def('Cloud',    {kind:'gas', k:0.15, cap:6, t0:10, life:[1200,2400], decay:WATER, rgb:[205,210,222], vary:25, opaque:false});
+  const SNOW  = def('Snow',     {kind:'powder', density:0.5, lazy:0.5, k:0.2, t0:-6, rgb:[232,238,248], vary:12, opaque:false});
+  const RUBBLE= def('Rubble',   {kind:'powder', density:2.4, k:0.15, rgb:[88,92,102], vary:30});
+  const CHAR  = def('Charcoal', {kind:'static', k:0.12, rgb:[38,34,32], vary:16});
+  const ASH   = def('Ash',      {kind:'powder', density:0.7, k:0.1, rgb:[150,146,140], vary:22});
+  const TIP   = def('Sapling',  {kind:'static', k:0.1, rgb:[130,95,45], vary:25});   // marker cell: becomes a Tree entity on its first tick
+
+  // phase changes driven by temperature
+  const phase = (t,o) => Object.assign(EL[t],o);
+  phase(WATER, {hi:{at:100,to:STEAM}, lo:{at:0,to:'freeze'}});   // snow if it is falling, ice if it is sitting
+  phase(SNOW,  {hi:{at:2,to:WATER}});
+  phase(BRINE, {hi:{at:108,to:STEAM}, lo:{at:-20,to:ICE}});
+  phase(ICE,   {hi:{at:40,to:WATER}});        // stable in ambient air; melts near anything burning
+  phase(STEAM, {lo:{at:85,to:'condense'}});   // cloud under open sky, water in a cave
+  phase(CLOUD, {hi:{at:120,to:STEAM}});
+  phase(LAVA,  {lo:{at:450,to:STONE}});
+  phase(STONE, {hi:{at:1280,to:LAVA}});   // only the floor of a deep fresh pool gets this hot
+  phase(SAND,  {hi:{at:900,to:GLASS}});
+  phase(GLASS, {hi:{at:1300,to:LAVA}});
+  phase(WOOD,  {hi:{at:300,to:EMBER}});
+  phase(PLANT, {hi:{at:250,to:EMBER}});
+  phase(TIP,   {hi:{at:300,to:EMBER}});
+  phase(CHAR,  {hi:{at:420,to:EMBER}});
+  phase(RUBBLE,{hi:{at:1280,to:LAVA}});
+  phase(SEED,  {hi:{at:220,to:FIRE}});
+  phase(OIL,   {hi:{at:250,to:FIRE}});
+  phase(GUNP,  {hi:{at:200,to:'explode',r:7}});
+  phase(GAS,   {hi:{at:200,to:'explode',r:3}});
+  phase(FIRE,  {lo:{at:200,to:SMOKE}});
+
+  const N = EL.length, AMB = 20;
+  const isLiquid = t => EL[t].kind==='liquid', isGas = t => EL[t].kind==='gas';
+
+  // ---- chemical reactions (things temperature can't express) ---------------
+  // react(A, B, prob, A', B') — A touches B in the 4-neighbourhood. null keeps a cell.
+  const RX = new Map();
+  const react = (a,b,p,na,nb) => { const k=a*N+b; (RX.get(k)||RX.set(k,[]).get(k)).push({p,na,nb}); };
+  react(FIRE, WATER, 1.0, STEAM, null);        // instant quench
+  react(FIRE, BRINE, 1.0, STEAM, null);
+  react(SALT, WATER, 0.15, E, BRINE);
+  react(SEED, WATER, 0.3, TIP, E);      // a watered seed becomes a sapling
+  react(SEED, BRINE, 0.05, PLANT, E);
+  for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR]) react(ACID, t, 0.08, [ACID,ACID,E], [E,SMOKE]);
+  const has = new Uint8Array(N); for (const k of RX.keys()) has[(k/N)|0]=1;
+  // contact ignition: a flame licking fuel lights it faster than conduction alone would
+  const FUEL = {[WOOD]:{p:0.02,to:EMBER},[TIP]:{p:0.03,to:EMBER},[OIL]:{p:0.35,to:FIRE},[PLANT]:{p:0.06,to:EMBER},[CHAR]:{p:0.01,to:EMBER},[SEED]:{p:0.1,to:FIRE},[GUNP]:{p:0.5,to:'explode',r:7},[GAS]:{p:0.5,to:'explode',r:3}};
+  const SOURCE = new Set([FIRE,EMBER,LAVA]);
+  // structural integrity: which solids can carry weight, and how far each can cantilever before it gives way
+  const SUPPORTS = new Set([STONE,GLASS,ICE,WOOD,CHAR,SAND,GUNP,SALT,RUBBLE,SNOW,ASH,SEED,PLANT,TIP]);
+  const SPAN = {[STONE]:5,[GLASS]:3,[ICE]:4,[CHAR]:2};
+  const FALLS_AS = {[STONE]:RUBBLE,[GLASS]:RUBBLE,[ICE]:SNOW,[CHAR]:ASH};
+
+  // ---- the grid --------------------------------------------------------------
+  const CH = 16, G = 0.25, VMAX = 6;
+  class Grid {
+    constructor(W,H){
+      this.W=W; this.H=H;
+      const n=W*H;
+      this.type=new Uint8Array(n); this.life=new Uint16Array(n); this.shade=new Uint8Array(n); this.done=new Uint8Array(n);
+      this.temp=new Float32Array(n).fill(AMB); this.vx=new Float32Array(n); this.vy=new Float32Array(n);
+      this.CW=Math.ceil(W/CH); this.CHh=Math.ceil(H/CH);
+      this.dirty=new Uint8Array(this.CW*this.CHh); this.next=new Uint8Array(this.CW*this.CHh);
+      this.frame=0; this.wind=0.3;
+      this.skyY=(H*0.4)|0; this.cloudY=Math.max(16,this.skyY-100);      // where the air is cold enough for cloud
+      this.trees=[]; this.treeId=1; this.owner=new Uint16Array(n);       // tree entities and which tree owns a cell
+      this.bfsQ=new Int32Array(1300); this.bfsSeen=new Set();
+      this.resetTemp();
+    }
+    // air gets colder with altitude (lapse rate) and a little warmer deep underground
+    ambAt(y){ return y<this.skyY ? 20-(this.skyY-y)*0.18 : Math.min(32, 20+(y-this.skyY)*0.05); }
+    resetTemp(){ for (let y=0;y<this.H;y++){ const a=this.ambAt(y); this.temp.fill(a, y*this.W, (y+1)*this.W); } }
+    idx(x,y){ return y*this.W+x; }
+    inb(x,y){ return x>=0&&x<this.W&&y>=0&&y<this.H; }
+    wake(x,y){
+      const {CW,CHh,next}=this;
+      const cx0=Math.max(0,((x-2)/CH)|0), cx1=Math.min(CW-1,((x+2)/CH)|0);
+      const cy0=Math.max(0,((y-2)/CH)|0), cy1=Math.min(CHh-1,((y+2)/CH)|0);
+      for (let cy=cy0;cy<=cy1;cy++) for (let cx=cx0;cx<=cx1;cx++) next[cy*CW+cx]=1;
+    }
+    wakeAll(){ this.next.fill(1); }
+    pick(v){ return Array.isArray(v) ? v[(R()*v.length)|0] : v; }
+    set(i,t,temp){
+      const el=EL[t], was=this.type[i];
+      if (SUPPORTS.has(was) && !SUPPORTS.has(t)) this.unsettle(i%this.W,(i/this.W)|0);
+      this.type[i]=t; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0;
+      this.life[i] = el.life ? el.life[0]+((R()*(el.life[1]-el.life[0]))|0) : 0;
+      this.temp[i] = temp===undefined ? el.t0 : temp;
+      this.wake(i%this.W,(i/this.W)|0);
+    }
+    unsettle(x,y){   // a solid vanished here: nearby solids must re-check their support
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const nx=x+dx, ny=y+dy; if (!this.inb(nx,ny)) continue; const j=this.idx(nx,ny); if (SPAN[this.type[j]]) { this.life[j]=0; this.wake(nx,ny); } }
+    }
+    supported(x,y,span){
+      // supported if something solid is under it, or a solid run leads to a supported column within `span` cells
+      const solidAt=(nx,ny)=> this.inb(nx,ny) && SUPPORTS.has(this.type[this.idx(nx,ny)]);
+      if (y+1>=this.H || solidAt(x,y+1)) return true;
+      for (const d of [-1,1]) for (let k=1;k<=span;k++){ const nx=x+d*k; if (!solidAt(nx,y)) break; if (solidAt(nx,y+1) || EL[this.type[this.idx(nx,y)]].kind==='powder') return true; }
+      // hanging from above counts for a short distance (stalactites)
+      for (let k=1;k<=2;k++){ if (!solidAt(x,y-k)) return false; if (solidAt(x-1,y-k)&&solidAt(x+1,y-k)) return true; }
+      return false;
+    }
+    stepSupport(x,y,i,t){
+      if (this.life[i]===1) return false;                // settled
+      if (this.owner[i]) { this.life[i]=1; return false; } // trees hold themselves up
+      if (this.supported(x,y,SPAN[t])){ this.life[i]=1; return false; }
+      if (R()<0.35){ this.set(i, FALLS_AS[t], this.temp[i]); this.vy[i]=0.5; return true; }   // rock drops as rubble, ice shears off as snow, charcoal crumbles to ash
+      this.wake(x,y); return false;
+    }
+    swap(a,b){
+      const T=this.type,L=this.life,S=this.shade,X=this.vx,Y=this.vy,H=this.temp;
+      let t=T[a];T[a]=T[b];T[b]=t; t=L[a];L[a]=L[b];L[b]=t; t=S[a];S[a]=S[b];S[b]=t;
+      t=X[a];X[a]=X[b];X[b]=t; t=Y[a];Y[a]=Y[b];Y[b]=t; t=H[a];H[a]=H[b];H[b]=t;
+      this.done[a]=1; this.done[b]=1;
+      this.wake(a%this.W,(a/this.W)|0); this.wake(b%this.W,(b/this.W)|0);
+      if (SUPPORTS.has(T[b]) && !SUPPORTS.has(T[a])) this.unsettle(a%this.W,(a/this.W)|0);   // something load-bearing moved away
+    }
+    clear(){ this.type.fill(0); this.life.fill(0); this.resetTemp(); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.wakeAll(); }
+    canSink(d,j){ const t=this.type[j]; return t===E || isGas(t) || (isLiquid(t) && EL[t].density<d); }
+
+    explode(x,y,r){
+      for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++){
+        const d2=dx*dx+dy*dy; if (d2>r*r) continue;
+        const nx=x+dx, ny=y+dy; if(!this.inb(nx,ny)) continue;
+        const j=this.idx(nx,ny), t=this.type[j], el=EL[t];
+        if (t===STONE || t===GLASS){ if (d2<r*r*0.3 && R()<0.5) this.set(j,E,400); continue; }
+        if (t===GUNP || t===GAS){ this.set(j,FIRE); continue; }           // chain reaction
+        if (el.kind==='powder' || el.kind==='liquid'){                        // throw debris outward
+          const d=Math.sqrt(d2)||1, s=(1-d/r)*VMAX*1.5;
+          this.vx[j]=dx/d*s; this.vy[j]=dy/d*s*0.5 - s*0.9; this.temp[j]+=200; this.wake(nx,ny); continue;   // outward, with lift
+        }
+        if (R()<0.7) this.set(j, R()<0.6?FIRE:SMOKE); else if (t!==E) this.set(j,E,300);
+      }
+    }
+
+    // ---- heat: diffusion, holds, phase changes ----
+    stepHeat(x,y,i){
+      const t=this.type[i], el=EL[t], T=this.temp;
+      let v=T[i];
+      if (el.hold!==null && v<el.hold) v=el.hold;
+      let d=0;
+      const nb=(j)=>{ const e=EL[this.type[j]]; d+=(T[j]-v)*(2*el.k*e.k/(el.k+e.k))*0.24; };   // harmonic mean: the poorer conductor limits the flow
+      if (x>0) nb(i-1); if (x<this.W-1) nb(i+1); if (y>0) nb(i-this.W); if (y<this.H-1) nb(i+this.W);
+      if (t===E) d+=(this.ambAt(y)-v)*0.03;                         // air bleeds heat toward the local ambient
+      d/=el.cap; v+=d; if (el.hold!==null && v<el.hold) v=el.hold;             // burning things stay hot while they burn
+      if (Math.abs(d)>0.05 || v!==T[i]){ T[i]=v; if (Math.abs(d)>0.3) this.wake(x,y); }
+      const ph = (el.hi && v>el.hi.at) ? el.hi : (el.lo && v<el.lo.at) ? el.lo : null;
+      if (!ph) return false;
+      if (ph.to==='explode'){ this.explode(x,y,ph.r); return true; }
+      if (ph.to==='condense'){ this.set(i, this.openSky(x,y) ? CLOUD : WATER, v); return true; }
+      if (ph.to==='freeze'){ const b=y+1<this.H?this.type[this.idx(x,y+1)]:STONE; this.set(i, (b===E||isGas(b)||b===SNOW) ? SNOW : ICE, v); return true; }
+      this.set(i, ph.to, v);
+      if (ph.to===STEAM) T[i]=Math.max(v,130);
+      return true;
+    }
+
+    ignite(x,y){
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){
+        if(!dx&&!dy) continue;
+        const nx=x+dx, ny=y+dy; if(!this.inb(nx,ny)) continue;
+        const j=this.idx(nx,ny), f=FUEL[this.type[j]];
+        if (!f || R()>=f.p) continue;
+        if (f.to==='explode') this.explode(nx,ny,f.r); else this.set(j,f.to);
+      }
+    }
+    stepReactions(x,y,i){
+      const t=this.type[i];
+      if (SOURCE.has(t)) this.ignite(x,y);
+      if(!has[t]) return false;
+      const dirs=[[0,1],[-1,0],[1,0],[0,-1]];
+      for (let k=0;k<4;k++){
+        const nx=x+dirs[k][0], ny=y+dirs[k][1]; if(!this.inb(nx,ny)) continue;
+        const j=this.idx(nx,ny), list=RX.get(t*N+this.type[j]); if(!list) continue;
+        for (const r of list){
+          if (R()>=r.p) continue;
+          if (r.nb!==null) this.set(j,this.pick(r.nb));
+          if (r.na!==null){ this.set(i,this.pick(r.na)); return true; }
+        }
+      }
+      return false;
+    }
+
+    // move cell i along (dx,dy) up to n steps; returns [newIndex, stepsTaken]
+    travel(i,x,y,dx,dy,n,d){
+      let ci=i,cx=x,cy=y,k=0;
+      for (;k<n;k++){
+        const nx=cx+dx, ny=cy+dy; if(!this.inb(nx,ny)) break;
+        const j=this.idx(nx,ny);
+        const ok = dy>0 ? this.canSink(d,j) : (this.type[j]===E || isGas(this.type[j]));
+        if (!ok) break;
+        this.swap(ci,j); ci=j; cx=nx; cy=ny;
+      }
+      return [ci,cx,cy,k];
+    }
+    stepMobile(x,y,i,t){
+      const el=EL[t], d=el.density, liquid=el.kind==='liquid';
+      if (el.lazy && R()<el.lazy){ this.wake(x,y); return; }
+      const VX=this.vx, VY=this.vy;
+      // horizontal momentum first
+      let ci=i,cx=x,cy=y;
+      if (Math.abs(VX[ci])>=0.5){
+        const ax=Math.abs(VX[ci]), n=(ax|0)+(R()<ax%1?1:0), sx=Math.sign(VX[ci]);
+        let k; [ci,cx,cy,k]=this.travel(ci,cx,cy,sx,0,n,d);
+        VX[ci] = k<n ? 0 : VX[ci]*(liquid?0.9:0.7);
+      }
+      // gravity
+      VY[ci]=Math.min(VMAX, VY[ci]+G);
+      const vy=VY[ci], n=(Math.abs(vy)|0)+(R()<Math.abs(vy)%1?1:0), sy=vy<0?-1:1;
+      let k; [ci,cx,cy,k]=this.travel(ci,cx,cy,0,sy,n,d);
+      if (k===n && n>0) return;                                    // free fall
+      if (vy<0){ VY[ci]=0; return; }                                 // hit a ceiling
+      // blocked below: slide diagonally, or splash sideways
+      const impact=VY[ci]; VY[ci]=0;
+      const dir=R()<0.5?-1:1;
+      if (cy+1<this.H){
+        for (const dx of [dir,-dir]){
+          const nx=cx+dx; if(nx<0||nx>=this.W) continue;
+          const j=this.idx(nx,cy+1);
+          if (!this.done[j] && this.canSink(d,j) && (liquid || this.type[this.idx(nx,cy)]!==STONE)){ this.swap(ci,j); if (liquid && impact>1.5) VX[j]=dx*impact*0.6; return; }
+        }
+      }
+      if (!liquid){ if (impact>2.5) VX[ci]=dir*impact*0.3*R(); return; }
+      // a still, warm water surface under open sky slowly evaporates
+      if (t===WATER && cy>0 && this.type[this.idx(cx,cy-1)]===E && this.temp[ci]>8 && R()<0.0004 && this.openSky(cx,cy)){ this.set(ci,STEAM,110); return; }
+      // liquid: spread sideways
+      if (impact>1.5){ VX[ci]=dir*impact*(0.4+R()*0.4); return; }
+      for (const dd of [dir,-dir]){
+        let last=-1;
+        for (let s=1;s<=el.disperse;s++){
+          const nx=cx+dd*s; if(nx<0||nx>=this.W) break;
+          const j=this.idx(nx,cy), tj=this.type[j];
+          if (tj===E || isGas(tj)) last=j; else break;
+        }
+        if (last>=0 && R()<0.95){ this.swap(ci,last); return; }
+      }
+      if (R()<0.01) this.pressureFlow(ci,cx,cy,t);           // boxed in: look for somewhere to surface under pressure
+    }
+    pressureFlow(i,x,y,t){
+      // head: how much of the same liquid sits directly on top of this cell
+      let head=0, gap=0; for (let k=1;k<=40;k++){ if (y-k<0) break; const a=this.type[this.idx(x,y-k)]; if (a===t){ head=k; gap=0; } else if (a===E && ++gap<=3) continue; else break; }   // bubbles don't break the column
+      if (head<3) return false;
+      // breadth-first through the body for an air cell that is lower than the surface of this column
+      const W=this.W, limit=y-head+1, seen=this.bfsSeen, q=this.bfsQ; seen.clear(); let qs=0, qe=0;
+      q[qe++]=i; seen.add(i); let best=-1, bestY=0;
+      while (qs<qe && qe<1200){
+        const c=q[qs++], cx=c%W, cy=(c/W)|0;
+        for (const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1]]){
+          const nx=cx+dx, ny=cy+dy; if (!this.inb(nx,ny)) continue; const j=ny*W+nx; if (seen.has(j)) continue;
+          const tj=this.type[j];
+          if (tj===E && ny<y && ny>=limit && (ny===0 || this.type[j-W]!==t) && (best<0 || ny<bestY)){ best=j; bestY=ny; }   // highest free surface of the body (not a bubble), below the head
+          if (tj===t && !seen.has(j)){ seen.add(j); q[qe++]=j; if (qe>=1200) break; }
+        }
+      }
+      if (best<0) return false;
+      this.swap(i,best); return true;
+    }
+    nearFuel(x,y){
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ if (this.inb(x+dx,y+dy) && FUEL[this.type[this.idx(x+dx,y+dy)]]) return true; }
+      return false;
+    }
+    stepGas(x,y,i,t){
+      if (t===FIRE && R()<0.8 && this.nearFuel(x,y)){ this.wake(x,y); return; }   // flames cling to fuel
+      const up = R() < (t===FIRE?0.6:t===STEAM?0.75:0.45);
+      const tryMove=(nx,ny)=>{
+        if(!this.inb(nx,ny)) return false;
+        const j=this.idx(nx,ny), tj=this.type[j];
+        if (tj===E || (isLiquid(tj) && t!==FIRE) || (t===SMOKE && tj===STEAM)){ this.swap(i,j); return true; }
+        return false;
+      };
+      if (up && tryMove(x,y-1)) return;
+      const dir=R()<0.5?-1:1;
+      if (R()<0.5 && tryMove(x+dir,y-1)) return;
+      if (tryMove(x+dir,y)) return;
+      tryMove(x-dir,y);
+      this.wake(x,y);
+    }
+    // ---- trees are entities: a skeleton of segments, re-drawn into the grid as it grows ----
+    plantTree(x,y){
+      if (!this.inb(x,y+1)) return false;
+      const below=EL[this.type[this.idx(x,y+1)]].kind; if (below!=='static' && below!=='powder') return false;
+      const t={id:this.treeId++, x, y, age:0, water:0, cells:new Map(), scars:new Map(), segs:[{p:-1, at:0, ang:0, len:0.5, max:16+R()*18, thick:1, depth:0, kids:0, age:0, alive:true}]};
+      this.trees.push(t); this.rasterTree(t); return true;
+    }
+    segStart(t,seg){ if (seg.p<0) return [t.x+0.5, t.y+1]; const p=t.segs[seg.p], [sx,sy]=this.segStart(t,p); return [sx+Math.sin(p.ang)*p.len*seg.at, sy-Math.cos(p.ang)*p.len*seg.at]; }
+    growTree(t){
+      // damage: cells of ours that are no longer wood or leaf were burnt, eaten or erased
+      const hit=new Map();
+      for (const [i,code] of t.cells){ const kind=(code&1)?PLANT:WOOD; if (this.type[i]!==kind){ const si=code>>1; hit.set(si,(hit.get(si)||0)+1); } }
+      const segs=t.segs;
+      for (const [si,cnt] of hit){ const seg=segs[si]; if (seg.alive && cnt>=Math.max(2,seg.cellCount*0.35)) seg.alive=false; }
+      for (let k=0;k<segs.length;k++){ const seg=segs[k]; if (seg.p>=0 && !segs[seg.p].alive) seg.alive=false; }   // parents first, so one pass works
+      const base=this.idx(t.x,t.y+1), bk=EL[this.type[base]].kind;
+      if (!segs[0].alive || (bk!=='static' && bk!=='powder')){ this.releaseTree(t); return false; }   // felled, or undermined
+      // drink: water near the roots becomes growth budget
+      if (t.water<60 && R()<0.5){ outer: for (let dy=0;dy<=4;dy++) for (let dx=-5;dx<=5;dx++){ const nx=t.x+dx, ny=t.y+1+dy; if (this.inb(nx,ny) && this.type[this.idx(nx,ny)]===WATER){ this.set(this.idx(nx,ny),E); t.water+=5; break outer; } } }
+      // a wounded tree stops growing until it has been left alone for a while (so it can't out-grow a fire)
+      if (hit.size>0) t.stress=25; if (t.stress>0){ t.stress--; return true; }
+      if (t.water<=0) return true;                 // no water, no growth: the tree just waits
+      const rate = 0.6; t.water--;
+      t.age++;
+      const MAXT=[3.8,2.4,1.5,1.0], MAXK=[4,3,2,0];
+      let grew = hit.size>0 || t.scars.size>0;
+      for (let k=0;k<segs.length;k++){
+        const seg=segs[k]; if (!seg.alive) continue;
+        seg.age++;
+        if (seg.len<seg.max){ seg.len=Math.min(seg.max, seg.len+rate*(seg.depth===0?1:0.75)); grew=true; }
+        else if (seg.depth===0 && t.water>0 && R()<0.2){ seg.max+=0.5; grew=true; }         // a well-watered trunk keeps gaining height
+        const th=Math.min(MAXT[seg.depth], 1+seg.age*0.018/(1+seg.depth*0.6));              // trunks thicken with age
+        if (th-seg.thick>0.1){ seg.thick=th; grew=true; }
+        if (seg.depth<3 && seg.kids<MAXK[seg.depth] && seg.len>seg.max*0.45 && R()<0.07){
+          const side=(seg.kids%2===0)?1:-1, ang=Math.max(-1.45,Math.min(1.45, seg.ang+side*(0.5+R()*0.55)));
+          segs.push({p:k, at:0.45+R()*0.5, ang, len:0.5, max:seg.max*(0.45+R()*0.25), thick:1, depth:seg.depth+1, kids:0, age:0, alive:true});
+          seg.kids++; grew=true;
+        }
+      }
+      // scars: a cell we lost stays bare for a while instead of healing instantly
+      for (const [i,code] of t.cells){ const kind=(code&1)?PLANT:WOOD; if (this.type[i]!==kind && !t.scars.has(i)) t.scars.set(i,60); }
+      for (const [i,n] of t.scars){ if (n<=1) t.scars.delete(i); else t.scars.set(i,n-1); }
+      if (grew) this.rasterTree(t); return true;
+    }
+    rasterTree(t){
+      const W=this.W, next=new Map();
+      const put=(x,y,code)=>{ x=Math.round(x); y=Math.round(y); if(!this.inb(x,y)) return; const i=y*W+x; const cur=next.get(i); if (cur!==undefined && !(cur&1)) return; next.set(i,code); };
+      for (let k=0;k<t.segs.length;k++){
+        const seg=t.segs[k]; if (!seg.alive) continue;
+        const [sx,sy]=this.segStart(t,seg), ex=sx+Math.sin(seg.ang)*seg.len, ey=sy-Math.cos(seg.ang)*seg.len;
+        const steps=Math.max(1,Math.ceil(seg.len*2)), r=seg.thick/2;
+        seg.cellCount=0;
+        for (let q=0;q<=steps;q++){
+          const px=sx+(ex-sx)*q/steps, py=sy+(ey-sy)*q/steps;
+          // taper: thinner toward the tip
+          const rr=r*(1-0.5*q/steps);
+          if (rr<0.75) put(px,py,k<<1);
+          else for (let dy=-rr;dy<=rr;dy+=1) for (let dx=-rr;dx<=rr;dx+=1) if (dx*dx+dy*dy<=rr*rr) put(px+dx,py+dy,k<<1);
+          seg.cellCount++;
+        }
+        // leaves: at the tips of branches and twigs, growing with age; a young trunk carries a tuft too
+        const leafy = seg.depth>0 || (seg.kids===0 && seg.age<80);
+        if (leafy){
+          const lr=Math.min(3.2, 1.1+seg.age*0.025), lx=Math.round(ex), ly=Math.round(ey);
+          for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++){ if (dx*dx+dy*dy>lr*lr) continue; const cx=lx+dx, cy=ly+dy; if (((cx*7+cy*13)&7)===0) continue; if (!this.inb(cx,cy)) continue; const i=cy*W+cx; if (!next.has(i)) next.set(i,(k<<1)|1); }
+          if (seg.depth>=2 && seg.len>3){ const mx=Math.round((sx+ex)/2), my=Math.round((sy+ey)/2); for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const cx=mx+dx, cy=my+dy; if (!this.inb(cx,cy)) continue; const i=cy*W+cx; if (!next.has(i)) next.set(i,(k<<1)|1); } }
+        }
+      }
+      // diff against what we drew last time: remove, add, or change kind
+      for (const [i,code] of t.cells){
+        const kind=(code&1)?PLANT:WOOD;
+        if (!next.has(i)){ if (this.type[i]===kind && this.owner[i]===t.id){ this.set(i,E); } if (this.owner[i]===t.id) this.owner[i]=0; }
+      }
+      for (const [i,code] of next){
+        const kind=(code&1)?PLANT:WOOD, cur=this.type[i];
+        if (cur===kind && (this.owner[i]===t.id || this.owner[i]===0)){ this.owner[i]=t.id; continue; }
+        const free = !t.scars.has(i) && (cur===E || cur===WATER || cur===SMOKE || cur===STEAM || cur===CLOUD || (this.owner[i]===t.id && (cur===WOOD||cur===PLANT)));
+        if (!free){ next.delete(i); continue; }                               // something else is in the way (or a fresh wound); grow around it
+        this.set(i,kind); this.life[i]=1; this.owner[i]=t.id;
+      }
+      t.cells=next;
+    }
+    releaseTree(t){ for (const [i] of t.cells) if (this.owner[i]===t.id) this.owner[i]=0; t.cells=new Map(); t.dead=true; }
+    stepTrees(){
+      for (let k=this.trees.length-1;k>=0;k--){ const t=this.trees[k]; if (t.dead){ this.trees.splice(k,1); continue; } if ((this.frame+t.id)%12===0) this.growTree(t); }
+    }
+    treesSave(){ return JSON.stringify(this.trees.map(t=>({id:t.id,x:t.x,y:t.y,age:t.age,water:t.water,segs:t.segs}))); }
+    treesLoad(json){
+      this.trees=[]; this.owner.fill(0); if (!json) return;
+      for (const d of JSON.parse(json)){ const t={id:d.id,x:d.x,y:d.y,age:d.age,water:d.water,cells:new Map(),scars:new Map(),segs:d.segs}; this.treeId=Math.max(this.treeId,t.id+1); this.trees.push(t); this.rasterTree(t); }
+    }
+    openSky(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return true; const t=this.type[this.idx(x,y-k)]; if (t!==E && !isGas(t)) return false; } return true; }
+    stepCloud(x,y,i){
+      // clouds gather where the air is cold, drift with the wind, clump, and rain from their undersides when thick
+      const band=this.cloudY, wind=this.wind;
+      let n=0, below=0, above=0;
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ if(!dx&&!dy) continue; const nx=x+dx, ny=y+dy; if (this.inb(nx,ny) && this.type[this.idx(nx,ny)]===CLOUD){ n++; if (dy===1) below++; } }
+      for (let k=1;k<=6;k++){ if (y-k<0) break; if (this.type[this.idx(x,y-k)]===CLOUD) above++; else break; }
+      if (n===0 && y<=band+8 && R()<0.01) this.life[i]=Math.min(this.life[i],200);   // lone wisps up in the band eventually drizzle away
+      const move=(nx,ny)=>{ if(!this.inb(nx,ny)) return false; const j=this.idx(nx,ny); if (this.type[j]!==E) return false; this.swap(i,j); return true; };
+      // rain falls from the underside of a thick cloud; heavier clouds rain harder
+      if (below===0 && n>=3 && y+1<this.H && this.type[this.idx(x,y+1)]===E && R()<0.0015*(1+above*1.2)){
+        const j=this.idx(x,y+1); this.set(j,WATER,18); this.vy[j]=2; this.vx[j]=this.wind*1.5;
+        if (R()<0.6) this.set(i,E); else this.life[i]=Math.max(1,this.life[i]-200);
+        return;
+      }
+      // fresh cloud below the band keeps climbing until it reaches cold air
+      if (y>band+8 && R()<0.5){ if (move(x,y-1)) return; if (R()<0.5 && move(x+(R()<0.5?-1:1),y-1)) return; }
+      if (R()<0.35){
+        if (y<band-8 && R()<0.6){ if (move(x,y+1)) return; }
+        if (R()<Math.abs(wind)){ if (move(x+Math.sign(wind),y)) return; }
+        const dir=R()<0.5?-1:1;
+        const hasN=(dx)=>this.inb(x+dx,y)&&this.type[this.idx(x+dx,y)]===CLOUD;
+        if (!hasN(dir) && hasN(-dir)){ /* stay with the cloud */ } else if (R()<0.5) move(x+dir,y); else if (R()<0.5) move(x,y+(R()<0.5?-1:1));
+      }
+      this.wake(x,y);
+    }
+    nearTip(x,y){ for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++){ const nx=x+dx, ny=y+dy; if (this.inb(nx,ny)){ const t=this.type[this.idx(nx,ny)]; if (t===TIP||t===WOOD) return true; } } return false; }
+    stepStatic(x,y,i,t){
+      if (t===TIP){ this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); return; }   // a sapling needs ground under it
+      if (t===EMBER && y>0 && R()<0.25 && this.type[this.idx(x,y-1)]===E) this.set(this.idx(x,y-1),FIRE);
+      if (t===PLANT){                       // drink: nearby water is absorbed and becomes growth budget
+        for (const [dx,dy] of [[0,1],[-1,0],[1,0],[0,-1]]){
+          const nx=x+dx, ny=y+dy; if(!this.inb(nx,ny)) continue;
+          const j=this.idx(nx,ny);
+          if (this.type[j]===WATER && R()<0.01){ this.set(j,E); this.life[i]=Math.min(3,this.life[i]+1); this.wake(x,y); break; }   // leaves bush out a little
+        }
+      }
+      if (t===PLANT && this.life[i]>1 && R()<0.08){
+        const r=R(), nx = r<0.75 ? x : (r<0.875 ? x-1 : x+1), ny = r<0.75 ? y-1 : y;
+        if (this.inb(nx,ny) && this.type[this.idx(nx,ny)]===E){
+          const j=this.idx(nx,ny); this.set(j,PLANT); this.life[j]=this.life[i]-1; this.life[i]=1;
+        } else this.wake(x,y);
+      } else if (t===PLANT && this.life[i]>1) this.wake(x,y);
+    }
+    stepLife(i,t){
+      const el=EL[t]; if(!el.life || t===PLANT || t===SEED) return false;
+      if (this.life[i]>0 && --this.life[i]>0){ this.wake(i%this.W,(i/this.W)|0); return false; }
+      if (t===FIRE){ this.set(i, R()<0.35?SMOKE:E, 150); return true; }
+      if (el.decay==='burnout'){ const r=R(); this.set(i, r<0.4?CHAR : r<0.7?ASH : SMOKE, this.temp[i]); if (this.type[i]===CHAR) this.temp[i]=Math.min(this.temp[i],380); return true; }
+      this.set(i, this.pick(el.decay), this.temp[i]); return true;
+    }
+
+    step(){
+      const {W,H,CW,type,done,dirty,next}=this;
+      done.fill(0); dirty.set(next); next.fill(0);
+      const ltr=(this.frame&1)===0;
+      for (let cy=this.CHh-1;cy>=0;cy--){
+        const y1=Math.min(H-1,cy*CH+CH-1);
+        for (let y=y1;y>=cy*CH;y--){
+          for (let k=0;k<W;k++){
+            const x=ltr?k:W-1-k;
+            if (!dirty[cy*CW+((x/CH)|0)]) continue;
+            const i=y*W+x;
+            if (this.stepHeat(x,y,i)) continue;
+            const t=type[i];
+            if (t===E){ if (y>0 && !done[i]){ const a=i-W; if (type[a]===E && this.temp[i]>this.temp[a]+12 && R()<0.3){ const tt=this.temp[i]; this.temp[i]=this.temp[a]; this.temp[a]=tt; this.wake(x,y-1); } } continue; }
+            if (done[i]) continue;
+            if (this.stepReactions(x,y,i)) continue;
+            const tt=type[i], el=EL[tt];
+            switch(el.kind){
+              case 'powder': case 'liquid': this.stepMobile(x,y,i,tt); break;
+              case 'gas':    if (!this.stepLife(i,tt)) { if (tt===CLOUD) this.stepCloud(x,y,i); else this.stepGas(x,y,i,tt); } break;
+              case 'static': if (SPAN[tt] && this.stepSupport(x,y,i,tt)) break; if (!this.stepLife(i,tt)) this.stepStatic(x,y,i,tt); break;
+            }
+          }
+        }
+      }
+      this.stepTrees();
+      this.frame++; this.wind=0.55*Math.sin(this.frame*0.0007)+0.15*Math.sin(this.frame*0.0031);
+    }
+
+    // ---- serialisation: RLE of types, temps restored from element defaults ----
+    save(){
+      const out=[this.W,this.H]; let run=this.type[0], n=0;
+      for (let i=0;i<this.type.length;i++){ if (this.type[i]===run && n<65535) n++; else { out.push(run,n); run=this.type[i]; n=1; } }
+      out.push(run,n);
+      const b=new Uint8Array(new Uint16Array(out).buffer); let s='';
+      for (let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192));
+      return btoa(s)+'|'+this.treesSave();
+    }
+    load(str){
+      const bar=str.indexOf('|'), treeJson=bar>=0?str.slice(bar+1):'', rle=bar>=0?str.slice(0,bar):str;
+      const bytes=Uint8Array.from(atob(rle),c=>c.charCodeAt(0)); const u=new Uint16Array(bytes.buffer);
+      if (u[0]!==this.W||u[1]!==this.H) throw new Error('world size mismatch');
+      this.clear(); let i=0;
+      for (let p=2;p<u.length;p+=2){ const t=u[p], n=u[p+1]; for (let k=0;k<n;k++,i++){ this.type[i]=t; this.temp[i]=t===E?this.ambAt((i/this.W)|0):EL[t].t0; this.shade[i]=(R()*64)|0; const l=EL[t].life; this.life[i]=l?l[0]:0; } }
+      this.treesLoad(treeJson);
+      this.wakeAll();
+    }
+  }
+
+  // ---- procedural terrain --------------------------------------------------
+  function noise2(seedN){
+    const perm=new Uint8Array(512); reseed(seedN); for(let i=0;i<256;i++)perm[i]=i; for(let i=255;i>0;i--){const j=(R()*(i+1))|0;[perm[i],perm[j]]=[perm[j],perm[i]];} for(let i=0;i<256;i++)perm[256+i]=perm[i];
+    const h=(x,y)=>perm[(perm[x&255]+y)&255]/255, sm=t=>t*t*(3-2*t);
+    const v=(x,y)=>{ const x0=Math.floor(x),y0=Math.floor(y),fx=sm(x-x0),fy=sm(y-y0); return (h(x0,y0)*(1-fx)+h(x0+1,y0)*fx)*(1-fy)+(h(x0,y0+1)*(1-fx)+h(x0+1,y0+1)*fx)*fy; };
+    return (x,y,oct=4)=>{ let s=0,a=1,f=1,m=0; for(let o=0;o<oct;o++){ s+=v(x*f,y*f)*a; m+=a; a*=0.5; f*=2; } return s/m; };
+  }
+  function generate(g, worldSeed){
+    g.clear(); reseed(worldSeed);
+    const nz=noise2(worldSeed), cave=noise2(worldSeed+7), ore=noise2(worldSeed+13);
+    const {W,H}=g; const surf=new Int16Array(W);
+    for (let x=0;x<W;x++) surf[x]=(H*0.32 + (nz(x/90,0.5,4)-0.5)*H*0.35)|0;
+    for (let x=0;x<W;x++) for (let y=0;y<H;y++){
+      const i=g.idx(x,y); if (y<surf[x]) continue;
+      const depth=y-surf[x], dn=y/H;
+      let t=STONE;
+      if (depth<3+nz(x/20,y/20,2)*6) t=SAND;
+      else {
+        const c=cave(x/48,y/32,3), o=ore(x/30,y/30,3);
+        if (c>0.62 && depth>8){ t=E;
+          if (dn>0.9 && c>0.66) t=LAVA;
+          else if (c>0.7 && dn>0.55 && o<0.4) t=OIL;
+          else if (c>0.7 && dn<0.7 && o>0.6) t=WATER;
+          else if (c>0.74 && o>0.45 && o<0.55) t=GAS;
+        }
+        else if (o>0.76 && depth>20 && depth<160) t=SAND;
+        else if (o<0.21 && depth>40) t=GUNP;
+        else if (o>0.70 && o<0.72 && depth>15) t=SALT;
+        else if (c<0.3 && dn>0.5 && o>0.62) t=ICE;
+      }
+      if (y>=H-3) t=STONE;
+      if (t!==E) g.set(i,t);
+    }
+    // lakes: flood shallow dips in the surface
+    for (let x=1;x<W-1;x++){ if (surf[x]>surf[x-1] && surf[x]>surf[x+1] && R()<0.5){ const lvl=Math.min(surf[x-1],surf[x+1]); for (let xx=x-25;xx<x+25;xx++){ if(xx<0||xx>=W)continue; for (let y=lvl;y<surf[xx];y++){ const i=g.idx(xx,y); if (g.type[i]===E) g.set(i,WATER); } } } }
+    // trees: plant on the surface and let them grow up before the world is handed over
+    for (let x=8;x<W-8;x++){ if (R()<0.035 && g.type[g.idx(x,surf[x])]===SAND && g.type[g.idx(x,surf[x]-1)]===E){ g.plantTree(x,surf[x]-1); x+=10; } }
+    const grow=60+(R()*120|0);
+    for (const t of g.trees){ t.water=20; for (let n=0;n<grow;n++) if (!g.growTree(t)) break; }
+    g.stepTrees();
+    g.wakeAll();
+    return surf;
+  }
+
+  return {EL,N,CH,AMB,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH}};
+})();
+
+// ============================================================================
+//  RENDER + INPUT — browser-specific; replaced wholesale in the engine port.
+// ============================================================================
+(() => {
+const {EL,Grid,CH,generate,ids}=Sim;
+const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH}=ids;
+const ERASE=255, PAN=254;
+const W=960, H=480, VW=320, VH=200;
+const g=new Grid(W,H);
+window.sandfall={g,Sim};   // handy for poking at the world from the console
+let camX=0, camY=0;
+
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+cv.width=VW; cv.height=VH;
+const img=ctx.createImageData(VW,VH), px=new Uint32Array(img.data.buffer);
+document.getElementById('dims').textContent='world '+W+'×'+H;
+const msg=s=>{ document.getElementById('msg').textContent=s; };
+
+// --- lighting: sky from above + emitters, two relaxation sweeps over the viewport ---
+const light=new Float32Array(VW*VH);
+function computeLight(){
+  const T=g.type;
+  for (let vx=0;vx<VW;vx++){
+    const x=camX+vx; let tr=1;
+    for (let y=0;y<camY+VH;y++){
+      const el=EL[T[y*W+x]];
+      if (y>=camY) light[(y-camY)*VW+vx]=tr;
+      if (el.opaque) tr=0; else if (el.kind==='liquid') tr*=0.93; else if (el.id===CLOUD) tr*=0.9;
+      if (tr<0.02 && y>=camY){ for (let yy=y+1;yy<camY+VH;yy++) light[(yy-camY)*VW+vx]=0; break; }
+    }
+  }
+  for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
+    const gl=EL[T[(camY+vy)*W+camX+vx]].glow; if (gl>light[vy*VW+vx]) light[vy*VW+vx]=gl;
+  }
+  const decay=i=>EL[T[(camY+((i/VW)|0))*W+camX+(i%VW)]].opaque?0.14:0.03;
+  for (let i=0;i<VW*VH;i++){ let m=0; if (i%VW) m=light[i-1]; if (i>=VW) m=Math.max(m,light[i-VW]); const v=m-decay(i); if (v>light[i]) light[i]=v; }
+  for (let i=VW*VH-1;i>=0;i--){ let m=0; if (i%VW!==VW-1) m=light[i+1]; if (i<VW*VH-VW) m=Math.max(m,light[i+VW]); const v=m-decay(i); if (v>light[i]) light[i]=v; }
+}
+
+const C=(r,gg,b)=>(255<<24)|((b&255)<<16)|((gg&255)<<8)|(r&255);
+const BASE=EL.map(e=>e.rgb);
+function rgbOf(i,out){
+  const t=g.type[i], s=g.shade[i]/64, l=g.life[i];
+  switch(t){
+    case E: out[0]=8;out[1]=8;out[2]=10; return;
+    case FIRE:{ const a=l/80; if(a>0.6){out[0]=255;out[1]=220;out[2]=120;} else if(a>0.3){out[0]=255;out[1]=130+s*40;out[2]=30;} else {out[0]=200+s*40;out[1]=50;out[2]=10;} return; }
+    case EMBER:{ const f=((g.frame+(s*20|0))%20)<10; if(f){out[0]=230;out[1]=90;out[2]=20;} else {out[0]=120;out[1]=40;out[2]=10;} return; }
+    case SMOKE:{ const a=l/240; out[0]=50+a*40;out[1]=52+a*40;out[2]=58+a*40; return; }
+    case CLOUD:{ const a=Math.min(1,l/1200); out[0]=170+a*50;out[1]=176+a*48;out[2]=190+a*42; return; }
+    case STEAM:{ const a=Math.min(1,(g.temp[i]-90)/60); out[0]=150+a*60;out[1]=165+a*60;out[2]=180+a*60; return; }
+    case LAVA:{ const p=0.5+0.5*Math.sin((g.frame*0.1)+s*6), c=Math.min(1,(g.temp[i]-600)/600); out[0]=160+c*60+p*35;out[1]=30+c*40+p*50+s*20;out[2]=10+s*15; return; }
+    default:{ const [r,gg,b]=BASE[t], v=EL[t].vary*s; out[0]=r+v*0.8;out[1]=gg+v*0.7;out[2]=b+v*0.5; }
+  }
+}
+function heatColor(T){
+  const a=Math.max(0,Math.min(1,(T+40)/1300));
+  if (T<0) return C(80,120,255);
+  return C(255*Math.min(1,a*2.2), 255*Math.max(0,Math.min(1,(a-0.25)*2)), 255*Math.max(0,(0.2-a)*4)+255*Math.max(0,(a-0.75)*4));
+}
+let showChunks=false, heatView=false;
+const tmp=[0,0,0];
+function render(){
+  if (!heatView) computeLight();
+  for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
+    const i=(camY+vy)*W+camX+vx, o=vy*VW+vx;
+    if (heatView){ px[o]=g.type[i]===E?C(10,10,14):heatColor(g.temp[i]); continue; }
+    rgbOf(i,tmp);
+    const gl=EL[g.type[i]].glow, L=gl>0?1:0.12+0.88*Math.max(0,light[o]);
+    px[o]=C(tmp[0]*L,tmp[1]*L,tmp[2]*L);
+  }
+  if (showChunks){
+    for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
+      const x=camX+vx, y=camY+vy;
+      if ((x%CH===0||y%CH===0) && g.dirty[((y/CH)|0)*g.CW+((x/CH)|0)]) px[vy*VW+vx]=C(240,178,74);
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+
+// --- element rack ---
+const GROUPS=[
+  ['Powders',[SAND,GUNP,SALT,SEED,SNOW,RUBBLE,ASH]],
+  ['Liquids',[WATER,OIL,ACID,LAVA,BRINE]],
+  ['Solids', [STONE,WOOD,ICE,GLASS,CHAR,PLANT,TIP]],
+  ['Gases',  [FIRE,SMOKE,STEAM,CLOUD,GAS]],
+  ['Tools',  [ERASE,PAN]],
+];
+let current=SAND, brush=4;
+const sw=t=>t===ERASE?'#15181f':t===PAN?'#f0b24a':`rgb(${EL[t].rgb.join(',')})`;
+const nameOf=t=>t===ERASE?'Erase':t===PAN?'Pan':EL[t].name;
+const groupsEl=document.getElementById('groups'); const buttons=[];
+for (const [label,list] of GROUPS){
+  const grp=document.createElement('div'); grp.className='group';
+  const h=document.createElement('h2'); h.textContent=label; grp.appendChild(h);
+  const rack=document.createElement('div'); rack.className='rack';
+  for (const t of list){
+    const b=document.createElement('button'); b.className='el'; b.type='button';
+    b.style.setProperty('--sw',sw(t)); b.innerHTML='<i></i>'+nameOf(t);
+    b.setAttribute('aria-pressed',t===current);
+    b.addEventListener('click',()=>{current=t; buttons.forEach(e=>e.setAttribute('aria-pressed',e===b)); cv.style.cursor=t===PAN?'grab':'crosshair';});
+    rack.appendChild(b); buttons.push(b);
+  }
+  grp.appendChild(rack); groupsEl.appendChild(grp);
+}
+
+function paint(cx,cy){
+  const r=brush, t=current===ERASE?E:current;
+  // solids fill the circle; powders and liquids fill it too, so a held brush is a steady spout; gases puff
+  if (t===TIP){ const i=g.idx(cx,cy); if (g.inb(cx,cy) && g.type[i]===E && !g.nearTip(cx,cy)) g.set(i,t); return; }   // one sapling at a time
+  const fill = t===E ? 1 : EL[t].kind==='gas' ? 0.3 : 1;
+  for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++){
+    if (dx*dx+dy*dy>r*r) continue;
+    const x=cx+dx,y=cy+dy; if(!g.inb(x,y)) continue;
+    const i=g.idx(x,y);
+    if (t===E){ if (g.type[i]!==E) g.set(i,E); continue; }
+    if (g.type[i]===E && Math.random()<fill){ g.set(i,t); if (EL[t].kind!=='static'&&EL[t].kind!=='gas') g.vy[i]=1; }
+  }
+}
+let drawing=false,panning=false,lastX=-1,lastY=-1,panPX=0,panPY=0;
+const clampCam=()=>{ camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
+const pos=e=>{ const r=cv.getBoundingClientRect(); return [camX+((e.clientX-r.left)/r.width*VW)|0, camY+((e.clientY-r.top)/r.height*VH)|0]; };
+function stroke(e){
+  const [x,y]=pos(e);
+  if (lastX<0) paint(x,y);
+  else { const n=Math.max(Math.abs(x-lastX),Math.abs(y-lastY),1);
+    for (let k=0;k<=n;k++) paint(Math.round(lastX+(x-lastX)*k/n), Math.round(lastY+(y-lastY)*k/n)); }
+  lastX=x; lastY=y;
+}
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',e=>{
+  cv.setPointerCapture(e.pointerId);
+  if (e.button===2 || current===PAN){ panning=true; const r=cv.getBoundingClientRect(); panPX=e.clientX; panPY=e.clientY; return; }
+  drawing=true; lastX=-1; stroke(e);
+});
+cv.addEventListener('pointermove',e=>{
+  if (panning){ const r=cv.getBoundingClientRect(); camX-=(e.clientX-panPX)/r.width*VW; camY-=(e.clientY-panPY)/r.height*VH; panPX=e.clientX; panPY=e.clientY; clampCam(); return; }
+  if (drawing) stroke(e);
+});
+const stop=()=>{drawing=false; panning=false; lastX=-1;};
+cv.addEventListener('pointerup',stop); cv.addEventListener('pointercancel',stop);
+const keys=new Set();
+window.addEventListener('keydown',e=>{ if (e.target.tagName==='TEXTAREA') return; keys.add(e.key.toLowerCase()); if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault(); });
+window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
+function keyPan(){
+  const s=4; if (keys.has('arrowleft')||keys.has('a')) camX-=s; if (keys.has('arrowright')||keys.has('d')) camX+=s;
+  if (keys.has('arrowup')||keys.has('w')) camY-=s; if (keys.has('arrowdown')||keys.has('s')) camY+=s; clampCam();
+}
+
+// --- controls ---
+const brushEl=document.getElementById('brush'), brushV=document.getElementById('brushv');
+brushEl.addEventListener('input',()=>{brush=+brushEl.value; brushV.textContent=brush;});
+let paused=false;
+document.getElementById('pause').addEventListener('click',e=>{paused=!paused; e.target.textContent=paused?'Resume':'Pause';});
+document.getElementById('clear').addEventListener('click',()=>{ g.clear(); msg('Cleared'); });
+document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
+document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
+let worldSeed=(Math.random()*1e9)|0;
+function newWorld(seedN){
+  worldSeed=seedN; const surf=generate(g,worldSeed);
+  camX=(W-VW)/2|0; camY=Math.max(0,surf[camX+VW/2|0]-VH*0.6|0); clampCam();
+  msg('World #'+worldSeed);
+}
+document.getElementById('newworld').addEventListener('click',()=>newWorld((Math.random()*1e9)|0));
+document.getElementById('save').addEventListener('click',()=>{ try{ localStorage.setItem('sandfall.world',g.save()); localStorage.setItem('sandfall.cam',camX+','+camY); msg('Saved to this browser'); }catch(e){ msg('Could not save in this browser'); } });
+document.getElementById('load').addEventListener('click',()=>{ try{ const s=localStorage.getItem('sandfall.world'); if(!s){msg('Nothing saved yet');return;} g.load(s); const c=(localStorage.getItem('sandfall.cam')||'0,0').split(',').map(Number); camX=c[0];camY=c[1];clampCam(); msg('Loaded'); }catch(e){ msg('Could not load: '+e.message); } });
+const io=document.getElementById('io'), iotext=document.getElementById('iotext');
+document.getElementById('export').addEventListener('click',()=>{ io.classList.toggle('open'); if (io.classList.contains('open')){ iotext.value=g.save(); msg('World text ready to copy ('+(iotext.value.length/1024|0)+' KB)'); } });
+document.getElementById('import').addEventListener('click',()=>{ try{ g.load(iotext.value.trim()); msg('Imported'); }catch(e){ msg('Could not import: '+e.message); } });
+
+// --- loop ---
+let fpsT=performance.now(), frames=0;
+const fpsEl=document.getElementById('fps'), chunkEl=document.getElementById('chunks'), camEl=document.getElementById('cam');
+function loop(now){
+  keyPan();
+  if (drawing && lastX>=0) paint(lastX,lastY);
+  if (!paused) g.step();
+  render(); frames++;
+  if (now-fpsT>500){
+    fpsEl.textContent=Math.round(frames*1000/(now-fpsT))+' fps'; fpsT=now; frames=0;
+    let d=0; for (let i=0;i<g.dirty.length;i++) d+=g.dirty[i];
+    chunkEl.textContent=d+'/'+g.dirty.length+' chunks awake';
+    camEl.textContent='cam '+camX+','+camY;
+    document.getElementById('wind').textContent='wind '+(g.wind<0?'←':'→')+' '+Math.abs(g.wind).toFixed(2);
+  }
+  requestAnimationFrame(loop);
+}
+function start(data){
+  if (data && data.world){ try{ g.load(data.world); camX=data.camX; camY=data.camY; clampCam(); }catch(e){ newWorld(worldSeed); } }
+  else newWorld(worldSeed);
+  requestAnimationFrame(loop);
+}
+window.claude?.hot?.snapshot?.(()=>({world:g.save(),camX,camY}));
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
