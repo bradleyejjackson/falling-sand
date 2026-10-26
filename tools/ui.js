@@ -1,42 +1,69 @@
-// Runs the whole page against a stub DOM and pokes the UI paths: rack, painting, views, save/load, export/import.
+// Runs the whole page against a stub DOM and pokes the UI paths: rack, painting, views, save/load, export/import, and
+// panning far enough that the world streams. Runs twice: with the cell pass on this thread, and on worker threads.
+// usage: node tools/ui.js [serial|threads]
 const { loadPage, census } = require('./load');
-const p = loadPage();
-const { g, Sim } = p.sf;
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
 
-p.run(40);
-check('stats show the season and time', /^(Spring|Summer|Autumn|Winter), day \d+, \d\d:\d\d, [+-]?\d+°$/.test(p.els.clock.textContent), p.els.clock.textContent);
-const names = p.created.filter(e => e.className === 'el').map(e => e.innerHTML.replace('<i></i>', ''));
-check('Dirt and Litter are in the rack', names.includes('Dirt') && names.includes('Litter'), names.join(' '));
+function suite(threads) {
+  console.log(`# ${threads ? 'worker threads' : 'one thread'}`);
+  const p = loadPage(undefined, { threads });
+  const { g, Sim, pool } = p.sf;
+  if (threads) { const n = p.ready(); check('the page starts its worker threads', pool.n > 0 && n === pool.n, `${n} of ${pool.n} ready`); }
+  else check('without workers the page says why it runs on one thread', pool.n === 0 && pool.why === 'no workers here', pool.why);
 
-// paint a dirt bed then a seed onto it through pointer events, in an empty area of sky
-const btn = n => p.created.find(e => e.className === 'el' && e.innerHTML.endsWith(n));
-const cv = p.els.c;
-const at = (vx, vy) => ({ clientX: vx, clientY: vy, button: 0, pointerId: 1 });
-g.clear();
-btn('Dirt').fire('click');
-for (let vx = 100; vx <= 220; vx += 4) { cv.fire('pointerdown', at(vx, 180)); cv.fire('pointerup', at(vx, 180)); }
-p.run(120);
-const c1 = census(g, Sim.EL);
-check('painting dirt places damp dirt', c1.Dirt > 300 && [...g.type].some((t, i) => t === Sim.ids.DIRT && (g.life[i] & 255) >= 60), `${c1.Dirt} cells`);
-btn('Seed').fire('click');
-p.els.brush.value = '1'; p.els.brush.fire('input');
-cv.fire('pointerdown', at(160, 100)); cv.fire('pointerup', at(160, 100));
-p.run(1200);
-check('a seed dropped on painted dirt becomes a tree', g.trees.length >= 1, `${g.trees.length} trees`);
+  p.run(40);
+  check('stats show the season and time', /^(Spring|Summer|Autumn|Winter), day \d+, \d\d:\d\d, [+-]?\d+°$/.test(p.els.clock.textContent), p.els.clock.textContent);
+  check('stats show the threads', threads ? /^\d worker threads/.test(p.els.threads.textContent) : /^1 thread/.test(p.els.threads.textContent), p.els.threads.textContent);
+  const names = p.created.filter(e => e.className === 'el').map(e => e.innerHTML.replace('<i></i>', ''));
+  check('Dirt and Litter are in the rack', names.includes('Dirt') && names.includes('Litter'), names.join(' '));
 
-for (const id of ['moistview', 'heatview', 'windview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
-p.run(3);
-check('view toggles render without errors', true);
+  // paint a dirt bed then a seed onto it through pointer events, in an empty area of sky
+  const btn = n => p.created.find(e => e.className === 'el' && e.innerHTML.endsWith(n));
+  const cv = p.els.c;
+  const at = (vx, vy) => ({ clientX: vx, clientY: vy, button: 0, pointerId: 1 });
+  p.run(1); g.clear();
+  btn('Dirt').fire('click');
+  for (let vx = 100; vx <= 220; vx += 4) { cv.fire('pointerdown', at(vx, 180)); cv.fire('pointerup', at(vx, 180)); }
+  p.run(120);
+  const c1 = census(g, Sim.EL);
+  check('painting dirt places damp dirt', c1.Dirt > 300 && [...g.type].some((t, i) => t === Sim.ids.DIRT && (g.life[i] & 255) >= 60), `${c1.Dirt} cells`);
+  btn('Seed').fire('click');
+  p.els.brush.value = '1'; p.els.brush.fire('input');
+  cv.fire('pointerdown', at(160, 100)); cv.fire('pointerup', at(160, 100));
+  p.run(1200);
+  check('a seed dropped on painted dirt becomes a tree', g.trees.length >= 1, `${g.trees.length} trees`);
 
-p.els.save.fire('click'); const saved = p.store['sandfall.world'];
-check('save writes a 6-part world', saved && saved.split('|').length === 6, p.els.msg.textContent);
-const trees = g.trees.length; g.clear(); p.els.load.fire('click');
-check('load restores trees', g.trees.length === trees, `${g.trees.length}/${trees}; ${p.els.msg.textContent}`);
-p.els.export.fire('click'); const text = p.els.iotext.value;
-g.clear(); p.els.import.fire('click');
-check('export/import round-trips', p.els.msg.textContent === 'Imported' && g.trees.length === trees, p.els.msg.textContent);
-p.els.newworld.fire('click'); p.run(60);
-check('new world generates with dirt and trees', (census(g, Sim.EL).Dirt || 0) > 1000 && g.trees.length > 5, `${census(g, Sim.EL).Dirt} dirt, ${g.trees.length} trees`);
+  for (const id of ['moistview', 'heatview', 'windview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
+  p.run(3);
+  check('view toggles render without errors', true);
+
+  p.run(1); p.els.save.fire('click'); p.run(1); const saved = p.store['sandfall.world'];
+  check('save writes a 7-part world', saved && saved.split('|').length === 7, p.els.msg.textContent);
+  const trees = g.trees.length; p.run(1); g.clear(); p.els.load.fire('click'); p.run(1);
+  check('load restores trees', g.trees.length === trees, `${g.trees.length}/${trees}; ${p.els.msg.textContent}`);
+  p.els.export.fire('click'); p.run(1); const text = p.els.iotext.value;
+  p.run(1); g.clear(); p.els.import.fire('click'); p.run(1);
+  check('export/import round-trips', p.els.msg.textContent === 'Imported' && g.trees.length === trees, p.els.msg.textContent);
+  p.els.newworld.fire('click'); p.run(60);
+  check('new world generates with dirt and trees', (census(g, Sim.EL).Dirt || 0) > 1000 && g.trees.length > 5, `${census(g, Sim.EL).Dirt} dirt, ${g.trees.length} trees`);
+  check('the world is eight windows wide and starts in the middle', g.worldW === 7680 && g.ox > 0 && /7680/.test(p.els.dims.textContent), `${p.els.dims.textContent}, window at ${g.ox}`);
+
+  // walk right with the keyboard: the window streams along; walk back and the land is as we left it
+  const ox0 = g.ox, here = Array.from(g.type);
+  p.window.fire('keydown', { key: 'd' }); p.run(480); p.window.fire('keyup', { key: 'd' });
+  const ox1 = g.ox, stored = g.store.size;
+  check('panning right streams the window along the world', ox1 >= ox0 + 3 * Sim.REGION && stored >= 3, `window ${ox0} -> ${ox1}, ${stored} regions stored; ${p.els.cam.textContent}`);
+  check('trees keep growing in the new land', g.trees.length > 5, `${g.trees.length} trees`);
+  p.window.fire('keydown', { key: 'a' }); for (let k = 0; k < 2000 && g.ox > ox0; k++) p.run(1); p.window.fire('keyup', { key: 'a' }); p.run(2);
+  // (the exact round trip is checked in validate.js stream; here the land lives on for the frames it is in the window)
+  let same = 0; for (let i = 0; i < here.length; i++) if (here[i] === g.type[i]) same++;
+  check('panning back brings the first land back', g.ox === ox0 && same / here.length > 0.95, `${(100 * same / here.length).toFixed(1)}% of cells the same type`);
+  p.run(1); p.els.save.fire('click'); p.run(1); const big = p.store['sandfall.world'];
+  check('a streamed world saves', big && big.split('|').length === 7, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
+  p.close();
+}
+const mode = process.argv[2];
+if (mode !== 'threads') suite(false);
+if (mode !== 'serial') suite(true);
 if (failed) { console.log(`${failed} UI check(s) failed`); process.exit(1); }

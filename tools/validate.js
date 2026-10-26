@@ -319,6 +319,7 @@ const scenarios = {
     run(g, 2 * MIN);
     const t = g.trees.find(t => t.x === 80), y0 = t.y;
     for (let y = H - 50; y < H - 3; y++) for (let x = 62; x < 90; x++) { const i = g.idx(x, y); if (!(g.owner[i] === t.id && g.type[i] === WOOD) && g.type[i] !== STONE) { g.owner[i] = 0; g.set(i, E); } }
+    for (const [i] of t.cells) if (g.type[i] === ROOT) { g.owner[i] = 0; g.set(i, E); }   // and cut any root that reached past the dig
     run(g, 900);
     console.log(`  ${g.trees.length} trees standing; the undermined one dropped ${t.y - y0} cells`);
     check('a toppling tree falls through its neighbour\'s canopy', t.dead && t.y - y0 > 20);
@@ -341,6 +342,46 @@ const scenarios = {
     const r = new Sim.Grid(120, 80); r.load(m.save());
     check("sediment, salt and acid strength survive save/load", r.life[r.idx(10, 69)] === (255 | 256) && r.life[r.idx(20, 69)] === 77 && r.life[r.idx(30, 69)] === 99);
     check('the vapour field survives save/load', Math.abs(r.hum[100] - 3.21) < 0.01);
+  },
+  // ---------------- stage 4: engine ----------------
+  tiles() {
+    // the cell pass in checkerboard tiles: a tile only touches cells within REACH of itself, so tiles run in any order give the same world
+    const make = () => { const S = loadSim(process.env.SIMFILE); S.reseed(1); const g = new S.Grid(640, 320); S.generate(g, 31); return g; };
+    const a = make(), b = make();
+    const scramble = list => { for (let k = list.length - 1; k > 0; k--) { const j = (k * 7919 + 13) % (k + 1); [list[k], list[j]] = [list[j], list[k]]; } return list.reverse(); };
+    for (let f = 0; f < 200; f++) { a.step(); b.beginStep(); b.runTiles(scramble); b.endStep(); }
+    let d = 0; for (let i = 0; i < a.type.length; i++) if (a.type[i] !== b.type[i] || a.life[i] !== b.life[i] || a.temp[i] !== b.temp[i]) d++;
+    console.log(`  200 ticks with each phase's tiles in a scrambled order: ${d} cells differ`);
+    check('tile order within a phase does not change the world', d === 0);
+  },
+  stream() {
+    // a window streaming along a world eight times as wide: regions round-trip exactly, streamed land matches land generated in place,
+    // trees go and come back with their regions, and a stored region is a small fraction of its size in memory
+    const g = new Sim.Grid(960, 480); Sim.generate(g, 4242, 7680, 3200); run(g, 120);
+    const snap = f => { const o = []; for (let y = 0; y < g.H; y++) for (let x = 0; x < Sim.REGION; x++) o.push(g[f][y * g.W + x]); return o; };
+    const t0 = snap('type'), l0 = snap('life'), o0 = snap('owner'), m0 = snap('temp'), ids = g.trees.filter(t => t.x < Sim.REGION).map(t => t.id).sort();
+    let ms = performance.now(); g.shift(1); const tOut = performance.now() - ms;
+    check('trees rooted in the region leave with it', ids.every(id => !g.trees.some(t => t.id === id) && g.storedTrees.has(id)), `${ids.length} trees`);
+    ms = performance.now(); g.shift(-1); const tIn = performance.now() - ms;
+    const t1 = snap('type'), l1 = snap('life'), o1 = snap('owner'), m1 = snap('temp');
+    let dt = 0, dl = 0, dm = 0, dow = 0; for (let k = 0; k < t0.length; k++) { if (t0[k] !== t1[k]) dt++; if (l0[k] !== l1[k]) dl++; if (Math.abs(m0[k] - m1[k]) > 0.5) dm++; if (o0[k] !== o1[k]) dow++; }
+    console.log(`  out and back: ${dt} types, ${dl} life values, ${dow} owners and ${dm} temperatures (beyond rounding) differ; shift out ${tOut.toFixed(0)} ms, back ${tIn.toFixed(0)} ms`);
+    check('a region comes back as it left', dt <= 30 && dl <= 30 && dm === 0, `${dt} types, ${dl} life values differ`);
+    check('and so do its trees', ids.every(id => g.trees.some(t => t.id === id)));
+    // walk five regions right, making each ahead of time the way the page does; then compare with the same land generated in place
+    let slices = 0, worst = 0; for (let k = 0; k < 5; k++) { for (;;) { const a = performance.now(); const more = g.prefetch(); worst = Math.max(worst, performance.now() - a); if (!more) break; slices++; } g.shift(1); }
+    const h = new Sim.Grid(960, 480); Sim.generate(h, 4242, 7680, g.ox);
+    let same = 0, tot = 0; for (let i = 0; i < g.type.length; i++) { if (i % g.W < 2 * Sim.REGION || g.owner[i] || h.owner[i]) continue; tot++; if (g.type[i] === h.type[i]) same++; }
+    console.log(`  new regions made ahead in ${slices} slices, the longest ${worst.toFixed(1)} ms; the newest region matches in-place generation on ${same}/${tot} non-tree cells`);
+    check('streamed land is the same land', same === tot);
+    let bytes = 0; for (const r of g.store.values()) bytes += r.type.byteLength + r.life.byteLength + r.temp.byteLength + r.owner.byteLength + r.hum.byteLength;
+    const per = bytes / g.store.size, raw = Sim.REGION * g.H * g.buffer.byteLength / (g.W * g.H);
+    console.log(`  ${g.store.size} regions stored, ${(per / 1024).toFixed(0)} KB each against ${(raw / 1024).toFixed(0)} KB live (${(raw / per).toFixed(0)}x)`);
+    check('a stored region takes a small fraction of its live memory', per * 10 < raw);
+    // save and load the streamed world
+    const s = g.save(), k = new Sim.Grid(960, 480); k.load(s);
+    check('a streamed world saves and loads', k.ox === g.ox && k.worldW === 7680 && k.store.size === g.store.size && k.trees.length === g.trees.length, `${(s.length / 1024) | 0} KB`);
+    k.shift(-1); check('and keeps streaming after loading', k.ox === g.ox - Sim.REGION && k.trees.length > 0);
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
