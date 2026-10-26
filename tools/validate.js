@@ -1,8 +1,8 @@
-// Stage 2 checks. Each scenario builds a small world, runs it, and measures what it should.
+// Stage 2 and 3 checks. Each scenario builds a small world, runs it, and measures what it should.
 // usage: node tools/validate.js [scenario...]   (default: all)
 const { loadSim, census } = require('./load');
-const Sim = loadSim();
-const { E, DIRT, STONE, WATER, TIP, SEED, WOOD, ROOT, LITTER, ASH, SNOW, PLANT } = Sim.ids;
+const Sim = loadSim(process.env.SIMFILE);
+const { E, DIRT, STONE, WATER, TIP, SEED, WOOD, ROOT, LITTER, ASH, SNOW, PLANT, SAND, CLOUD, FIRE, LAVA, OIL, SALT, BRINE, ACID } = Sim.ids;
 const MIN = 3600;   // ticks in a minute at 60 fps
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
@@ -12,6 +12,7 @@ function plot(W, H, depth, m, seed = 7) {
   Sim.reseed(seed);
   const g = new Sim.Grid(W, H);
   for (let y = H - depth; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (40 << 8) | m; } }
+  g.initAir(); if (!m) for (let c = 0; c < g.hum.length; c++) g.hum[c] *= 0.3;   // dry ground under dry air
   return g;
 }
 const moisture = (g, y0, y1) => { let s = 0, n = 0; for (let i = y0 * g.W; i < y1 * g.W; i++) if (g.type[i] === DIRT) { s += g.life[i] & 255; n++; } return n ? s / n : 0; };
@@ -132,6 +133,196 @@ const scenarios = {
     check('snow lasts through winter on the hilltop', s1 > 0.8 * s0);
     check('and melts when it warms up', s2 < 0.2 * s0);
   },
+  // ---------------- stage 3: atmosphere and erosion ----------------
+  shadow() {
+    // a lake upwind of a ridge under a steady wind: the air is lifted over the ridge and rains out on the windward side
+    Sim.reseed(11); const W = 480, H = 240, g = new Sim.Grid(W, H); g.clock = Sim.YEAR * 0.4; g.updateClimate(); g.windHold = 0.6;
+    const ground = x => Math.round(175 - Math.max(0, 1 - Math.abs(x - 300) / 110) * 125);   // peak at x=300
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+      const i = g.idx(x, y), gy = ground(x), lake = x >= 30 && x < 190;
+      if (lake && y >= gy && y < gy + 20) g.set(i, WATER);
+      else if (y >= gy) g.set(i, y >= H - 4 || (x < 200 && y < gy + 24) ? STONE : DIRT, g.ambAt(y));
+    }
+    g.initAir(); g.wakeAll();
+    const rainX = g.precip;
+    run(g, 4 * MIN);   // late summer into winter
+    let wind = 0, lee = 0; for (let x = 190; x < 300; x++) wind += rainX[x]; for (let x = 300; x < 410; x++) lee += rainX[x];
+    const w = g.wc(240, 80), l = g.wc(360, 80);
+    console.log(`  rain on the windward slope ${wind}, on the lee slope ${lee}; air over the windward slope rises at ${(-g.vc[w]).toFixed(2)} cells/tick, sinks behind at ${g.vc[l].toFixed(2)}`);
+    check('wind is lifted over the ridge and sinks behind it', g.vc[w] < -0.02 && g.vc[l] > 0.02);
+    check('rain shadow: the windward slope gets twice the rain of the lee', wind > 50 && wind > 2 * lee, `${wind} vs ${lee}`);
+  },
+  updraft() {
+    // a bonfire with no prevailing wind: hot air rises over it and draws air in along the ground from both sides
+    Sim.reseed(5); const W = 320, H = 200, g = new Sim.Grid(W, H); g.windHold = 0;
+    for (let x = 0; x < W; x++) for (let y = H - 20; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+    for (let x = 150; x < 170; x++) for (let y = H - 50; y < H - 20; y++) g.set(g.idx(x, y), WOOD);
+    g.initAir(); g.wakeAll(); run(g, 120);
+    for (let x = 150; x < 170; x++) g.set(g.idx(x, H - 51), FIRE);
+    run(g, 400);
+    const up = g.vc[g.wc(160, H - 80)], left = g.uc[g.wc(120, H - 28)], right = g.uc[g.wc(200, H - 28)], calm = Math.abs(g.uc[g.wc(20, H - 28)]);
+    console.log(`  over the fire ${(-up).toFixed(2)} cells/tick up; at the ground ${left.toFixed(2)} from the left, ${(-right).toFixed(2)} from the right; far away ${calm.toFixed(2)}`);
+    check('fire makes an updraft', up < -0.2);
+    check('and pulls air in along the ground from both sides', left > 0.1 && right < -0.1 && calm < 0.05);
+  },
+  fog() {
+    // a lake in a valley: fog gathers over it in the small hours and burns off by midday; the hilltops stay clear
+    Sim.reseed(9); const W = 320, H = 240, g = new Sim.Grid(W, H); g.clock = Sim.YEAR * 0.45; g.updateClimate(); g.windHold = 0;
+    const hill = x => { const d = Math.abs(x - 160); return d < 40 ? 200 : Math.max(150, 200 - (d - 40) * 0.6); };
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+      const i = g.idx(x, y), h = hill(x);
+      if (Math.abs(x - 160) < 34 && y >= h - 6 && y < h) g.set(i, WATER);
+      else if (y >= h) { g.set(i, y >= H - 4 || (Math.abs(x - 160) < 40 && y < h + 4) ? STONE : DIRT, g.ambAt(y)); if (g.type[i] === DIRT) g.life[i] = (40 << 8) | 150; }
+    }
+    g.initAir(); g.wakeAll();
+    // fog: cloud within 8 cells of the ground, in the valley (the lake and its shore) or on the high slopes
+    const fog = () => { let v = 0, top = 0; for (let x = 0; x < W; x++) { const h = hill(x); for (let y = Math.max(0, Math.round(h) - 14); y < h; y++) if (g.type[g.idx(x, y)] === CLOUD) { if (Math.abs(x - 160) < 50) v++; else if (h < 160) top++; } } return [v, top]; };
+    const at = {}; let hilltops = 0;
+    run(g, 2 * Sim.DAY, 150, () => { const h = ((g.dayPhase * 24 + 6) % 24) | 0, [v, t] = fog(); at[h] = Math.max(at[h] || 0, v); hilltops = Math.max(hilltops, t); });
+    const night = Math.max(at[2] || 0, at[3] || 0, at[4] || 0, at[5] || 0), noon = Math.max(at[12] || 0, at[13] || 0, at[14] || 0);
+    console.log(`  valley fog: ${night} cells before dawn, ${noon} at midday; most fog on the high slopes at any time ${hilltops}`);
+    check('fog forms in the valley at night', night >= 15);
+    check('and burns off by midday', noon <= night / 4);
+    check('the high slopes stay clear', hilltops <= night / 4);
+  },
+  dew() {
+    // dry topsoil under saturated night air gathers dew; under dry air it doesn't
+    const got = {};
+    for (const [label, rh] of [['humid', 1.05], ['dry', 0.3]]) {
+      const g = plot(120, 100, 30, 0); g.clock = Sim.DAY * 2.6; g.updateClimate(); g.windHold = 0;
+      for (let x = 0; x < 120; x++) { const i = g.idx(x, 70); g.life[i] = (40 << 8) | 10; }
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c] * rh;
+      const total = () => moisture(g, 70, 97) * 27 * 120 / 100;   // in water cells
+      const m0 = total(); run(g, 900); const m = total();
+      console.log(`  ${label} night air: the soil holds ${m0.toFixed(1)} -> ${m.toFixed(1)} water cells' worth`);
+      got[label] = m - m0;
+    }
+    check('dew wets dry soil overnight, and dry air does not', got.humid > 2 && got.dry <= 0, `${got.humid.toFixed(1)} vs ${got.dry.toFixed(1)}`);
+  },
+  clouds() {
+    // the generated world through an autumn: clouds form aloft with a level base, and it snows on the hills in winter
+    const g = new Sim.Grid(960, 480); Sim.generate(g, 12345); g.clock = Sim.YEAR * 0.55; g.updateClimate();
+    const bases = [], W = 960; let snow = 0, cloud = 0;
+    run(g, 3 * Sim.DAY, Sim.DAY / 4, () => {
+      for (let x = 0; x < W; x++) {
+        let y = 0; while (y < g.H && (g.type[y * W + x] === E || Sim.EL[g.type[y * W + x]].kind === 'gas')) y++;
+        for (let yy = y - 8; yy >= 0; yy--) if (g.type[yy * W + x] === CLOUD) { if (g.type[(yy + 1) * W + x] !== CLOUD) bases.push(yy); break; }
+      }
+      const c = census(g, Sim.EL); snow = Math.max(snow, c.Snow || 0); cloud = Math.max(cloud, c.Cloud || 0);
+    });
+    bases.sort((a, b) => a - b); const q = p => bases[Math.min(bases.length - 1, (bases.length * p) | 0)];
+    console.log(`  ${bases.length} cloud-base samples over 3 days; base p10 ${q(0.1)}, p50 ${q(0.5)}, p90 ${q(0.9)} rows; most cloud ${cloud}, most snow lying ${snow}`);
+    check('clouds form aloft', bases.length > 300);
+    check('with a consistent base (middle 80% within 70 rows)', q(0.9) - q(0.1) <= 70);
+    check('snow settles once winter comes (stage 2 had none on this world)', snow > 50);
+  },
+  erosion() {
+    // a stream running down a sand slope cuts into it and carries the sand down into the basin, where it settles
+    Sim.reseed(3); const W = 240, H = 160, g = new Sim.Grid(W, H); g.windHold = 0;
+    const top = x => x < 150 ? Math.round(60 + x * 0.55) : 150;
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) {
+      const i = g.idx(x, y);
+      if (y >= H - 6 || (x >= 150 && y >= 150) || (x >= W - 3 && y >= 100)) g.set(i, STONE, g.ambAt(y));
+      else if (x < 150 && y >= top(x)) g.set(i, y >= top(x) + 12 ? STONE : SAND, g.ambAt(y));
+    }
+    g.initAir(); g.wakeAll();
+    const sandIn = (x0, x1) => { let n = 0; for (let y = 0; y < H; y++) for (let x = x0; x < x1; x++) if (g.type[g.idx(x, y)] === SAND) n++; return n; };
+    const up0 = sandIn(0, 50), all0 = census(g, Sim.EL).Sand;
+    run(g, 3 * MIN, 1, () => { for (let x = 4; x < 10; x++) { const i = g.idx(x, 40); if (g.type[i] === E) { g.set(i, WATER); g.vy[i] = 1; } } });
+    const up = sandIn(0, 50), basin = sandIn(150, W), all = census(g, Sim.EL).Sand;
+    console.log(`  upper slope ${up0} -> ${up} sand cells; basin 0 -> ${basin}; all sand ${all0} -> ${all}`);
+    check('the stream cuts into the upper slope', up0 - up > 25);
+    check('and drops the sand in the basin (a delta)', basin > 60);
+    check('sand is conserved', Math.abs(all - all0) < 20);
+  },
+  lava() {
+    // lava poured on cold stone heaps into a mound as it stiffens, instead of levelling like water
+    Sim.reseed(4); const g = new Sim.Grid(120, 80); g.windHold = 0;
+    for (let x = 0; x < 120; x++) for (let y = 76; y < 80; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+    g.initAir(); g.wakeAll();
+    run(g, 4000, 1, f => { if (f < 1500 && f % 3 === 0) { const i = g.idx(60, 60); if (g.type[i] === E) g.set(i, LAVA); } });
+    let h = 0, x0 = 1e9, x1 = -1; for (let y = 0; y < 76; y++) for (let x = 0; x < 120; x++) { const t = g.type[g.idx(x, y)]; if (t === STONE || t === LAVA || t === Sim.ids.RUBBLE) { h = Math.max(h, 76 - y); x0 = Math.min(x0, x); x1 = Math.max(x1, x); } }
+    console.log(`  mound ${x1 - x0 + 1} wide, ${h} high`);
+    check('lava sets as a mound (height at least a third of its width)', h * 3 >= x1 - x0 + 1);
+  },
+  tension() {
+    const box = (W, H) => { Sim.reseed(4); const g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y)); g.initAir(); g.wakeAll(); return g; };
+    { // a block of water set on a flat floor holds together as a puddle
+      const g = box(300, 80); for (let y = 66; y < 76; y++) for (let x = 145; x < 155; x++) g.set(g.idx(x, y), WATER); run(g, 1500);
+      let x0 = 1e9, x1 = -1; for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER) { x0 = Math.min(x0, i % 300); x1 = Math.max(x1, i % 300); }
+      console.log(`  100 cells of water spread to a puddle ${x1 - x0 + 1} wide`);
+      check('water holds a puddle rather than thinning to a film', x1 - x0 + 1 < 80);
+    }
+    { // lone drops bead where they land
+      const g = box(120, 60); for (const x of [30, 60, 90]) g.set(g.idx(x, 55), WATER);
+      run(g, 900, 1, () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = 0.98 * g.cap[c]; });   // in near-saturated air, so they don't dry up
+      const xs = []; for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER) xs.push(i % 120);
+      check('lone drops stay put', xs.join() === '30,60,90', xs.join());
+    }
+    { // oil on water spreads into a thin film
+      const g = box(200, 80); for (let x = 0; x < 200; x++) for (let y = 50; y < 76; y++) g.set(g.idx(x, y), WATER);
+      for (let y = 40; y < 46; y++) for (let x = 95; x < 105; x++) g.set(g.idx(x, y), OIL);
+      run(g, 1800); let cols = 0, thick = 0; for (let x = 0; x < 200; x++) { let t = 0; for (let y = 0; y < 80; y++) if (g.type[g.idx(x, y)] === OIL) t++; if (t) cols++; thick = Math.max(thick, t); }
+      console.log(`  60 cells of oil on water cover ${cols} columns, at most ${thick} thick`);
+      check('oil spreads into a film on water', cols >= 45 && thick <= 2);
+    }
+  },
+  salt() {
+    const box = (W, H, floor = 4) => { Sim.reseed(4); const g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - floor; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y)); for (let y = 0; y < H; y++) { g.set(g.idx(0, y), STONE); g.set(g.idx(W - 1, y), STONE); } g.initAir(); g.wakeAll(); return g; };
+    { // salt dropped into a tank dissolves; the brine is heavier and settles in a layer under the fresh water
+      const W = 40, H = 80, g = box(W, H); for (let y = 36; y < 76; y++) for (let x = 1; x < W - 1; x++) g.set(g.idx(x, y), WATER);
+      for (let y = 20; y < 23; y++) for (let x = 10; x < 30; x++) g.set(g.idx(x, y), SALT);
+      run(g, 3000);
+      const sal = (y0, y1) => { let s = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = 1; x < W - 1; x++) { const i = g.idx(x, y); if (g.type[i] === BRINE) s += g.life[i]; if (g.type[i] === BRINE || g.type[i] === WATER) n++; } return s / n; };
+      const top = sal(36, 46), bottom = sal(66, 76), c = census(g, Sim.EL);
+      console.log(`  60 salt in 1500 water: ${c.Salt || 0} undissolved; salt content top ${top.toFixed(1)}, bottom ${bottom.toFixed(1)}`);
+      check('salt dissolves into brine', !c.Salt && c.Brine > 50);
+      check('the brine layers under fresh water', bottom > 5 * Math.max(1, top));
+    }
+    { // a shallow pan of brine dries in the summer sun and leaves a salt crust
+      const g = box(60, 60); g.clock = Sim.YEAR * 0.42; g.updateClimate();
+      for (let y = 53; y < 56; y++) for (let x = 5; x < 55; x++) { const i = g.idx(x, y); g.set(i, BRINE); g.life[i] = 60; }
+      run(g, 10 * MIN, 1, () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = Math.min(g.hum[c], 0.3 * g.cap[c]); });   // a dry wind carries the vapour off
+      const c = census(g, Sim.EL);
+      console.log(`  150 cells of weak brine after 10 min in a dry wind: ${c.Brine || 0} brine left, ${c.Salt || 0} salt crust`);
+      check('a drying salt pan leaves a crust', (c.Salt || 0) >= 10 && (c.Brine || 0) < 50);
+    }
+    { // brine boiled off over lava leaves its salt behind
+      const W = 40, H = 40, g = box(W, H, 8);
+      for (let x = 1; x < W - 1; x++) for (let y = 30; y < 32; y++) g.set(g.idx(x, y), LAVA);
+      for (let x = 1; x < W - 1; x++) for (let y = 24; y < 30; y++) { const i = g.idx(x, y); g.set(i, BRINE); g.life[i] = 100; }
+      run(g, 2400); const c = census(g, Sim.EL);
+      console.log(`  228 cells of brine (178 grains of salt) boiled dry: ${c.Salt || 0} salt left`);
+      check('boiling brine leaves its salt', !c.Brine && c.Salt > 120 && c.Salt < 240);
+    }
+  },
+  acid() {
+    const box = (W, H, floor) => { Sim.reseed(4); const g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - floor; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y)); for (let y = 0; y < H; y++) { g.set(g.idx(0, y), Sim.ids.GLASS); g.set(g.idx(W - 1, y), Sim.ids.GLASS); } g.initAir(); g.wakeAll(); return g; };
+    { // acid poured into a pool is diluted and spent
+      const g = box(60, 60, 4); for (let y = 30; y < 56; y++) for (let x = 1; x < 59; x++) g.set(g.idx(x, y), WATER);
+      for (let y = 20; y < 25; y++) for (let x = 25; x < 35; x++) g.set(g.idx(x, y), ACID);
+      let peak = 0, mean = 0; run(g, 120, 1, () => { let n = 0, s = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === ACID) { n++; s += g.life[i]; } if (n > peak) { peak = n; mean = s / n; } });
+      run(g, 1800); const left = census(g, Sim.EL).Acid || 0;
+      console.log(`  50 cells of acid in a pool: up to ${peak} cells of acid at mean strength ${mean.toFixed(0)} as it mixes; ${left} left after 30 s`);
+      check('water dilutes acid', peak > 50 && mean < 200);
+      check('diluted acid is spent', left <= 2);
+    }
+    const ate = s => { const g = box(60, 60, 20); for (let y = 30; y < 40; y++) for (let x = 20; x < 40; x++) { const i = g.idx(x, y); g.set(i, ACID); g.life[i] = s; } const st = census(g, Sim.EL).Stone; run(g, 600); return st - census(g, Sim.EL).Stone; };
+    const strong = ate(255), weak = ate(60);
+    console.log(`  200 cells of acid eat ${strong} stone in 10 s at full strength, ${weak} when dilute`);
+    check('dilute acid eats more slowly', weak * 2 < strong);
+  },
+  canopy() {
+    // undermine a tree that stands in its neighbour's canopy: it crashes down through it rather than hanging there
+    const W = 160, H = 140, g = plot(W, H, 50, 220);
+    g.set(g.idx(80, H - 51), TIP); g.set(g.idx(92, H - 51), TIP); g.dropSeed = () => {};
+    run(g, 2 * MIN);
+    const t = g.trees.find(t => t.x === 80), y0 = t.y;
+    for (let y = H - 50; y < H - 3; y++) for (let x = 62; x < 90; x++) { const i = g.idx(x, y); if (!(g.owner[i] === t.id && g.type[i] === WOOD) && g.type[i] !== STONE) { g.owner[i] = 0; g.set(i, E); } }
+    run(g, 900);
+    console.log(`  ${g.trees.length} trees standing; the undermined one dropped ${t.y - y0} cells`);
+    check('a toppling tree falls through its neighbour\'s canopy', t.dead && t.y - y0 > 20);
+  },
   save() {
     // save/load keeps soil moisture, rot timers and the calendar; older saves still load
     const g = new Sim.Grid(480, 240); Sim.generate(g, 5); run(g, 300);
@@ -141,6 +332,15 @@ const scenarios = {
     check('calendar survives save/load', Math.abs(h.clock - g.clock) < 1 && h.trees.length === g.trees.length);
     const old = s.split('|').slice(0, 2).join('|'), k = new Sim.Grid(480, 240); k.load(old);
     check('stage 1 save format still loads', k.trees.length === g.trees.length);
+    const s2 = s.split('|').slice(0, 4).join('|'), k2 = new Sim.Grid(480, 240); k2.load(s2);
+    check('stage 2 save format still loads', k2.trees.length === g.trees.length && Math.abs(k2.clock - g.clock) < 1);
+    // liquids keep what they carry, and the sky keeps its vapour
+    const m = new Sim.Grid(120, 80); for (let x = 0; x < 120; x++) for (let y = 70; y < 80; y++) m.set(m.idx(x, y), STONE);
+    const put = (x, t, v) => { const i = m.idx(x, 69); m.set(i, t); m.life[i] = v; };
+    put(10, WATER, 255 | 256); put(20, BRINE, 77); put(30, ACID, 99); m.hum[100] = 3.21;
+    const r = new Sim.Grid(120, 80); r.load(m.save());
+    check("sediment, salt and acid strength survive save/load", r.life[r.idx(10, 69)] === (255 | 256) && r.life[r.idx(20, 69)] === 77 && r.life[r.idx(30, 69)] === 99);
+    check('the vapour field survives save/load', Math.abs(r.hum[100] - 3.21) < 0.01);
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
