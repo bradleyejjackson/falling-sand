@@ -47,7 +47,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 
 <header>
   <h1>Sand<span>fall</span></h1>
-  <div class="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="wind"></span></div>
+  <div class="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="wind"></span><span id="clock"></span></div>
 </header>
 
 <div class="stage"><canvas id="c"></canvas></div>
@@ -64,13 +64,14 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <button class="btn" id="export">Export / Import</button>
   <button class="btn" id="showchunks" aria-pressed="false">Chunks</button>
   <button class="btn" id="heatview" aria-pressed="false">Heat view</button>
+  <button class="btn" id="moistview" aria-pressed="false">Moisture view</button>
   <span class="msg" id="msg"></span>
 </div>
 <div class="io" id="io">
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Trees are living things: plant a Sapling or drop a Seed in water; they grow only while their roots can drink, thicken with age, branch, and carry their leaves outward. Weather runs on temperature: warm lakes evaporate, vapour climbs and condenses into cloud in the cold upper air, clouds drift on a shifting wind and rain or snow from their undersides.</p>
+<p class="hint">Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Weather runs on temperature: warm lakes evaporate, vapour climbs and condenses into cloud in the cold upper air, clouds drift on a shifting wind and rain or snow from their undersides.</p>
 
 <script>
 // ============================================================================
@@ -89,7 +90,8 @@ const Sim = (() => {
   // life: [min,max] ticks before decay (0 = immortal).  decay: what it becomes (array = random pick).
   // hi/lo: phase change when temperature crosses it → {at, to} (to may be 'explode').
   const EL = [];
-  const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,k:0.2,cap:1,t0:20,hold:null,life:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
+  // soil: the life value a freshly placed cell starts with when it has no lifetime (dirt's moisture and richness).
+  const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,k:0.2,cap:1,t0:20,hold:null,life:0,soil:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
 
   const E     = def('Empty',    {kind:'static', k:0.05, rgb:[8,8,10], opaque:false});
   const SAND  = def('Sand',     {kind:'powder', density:1.6, k:0.2, rgb:[205,170,90], vary:30});
@@ -117,6 +119,9 @@ const Sim = (() => {
   const CHAR  = def('Charcoal', {kind:'static', k:0.12, rgb:[38,34,32], vary:16});
   const ASH   = def('Ash',      {kind:'powder', density:0.7, k:0.1, rgb:[150,146,140], vary:22});
   const TIP   = def('Sapling',  {kind:'static', k:0.1, rgb:[130,95,45], vary:25});   // marker cell: becomes a Tree entity on its first tick
+  const DIRT  = def('Dirt',     {kind:'powder', density:1.5, k:0.25, cap:1.5, soil:(40<<8)|90, rgb:[104,72,44], vary:20});   // life = richness<<8 | moisture, 0..255 each
+  const LITTER= def('Litter',   {kind:'powder', density:0.6, lazy:0.3, k:0.1, rgb:[128,92,42], vary:30});   // fallen leaves and dead wood; rots into dirt
+  const ROOT  = def('Root',     {kind:'static', k:0.1, rgb:[150,112,72], vary:20});   // drawn by a tree's root segments
 
   // phase changes driven by temperature
   const phase = (t,o) => Object.assign(EL[t],o);
@@ -140,6 +145,8 @@ const Sim = (() => {
   phase(GUNP,  {hi:{at:200,to:'explode',r:7}});
   phase(GAS,   {hi:{at:200,to:'explode',r:3}});
   phase(FIRE,  {lo:{at:200,to:SMOKE}});
+  phase(LITTER,{hi:{at:230,to:FIRE}});
+  phase(ROOT,  {hi:{at:300,to:EMBER}});
 
   const N = EL.length, AMB = 20;
   const isLiquid = t => EL[t].kind==='liquid', isGas = t => EL[t].kind==='gas';
@@ -151,17 +158,21 @@ const Sim = (() => {
   react(FIRE, WATER, 1.0, STEAM, null);        // instant quench
   react(FIRE, BRINE, 1.0, STEAM, null);
   react(SALT, WATER, 0.15, E, BRINE);
-  react(SEED, WATER, 0.3, TIP, E);      // a watered seed becomes a sapling
   react(SEED, BRINE, 0.05, PLANT, E);
-  for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR]) react(ACID, t, 0.08, [ACID,ACID,E], [E,SMOKE]);
+  for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR,DIRT,LITTER,ROOT]) react(ACID, t, 0.08, [ACID,ACID,E], [E,SMOKE]);
   const has = new Uint8Array(N); for (const k of RX.keys()) has[(k/N)|0]=1;
   // contact ignition: a flame licking fuel lights it faster than conduction alone would
-  const FUEL = {[WOOD]:{p:0.02,to:EMBER},[TIP]:{p:0.03,to:EMBER},[OIL]:{p:0.35,to:FIRE},[PLANT]:{p:0.06,to:EMBER},[CHAR]:{p:0.01,to:EMBER},[SEED]:{p:0.1,to:FIRE},[GUNP]:{p:0.5,to:'explode',r:7},[GAS]:{p:0.5,to:'explode',r:3}};
+  const FUEL = {[WOOD]:{p:0.02,to:EMBER},[TIP]:{p:0.03,to:EMBER},[OIL]:{p:0.35,to:FIRE},[PLANT]:{p:0.06,to:EMBER},[CHAR]:{p:0.01,to:EMBER},[SEED]:{p:0.1,to:FIRE},[GUNP]:{p:0.5,to:'explode',r:7},[GAS]:{p:0.5,to:'explode',r:3},[LITTER]:{p:0.12,to:FIRE},[ROOT]:{p:0.01,to:EMBER}};
   const SOURCE = new Set([FIRE,EMBER,LAVA]);
   // structural integrity: which solids can carry weight, and how far each can cantilever before it gives way
-  const SUPPORTS = new Set([STONE,GLASS,ICE,WOOD,CHAR,SAND,GUNP,SALT,RUBBLE,SNOW,ASH,SEED,PLANT,TIP]);
+  const SUPPORTS = new Set([STONE,GLASS,ICE,WOOD,CHAR,SAND,GUNP,SALT,RUBBLE,SNOW,ASH,SEED,PLANT,TIP,DIRT,LITTER,ROOT]);
   const SPAN = {[STONE]:5,[GLASS]:3,[ICE]:4,[CHAR]:2};
   const FALLS_AS = {[STONE]:RUBBLE,[GLASS]:RUBBLE,[ICE]:SNOW,[CHAR]:ASH};
+  // ecology: a day is a minute at 60 fps and a year is eight days; the soil pass visits each row once every SLOW ticks
+  const DAY = 3600, YEAR = DAY*8, SLOW = 8, TREE_TICK = 16, MOIST = 255, HOLD = 70, ROT = 600, MATURE = 220, MAX_TREES = 160;
+  const SEASONS = ['Spring','Summer','Autumn','Winter'], START = DAY*1.08;   // new worlds open on the second morning of spring
+  const ROOT_INTO = new Set([DIRT,SAND,LITTER,ASH,WATER,SNOW]);   // what a root can push through
+  const KEEP_LIFE = new Set([DIRT,WOOD,ROOT,SEED,ICE]);          // cells whose life value is state worth saving
 
   // ---- the grid --------------------------------------------------------------
   const CH = 16, G = 0.25, VMAX = 6;
@@ -177,10 +188,11 @@ const Sim = (() => {
       this.skyY=(H*0.4)|0; this.cloudY=Math.max(16,this.skyY-100);      // where the air is cold enough for cloud
       this.trees=[]; this.treeId=1; this.owner=new Uint16Array(n);       // tree entities and which tree owns a cell
       this.bfsQ=new Int32Array(1300); this.bfsSeen=new Set();
+      this.clock=START; this.updateClimate();
       this.resetTemp();
     }
     // air gets colder with altitude (lapse rate) and a little warmer deep underground
-    ambAt(y){ return y<this.skyY ? 20-(this.skyY-y)*0.18 : Math.min(32, 20+(y-this.skyY)*0.05); }
+    ambAt(y){ return (y<this.skyY ? 20-(this.skyY-y)*0.18 : Math.min(32, 20+(y-this.skyY)*0.05)) + this.climate; }
     resetTemp(){ for (let y=0;y<this.H;y++){ const a=this.ambAt(y); this.temp.fill(a, y*this.W, (y+1)*this.W); } }
     idx(x,y){ return y*this.W+x; }
     inb(x,y){ return x>=0&&x<this.W&&y>=0&&y<this.H; }
@@ -196,7 +208,7 @@ const Sim = (() => {
       const el=EL[t], was=this.type[i];
       if (SUPPORTS.has(was) && !SUPPORTS.has(t)) this.unsettle(i%this.W,(i/this.W)|0);
       this.type[i]=t; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0;
-      this.life[i] = el.life ? el.life[0]+((R()*(el.life[1]-el.life[0]))|0) : 0;
+      this.life[i] = el.life ? el.life[0]+((R()*(el.life[1]-el.life[0]))|0) : el.soil;
       this.temp[i] = temp===undefined ? el.t0 : temp;
       this.wake(i%this.W,(i/this.W)|0);
     }
@@ -260,7 +272,7 @@ const Sim = (() => {
       if (!ph) return false;
       if (ph.to==='explode'){ this.explode(x,y,ph.r); return true; }
       if (ph.to==='condense'){ this.set(i, this.openSky(x,y) ? CLOUD : WATER, v); return true; }
-      if (ph.to==='freeze'){ const b=y+1<this.H?this.type[this.idx(x,y+1)]:STONE; this.set(i, (b===E||isGas(b)||b===SNOW) ? SNOW : ICE, v); return true; }
+      if (ph.to==='freeze'){ const b=y+1<this.H?this.type[this.idx(x,y+1)]:STONE; this.set(i, (b===E||isGas(b)||b===SNOW) ? SNOW : ICE, v); if (this.type[i]===ICE) this.life[i]=1; return true; }   // life 1 marks weather ice, which thaws in spring
       this.set(i, ph.to, v);
       if (ph.to===STEAM) T[i]=Math.max(v,130);
       return true;
@@ -332,8 +344,6 @@ const Sim = (() => {
         }
       }
       if (!liquid){ if (impact>2.5) VX[ci]=dir*impact*0.3*R(); return; }
-      // a still, warm water surface under open sky slowly evaporates
-      if (t===WATER && cy>0 && this.type[this.idx(cx,cy-1)]===E && this.temp[ci]>8 && R()<0.0004 && this.openSky(cx,cy)){ this.set(ci,STEAM,110); return; }
       // liquid: spread sideways
       if (impact>1.5){ VX[ci]=dir*impact*(0.4+R()*0.4); return; }
       for (const dd of [dir,-dir]){
@@ -387,36 +397,96 @@ const Sim = (() => {
       this.wake(x,y);
     }
     // ---- trees are entities: a skeleton of segments, re-drawn into the grid as it grows ----
+    // Segments marked root grow down into the soil as Root cells: they anchor the tree, and they are how it drinks.
     plantTree(x,y){
       if (!this.inb(x,y+1)) return false;
       const below=EL[this.type[this.idx(x,y+1)]].kind; if (below!=='static' && below!=='powder') return false;
-      const t={id:this.treeId++, x, y, age:0, water:0, cells:new Map(), scars:new Map(), segs:[{p:-1, at:0, ang:0, len:0.5, max:16+R()*18, thick:1, depth:0, kids:0, age:0, alive:true}]};
+      const t={id:this.treeId++, x, y, age:0, water:0, leaf:this.foliage, span:1600+R()*1200, cells:new Map(), scars:new Map(), segs:[
+        {p:-1, at:0, ang:0, len:0.5, max:16+R()*18, thick:1, depth:0, kids:0, age:0, alive:true},
+        this.newRoot(-1, 0, Math.PI, 7+R()*7, 0)]};                        // the taproot shares the trunk's base and heads straight down
       this.trees.push(t); this.rasterTree(t); return true;
     }
+    newRoot(p,at,ang,max,depth){ return {p, at, ang, len:0.5, max, thick:1, depth, kids:0, age:0, alive:true, root:true}; }
+    kindOf(t,code){ return (code&1) ? PLANT : t.segs[code>>1].root ? ROOT : WOOD; }
     segStart(t,seg){ if (seg.p<0) return [t.x+0.5, t.y+1]; const p=t.segs[seg.p], [sx,sy]=this.segStart(t,p); return [sx+Math.sin(p.ang)*p.len*seg.at, sy-Math.cos(p.ang)*p.len*seg.at]; }
-    growTree(t){
-      // damage: cells of ours that are no longer wood or leaf were burnt, eaten or erased
+    segEnd(t,seg,len){ const [sx,sy]=this.segStart(t,seg); return [Math.round(sx+Math.sin(seg.ang)*len), Math.round(sy-Math.cos(seg.ang)*len)]; }
+    rootRoom(t,x,y){ if (!this.inb(x,y)) return false; const i=this.idx(x,y); return ROOT_INTO.has(this.type[i]) || (this.owner[i]===t.id && this.type[i]===ROOT); }
+    wetness(x,y){   // how attractive the soil around (x,y) is to a root
+      let s=0;
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const nx=x+dx, ny=y+dy; if (!this.inb(nx,ny)) continue; const j=this.idx(nx,ny), tj=this.type[j]; if (tj===DIRT) s+=this.life[j]&255; else if (tj===WATER) s+=300; }
+      return s;
+    }
+    rootAim(t,seg,at){
+      // a new root tries a few headings and takes the one that ends in the wettest soil
+      const [px,py]=this.segStart(t,seg), bx=px+Math.sin(seg.ang)*seg.len*at, by=py-Math.cos(seg.ang)*seg.len*at;
+      let best=null, bestS=-1;
+      for (let n=0;n<4;n++){
+        const side=(n&1)?1:-1, ang=Math.max(Math.PI/2+0.15, Math.min(Math.PI*1.5-0.15, seg.ang+side*(0.5+R()*0.7)));
+        const ex=Math.round(bx+Math.sin(ang)*6), ey=Math.round(by-Math.cos(ang)*6);
+        if (!this.rootRoom(t,ex,ey)) continue;
+        const s=this.wetness(ex,ey)+R()*40;
+        if (s>bestS){ bestS=s; best=ang; }
+      }
+      return best;
+    }
+    growTree(t,force){
+      // damage: cells of ours that are no longer wood, root or leaf were burnt, eaten or erased
       const hit=new Map();
-      for (const [i,code] of t.cells){ const kind=(code&1)?PLANT:WOOD; if (this.type[i]!==kind){ const si=code>>1; hit.set(si,(hit.get(si)||0)+1); } }
+      for (const [i,code] of t.cells){ if (this.type[i]!==this.kindOf(t,code)){ const si=code>>1; hit.set(si,(hit.get(si)||0)+1); } }
       const segs=t.segs;
       for (const [si,cnt] of hit){ const seg=segs[si]; if (seg.alive && cnt>=Math.max(2,seg.cellCount*0.35)) seg.alive=false; }
       for (let k=0;k<segs.length;k++){ const seg=segs[k]; if (seg.p>=0 && !segs[seg.p].alive) seg.alive=false; }   // parents first, so one pass works
-      const base=this.idx(t.x,t.y+1), bk=EL[this.type[base]].kind;
-      if (!segs[0].alive || (bk!=='static' && bk!=='powder')){ this.releaseTree(t); return false; }   // felled, or undermined
-      // drink: water near the roots becomes growth budget
-      if (t.water<60 && R()<0.5){ outer: for (let dy=0;dy<=4;dy++) for (let dx=-5;dx<=5;dx++){ const nx=t.x+dx, ny=t.y+1+dy; if (this.inb(nx,ny) && this.type[this.idx(nx,ny)]===WATER){ this.set(this.idx(nx,ny),E); t.water+=5; break outer; } } }
+      if (!segs[0].alive || t.age>t.span){ this.releaseTree(t); return false; }   // felled, burnt through, or old
+      // anchoring: count root cells gripping soil that isn't ours. Wash the soil away and the tree comes down.
+      const W=this.W, roots=[]; let anchors=0;
+      const base=this.idx(t.x,t.y+1); if (SUPPORTS.has(this.type[base]) && this.owner[base]!==t.id) anchors++;
+      for (const [i,code] of t.cells){
+        if ((code&1) || !segs[code>>1].root || this.type[i]!==ROOT) continue;
+        roots.push(i);
+        const x=i%W;
+        for (const j of [i+W, i-1, i+1, i-W]){ if (j<0 || j>=this.type.length || Math.abs(j%W-x)>1) continue; if (SUPPORTS.has(this.type[j]) && this.owner[j]!==t.id){ anchors++; break; } }
+      }
+      if (anchors < Math.max(1, roots.length*0.1)){ t.falling=true; return true; }
+      // leaves follow the season: they thin and fall as litter in autumn, and come back in spring
+      let redraw=false;
+      const leafTo=this.foliage;
+      if (Math.abs(leafTo-t.leaf)>0.01){ t.dropping=leafTo<t.leaf; t.leaf+=Math.sign(leafTo-t.leaf)*Math.min(0.04, Math.abs(leafTo-t.leaf)); redraw=true; }
+      // a mature tree in leaf drops seeds through summer and autumn
+      if (t.age>MATURE && t.leaf>0.6 && this.seeding && R()<0.08) this.dropSeed(t);
+      // drink: root cells pull moisture out of the soil around them, so a bigger root system drinks faster
+      if (t.water<60 && (force || this.growth>0)){
+        const tries=Math.min(12, 1+(roots.length/3|0));
+        for (let n=0;n<tries && roots.length;n++){
+          const j=this.nb4(roots[(R()*roots.length)|0]); if (j<0) continue;
+          const tj=this.type[j];
+          if (tj===DIRT){ const v=this.life[j], m=v&255, rich=v>>8; if (m>30){ const take=Math.min(m-20,40); this.life[j]=(Math.max(0,rich-3)<<8)|(m-take); t.water+=take/20*(1+rich/255); } }
+          else if (tj===WATER){ this.set(j,E); t.water+=5; }
+        }
+      }
       // a wounded tree stops growing until it has been left alone for a while (so it can't out-grow a fire)
-      if (hit.size>0) t.stress=25; if (t.stress>0){ t.stress--; return true; }
-      if (t.water<=0) return true;                 // no water, no growth: the tree just waits
+      if (hit.size>0) t.stress=25; if (t.stress>0){ t.stress--; if (redraw) this.rasterTree(t); return true; }
+      if (t.water<=0 || (!force && R()>=this.growth)){ if (redraw) this.rasterTree(t); return true; }   // no water, or the wrong season: the tree waits
       const rate = 0.6; t.water--;
       t.age++;
-      const MAXT=[3.8,2.4,1.5,1.0], MAXK=[4,3,2,0];
-      let grew = hit.size>0 || t.scars.size>0;
+      const MAXT=[3.8,2.4,1.5,1.0], MAXK=[4,3,2,0], RMAXT=[2.2,1.4,1.0,1.0], RMAXK=[4,3,1,0];
+      let grew = redraw || hit.size>0 || t.scars.size>0;
       for (let k=0;k<segs.length;k++){
         const seg=segs[k]; if (!seg.alive) continue;
         seg.age++;
+        if (seg.root){
+          // roots push through soil but stop at rock, caves and other trees' roots
+          if (seg.len<seg.max){ const nl=Math.min(seg.max, seg.len+rate*0.8), [ex,ey]=this.segEnd(t,seg,nl); if (this.rootRoom(t,ex,ey)){ seg.len=nl; grew=true; } else seg.max=seg.len; }
+          const th=Math.min(RMAXT[seg.depth], 1+seg.age*0.012/(1+seg.depth*0.6));
+          if (th-seg.thick>0.1){ seg.thick=th; grew=true; }
+          if (seg.depth<3 && seg.kids<RMAXK[seg.depth] && seg.len>seg.max*0.4 && R()<0.07){
+            const at=0.35+R()*0.6, ang=this.rootAim(t,seg,at);
+            if (ang!==null){ segs.push(this.newRoot(k, at, ang, seg.max*(0.55+R()*0.35), seg.depth+1)); grew=true; }
+            seg.kids++;
+          }
+          continue;
+        }
         if (seg.len<seg.max){ seg.len=Math.min(seg.max, seg.len+rate*(seg.depth===0?1:0.75)); grew=true; }
-        else if (seg.depth===0 && t.water>0 && R()<0.2){ seg.max+=0.5; grew=true; }         // a well-watered trunk keeps gaining height
+        else if (seg.depth===0 && t.water>0 && seg.max<44 && R()<0.2){ seg.max+=0.5; grew=true; }   // a well-watered trunk keeps gaining height, up to a point
         const th=Math.min(MAXT[seg.depth], 1+seg.age*0.018/(1+seg.depth*0.6));              // trunks thicken with age
         if (th-seg.thick>0.1){ seg.thick=th; grew=true; }
         if (seg.depth<3 && seg.kids<MAXK[seg.depth] && seg.len>seg.max*0.45 && R()<0.07){
@@ -426,9 +496,26 @@ const Sim = (() => {
         }
       }
       // scars: a cell we lost stays bare for a while instead of healing instantly
-      for (const [i,code] of t.cells){ const kind=(code&1)?PLANT:WOOD; if (this.type[i]!==kind && !t.scars.has(i)) t.scars.set(i,60); }
+      for (const [i,code] of t.cells){ if (this.type[i]!==this.kindOf(t,code) && !t.scars.has(i)) t.scars.set(i,60); }
       for (const [i,n] of t.scars){ if (n<=1) t.scars.delete(i); else t.scars.set(i,n-1); }
       if (grew) this.rasterTree(t); return true;
+    }
+    nb4(i){   // a random 4-neighbour of cell i, or -1 off the edge
+      const W=this.W, r=(R()*4)|0, j = r===0 ? i+W : r===1 ? i-W : r===2 ? i-1 : i+1;
+      if (j<0 || j>=this.type.length || (r>1 && ((j/W)|0)!==((i/W)|0))) return -1;
+      return j;
+    }
+    dropSeed(t){
+      // a seed leaves from just outside a branch tip and rides the wind away from the parent's shade
+      const seg=t.segs[(R()*t.segs.length)|0]; if (!seg.alive || seg.root || seg.depth===0) return;
+      const side=Math.sin(seg.ang)<0?-1:1, [ex,ey]=this.segEnd(t,seg,seg.len), x=ex+side*4, y=ey+1;
+      if (!this.inb(x,y) || this.type[this.idx(x,y)]!==E) return;
+      const i=this.idx(x,y); this.set(i,SEED); this.vx[i]=side*(1+R()*2)+this.wind*3;
+    }
+    canSprout(x,y){   // room for a new tree: not too many, not crowded, and not in deep shade
+      if (this.trees.length>=MAX_TREES) return false;
+      for (const t of this.trees) if (Math.abs(t.x-x)<7 && Math.abs(t.y-y)<30) return false;
+      return this.openSky(x,y);
     }
     rasterTree(t){
       const W=this.W, next=new Map();
@@ -446,36 +533,77 @@ const Sim = (() => {
           else for (let dy=-rr;dy<=rr;dy+=1) for (let dx=-rr;dx<=rr;dx+=1) if (dx*dx+dy*dy<=rr*rr) put(px+dx,py+dy,k<<1);
           seg.cellCount++;
         }
-        // leaves: at the tips of branches and twigs, growing with age; a young trunk carries a tuft too
+        if (seg.root) continue;
+        // leaves: at the tips of branches and twigs, growing with age and thinning with the season; a young trunk carries a tuft too
         const leafy = seg.depth>0 || (seg.kids===0 && seg.age<80);
-        if (leafy){
-          const lr=Math.min(3.2, 1.1+seg.age*0.025), lx=Math.round(ex), ly=Math.round(ey);
+        const lr=Math.min(3.2, 1.1+seg.age*0.025)*t.leaf;
+        if (leafy && lr>=0.8){
+          const lx=Math.round(ex), ly=Math.round(ey);
           for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++){ if (dx*dx+dy*dy>lr*lr) continue; const cx=lx+dx, cy=ly+dy; if (((cx*7+cy*13)&7)===0) continue; if (!this.inb(cx,cy)) continue; const i=cy*W+cx; if (!next.has(i)) next.set(i,(k<<1)|1); }
-          if (seg.depth>=2 && seg.len>3){ const mx=Math.round((sx+ex)/2), my=Math.round((sy+ey)/2); for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const cx=mx+dx, cy=my+dy; if (!this.inb(cx,cy)) continue; const i=cy*W+cx; if (!next.has(i)) next.set(i,(k<<1)|1); } }
+          if (seg.depth>=2 && seg.len>3 && t.leaf>0.5){ const mx=Math.round((sx+ex)/2), my=Math.round((sy+ey)/2); for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const cx=mx+dx, cy=my+dy; if (!this.inb(cx,cy)) continue; const i=cy*W+cx; if (!next.has(i)) next.set(i,(k<<1)|1); } }
         }
       }
       // diff against what we drew last time: remove, add, or change kind
       for (const [i,code] of t.cells){
-        const kind=(code&1)?PLANT:WOOD;
-        if (!next.has(i)){ if (this.type[i]===kind && this.owner[i]===t.id){ this.set(i,E); } if (this.owner[i]===t.id) this.owner[i]=0; }
+        if (next.has(i)) continue;
+        const kind=this.kindOf(t,code);
+        if (this.owner[i]===t.id){
+          if (this.type[i]===kind){
+            const dead=!t.segs[code>>1].alive;
+            // a dropped leaf or a dead branch falls as litter; a dead root leaves its soil behind
+            this.set(i, kind===ROOT ? DIRT : ((kind===PLANT && t.dropping && R()<0.35) || (dead && R()<0.4)) ? LITTER : E);
+          }
+          this.owner[i]=0;
+        }
       }
       for (const [i,code] of next){
-        const kind=(code&1)?PLANT:WOOD, cur=this.type[i];
+        const kind=this.kindOf(t,code), cur=this.type[i];
         if (cur===kind && (this.owner[i]===t.id || this.owner[i]===0)){ this.owner[i]=t.id; continue; }
-        const free = !t.scars.has(i) && (cur===E || cur===WATER || cur===SMOKE || cur===STEAM || cur===CLOUD || (this.owner[i]===t.id && (cur===WOOD||cur===PLANT)));
+        const free = !t.scars.has(i) && (kind===ROOT ? ROOT_INTO.has(cur) : (cur===E || cur===WATER || cur===SMOKE || cur===STEAM || cur===CLOUD || cur===LITTER || (this.owner[i]===t.id && (cur===WOOD||cur===PLANT))));
         if (!free){ next.delete(i); continue; }                               // something else is in the way (or a fresh wound); grow around it
-        this.set(i,kind); this.life[i]=1; this.owner[i]=t.id;
+        // new growth is static and starts at the local air temperature, so it is written without waking its chunk
+        const wasWet=cur===WATER; this.type[i]=kind; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0; this.temp[i]=this.ambAt((i/W)|0); this.life[i]=1; this.owner[i]=t.id;
+        if (wasWet) this.wake(i%W,(i/W)|0);
       }
       t.cells=next;
     }
-    releaseTree(t){ for (const [i] of t.cells) if (this.owner[i]===t.id) this.owner[i]=0; t.cells=new Map(); t.dead=true; }
-    stepTrees(){
-      for (let k=this.trees.length-1;k>=0;k--){ const t=this.trees[k]; if (t.dead){ this.trees.splice(k,1); continue; } if ((this.frame+t.id)%12===0) this.growTree(t); }
+    releaseTree(t){
+      // what a dead tree leaves: leaves fall as litter, the wood stands as a snag and the roots stay put, both slowly rotting
+      for (const [i] of t.cells){
+        if (this.owner[i]!==t.id) continue;
+        this.owner[i]=0;
+        const ty=this.type[i];
+        if (ty===PLANT) this.set(i, R()<0.5?LITTER:E);
+        else if (ty===WOOD || ty===ROOT) this.life[i]=ROT+((R()*ROT)|0);
+      }
+      t.cells=new Map(); t.dead=true;
     }
-    treesSave(){ return JSON.stringify(this.trees.map(t=>({id:t.id,x:t.x,y:t.y,age:t.age,water:t.water,segs:t.segs}))); }
+    fallTree(t){
+      // an uprooted tree drops as one piece until it lands, then dies where it fell
+      const W=this.W, n=this.type.length, list=[];
+      for (const [i,code] of t.cells) if (this.owner[i]===t.id && this.type[i]===this.kindOf(t,code)) list.push(i);
+      for (const i of list){
+        const j=i+W; if (j>=n){ this.releaseTree(t); return; }
+        if (this.owner[j]===t.id) continue;
+        const tj=this.type[j]; if (!(tj===E || isGas(tj) || isLiquid(tj) || (EL[tj].kind==='powder' && EL[tj].density<1))){ this.releaseTree(t); return; }   // brushes light debris (seeds, litter, snow) aside
+      }
+      list.sort((a,b)=>b-a);                                                   // bottom first, so each cell moves into a space already vacated
+      for (const i of list){ this.swap(i,i+W); this.owner[i+W]=t.id; this.owner[i]=0; }
+      const cells=new Map(), scars=new Map();
+      for (const [i,c] of t.cells) cells.set(i+W,c); for (const [i,c] of t.scars) scars.set(i+W,c);
+      t.cells=cells; t.scars=scars; t.y++;
+    }
+    stepTrees(){
+      for (let k=this.trees.length-1;k>=0;k--){ const t=this.trees[k]; if (t.dead){ this.trees.splice(k,1); continue; } if (t.falling) this.fallTree(t); else if ((this.frame+t.id)%TREE_TICK===0) this.growTree(t); }
+    }
+    treesSave(){ return JSON.stringify(this.trees.map(t=>({id:t.id,x:t.x,y:t.y,age:t.age,water:t.water,leaf:t.leaf,span:t.span,falling:t.falling||undefined,segs:t.segs}))); }
     treesLoad(json){
       this.trees=[]; this.owner.fill(0); if (!json) return;
-      for (const d of JSON.parse(json)){ const t={id:d.id,x:d.x,y:d.y,age:d.age,water:d.water,cells:new Map(),scars:new Map(),segs:d.segs}; this.treeId=Math.max(this.treeId,t.id+1); this.trees.push(t); this.rasterTree(t); }
+      for (const d of JSON.parse(json)){
+        const t={id:d.id,x:d.x,y:d.y,age:d.age,water:d.water,leaf:d.leaf??1,span:d.span??2400,falling:d.falling,cells:new Map(),scars:new Map(),segs:d.segs};
+        if (!t.segs.some(s=>s.root)) t.segs.push(this.newRoot(-1,0,Math.PI,8,0));   // saved before trees had roots
+        this.treeId=Math.max(this.treeId,t.id+1); this.trees.push(t); this.rasterTree(t);
+      }
     }
     openSky(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return true; const t=this.type[this.idx(x,y-k)]; if (t!==E && !isGas(t)) return false; } return true; }
     stepCloud(x,y,i){
@@ -488,7 +616,7 @@ const Sim = (() => {
       const move=(nx,ny)=>{ if(!this.inb(nx,ny)) return false; const j=this.idx(nx,ny); if (this.type[j]!==E) return false; this.swap(i,j); return true; };
       // rain falls from the underside of a thick cloud; heavier clouds rain harder
       if (below===0 && n>=3 && y+1<this.H && this.type[this.idx(x,y+1)]===E && R()<0.0015*(1+above*1.2)){
-        const j=this.idx(x,y+1); this.set(j,WATER,18); this.vy[j]=2; this.vx[j]=this.wind*1.5;
+        const j=this.idx(x,y+1); this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=this.wind*1.5;
         if (R()<0.6) this.set(i,E); else this.life[i]=Math.max(1,this.life[i]-200);
         return;
       }
@@ -529,6 +657,108 @@ const Sim = (() => {
       this.set(i, this.pick(el.decay), this.temp[i]); return true;
     }
 
+    // ---- calendar: a seasonal swing and a day/night swing on top of the lapse rate ----
+    updateClimate(){
+      const p=(this.clock%YEAR)/YEAR, d=(this.clock%DAY)/DAY;
+      const season=-3+9*Math.cos(2*Math.PI*(p-0.36));                       // warmest midsummer, coldest midwinter
+      this.sun=Math.max(0, Math.sin(2*Math.PI*d));                          // the day starts at sunrise; the second half is night
+      this.light=0.18+0.82*Math.min(1, this.sun*2.5);
+      this.climate=season+3*Math.sin(2*Math.PI*(d-0.08));                  // afternoons warm, nights cool
+      this.growth=Math.max(0, Math.min(1, (season+7)/7));                   // trees grow in the warm part of the year
+      this.foliage=Math.max(0, Math.min(1, (season+6)/5));
+      this.seeding=p>0.3 && p<0.72;
+      this.precipT=6+season;                                                 // rain in the warm months, snow in the cold ones
+      this.yearPhase=p; this.dayPhase=d; this.seasonName=SEASONS[(p*4)|0];
+    }
+    // ---- the soil pass: slow ecology that has to keep running in chunks that are asleep ----
+    // Each tick visits every SLOW-th row, so every cell is seen once per SLOW ticks; the rates below are per visit.
+    stepSoil(){
+      const {W,H,CW,type:T,temp,dirty}=this;
+      const dry=0.35*Math.max(0,(this.climate+6)/20)*(0.25+0.75*this.sun);   // exposed soil dries fastest on warm sunny afternoons
+      const evap=0.018*Math.max(0.3, Math.min(1.2, (this.climate+14)/16))*(0.4+0.6*this.sun);   // open water evaporating, sleeping lakes included
+      for (let y=this.frame%SLOW;y<H;y+=SLOW){
+        const amb=this.ambAt(y), row=y*W, crow=((y/CH)|0)*CW;
+        for (let x=0;x<W;x++){
+          const i=row+x, t=T[i];
+          const asleep=!dirty[crow+((x/CH)|0)];
+          if (t===E){ if (asleep) temp[i]+=(amb-temp[i])*0.2; continue; }   // sleeping air still follows the weather
+          if (asleep && y>0 && T[i-W]===E && (t===DIRT || t===SAND || t===STONE)) temp[i]+=(amb-temp[i])*0.1;   // and so does bare ground, so snow can lie on it in winter
+          switch(t){
+            case DIRT: this.soilDirt(x,y,i,dry); break;
+            case SEED: this.soilSeed(x,y,i); break;
+            case LITTER: this.soilRot(x,y,i,0.004,0.0008,DIRT,(200<<8)|60); break;
+            case ASH: if (y+1<H && T[i+W]===DIRT && R()<0.004){ this.set(i,DIRT); this.life[i]=(255<<8)|40; } break;   // ash works into the soil and feeds it
+            case WOOD: if (this.owner[i]===0 && this.life[i]>=2) this.soilDecay(x,y,i,LITTER,0); break;   // snags rot; painted wood (life 0) doesn't
+            case ROOT: if (this.owner[i]===0){ if (this.life[i]<2) this.life[i]=ROT; this.soilDecay(x,y,i,DIRT,(160<<8)|80); } break;
+            case PLANT:
+              if (this.owner[i]!==0) break;
+              if (this.growth===0 && R()<0.01){ this.set(i,LITTER); break; }   // frost kills bushes back
+              if (y+1<H && T[i+W]===DIRT && (this.life[i+W]&255)>=60 && this.life[i]<3 && R()<0.05){ this.life[i+W]-=20; this.life[i]++; this.wake(x,y); }
+              break;
+            case WATER:
+              if (y>0 && T[i-W]===E){
+                if (amb<0){ temp[i]+=(amb-temp[i])*0.05; if (temp[i]<0) this.wake(x,y); }   // a still surface chills in freezing air, then freezes over
+                else if (R()<evap && this.openSky(x,y)) this.set(i,STEAM,110);
+              }
+              break;
+            case SNOW: temp[i]+=(amb-temp[i])*0.05; if (temp[i]>2) this.wake(x,y); break;   // spring melt: warm snow goes back to the heat step
+            case ICE: if (this.life[i]===1 && amb>4 && y>0 && T[i-W]===E && R()<0.02) this.set(i,WATER,2); break;   // lake ice thaws; built ice (life 0) stays
+          }
+        }
+      }
+    }
+    soilDirt(x,y,i,dry){
+      const W=this.W, T=this.type, L=this.life;
+      let v=L[i], m=v&255; const rich=v>>8;
+      // soak up water it touches: rain, puddles, lake beds
+      if (m<=MOIST-100){
+        for (const j of [i-W, i-1, i+1, i+W]){
+          if (j<0 || j>=T.length || T[j]!==WATER || Math.abs(j%W-x)>1) continue;
+          if (R()<0.5){ this.set(j,E); m+=100; }
+          break;
+        }
+      }
+      // moisture spreads to drier neighbours; anything above what the soil can hold against gravity drains downward
+      if (y+1<this.H && T[i+W]===DIRT){ const b=L[i+W], mb=b&255, f=Math.min(Math.max((m-mb)/4, (m-HOLD)/2)|0, MOIST-mb); if (f>0){ m-=f; L[i+W]=b+f; } }
+      const sx=R()<0.5?-1:1;
+      if (x+sx>=0 && x+sx<W && T[i+sx]===DIRT){ const s=L[i+sx], ms=s&255, f=((m-ms)/4)|0; if (f>0){ m-=f; L[i+sx]=s+f; } }
+      const up=y>0?T[i-W]:STONE;
+      if (up===DIRT){ const a=L[i-W], ma=a&255, f=((m-ma)/8)|0; if (f>0){ m-=f; L[i-W]=a+f; } }   // wicking up is slower than draining down
+      // dry out where open to the air, and fast when hot
+      else if ((up===E || isGas(up)) && m>0 && R()<dry) m--;
+      if (this.temp[i]>60) m=Math.max(0,m-6);
+      L[i]=(rich<<8)|m;
+    }
+    soilSeed(x,y,i){
+      // a seed resting on soil that is damp within its first few cells germinates in the growing season;
+      // anywhere else it slowly loses viability
+      let damp=0;
+      for (let k=1;k<=3 && y+k<this.H;k++){ const j=i+k*this.W; if (this.type[j]!==DIRT) break; damp=Math.max(damp,this.life[j]&255); }
+      if (damp>=45 && this.growth>0.2){
+        if (this.life[i]>1){ this.life[i]--; return; }
+        if (this.canSprout(x,y)){ this.set(i,TIP); return; }
+      }
+      if (R()<0.002) this.set(i,E);
+    }
+    wetAround(x,y){
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){
+        const nx=x+dx, ny=y+dy; if ((!dx&&!dy) || !this.inb(nx,ny)) continue;
+        const j=this.idx(nx,ny), t=this.type[j];
+        if (t===WATER || t===LITTER || (t===DIRT && (this.life[j]&255)>=60)) return true;
+      }
+      return false;
+    }
+    soilRot(x,y,i,pWet,pDry,to,life){
+      // rot is faster when damp and stalls in the cold
+      if (R() < (this.wetAround(x,y)?pWet:pDry)*(0.3+0.7*this.growth)){ this.set(i,to); this.life[i]=life; }
+    }
+    soilDecay(x,y,i,to,life){
+      // dead wood and roots count down; damp speeds them up
+      const d=Math.round((this.wetAround(x,y)?3:1)*(0.3+0.7*this.growth)*(R()<0.5?1:2));
+      const v=Math.max(2, this.life[i]-d);
+      if (v===2){ this.set(i,to); if (life) this.life[i]=life; } else this.life[i]=v;
+    }
+
     step(){
       const {W,H,CW,type,done,dirty,next}=this;
       done.fill(0); dirty.set(next); next.fill(0);
@@ -555,24 +785,31 @@ const Sim = (() => {
         }
       }
       this.stepTrees();
+      this.stepSoil();
+      this.clock++; this.updateClimate();
       this.frame++; this.wind=0.55*Math.sin(this.frame*0.0007)+0.15*Math.sin(this.frame*0.0031);
     }
 
-    // ---- serialisation: RLE of types, temps restored from element defaults ----
+    // ---- serialisation: RLE of types | trees JSON | RLE of the life values that are state (soil moisture, rot) | clock ----
+    // temps are restored from element defaults
     save(){
-      const out=[this.W,this.H]; let run=this.type[0], n=0;
-      for (let i=0;i<this.type.length;i++){ if (this.type[i]===run && n<65535) n++; else { out.push(run,n); run=this.type[i]; n=1; } }
-      out.push(run,n);
-      const b=new Uint8Array(new Uint16Array(out).buffer); let s='';
-      for (let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192));
-      return btoa(s)+'|'+this.treesSave();
+      const rle=(len,get,out)=>{ let run=get(0), n=0; for (let i=0;i<len;i++){ const v=get(i); if (v===run && n<65535) n++; else { out.push(run,n); run=v; n=1; } } if (len) out.push(run,n); return out; };
+      const pack=out=>{ const b=new Uint8Array(new Uint16Array(out).buffer); let s=''; for (let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); };
+      const keep=[]; for (let i=0;i<this.type.length;i++) if (KEEP_LIFE.has(this.type[i])) keep.push(this.life[i]);
+      return pack(rle(this.type.length,i=>this.type[i],[this.W,this.H]))+'|'+this.treesSave()+'|'+pack(rle(keep.length,i=>keep[i],[]))+'|'+Math.round(this.clock);
     }
     load(str){
-      const bar=str.indexOf('|'), treeJson=bar>=0?str.slice(bar+1):'', rle=bar>=0?str.slice(0,bar):str;
-      const bytes=Uint8Array.from(atob(rle),c=>c.charCodeAt(0)); const u=new Uint16Array(bytes.buffer);
+      const [rle,treeJson='',soil='',clock='']=str.split('|');
+      const unpack=b64=>{ const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); return new Uint16Array(bytes.buffer); };
+      const u=unpack(rle);
       if (u[0]!==this.W||u[1]!==this.H) throw new Error('world size mismatch');
+      if (clock) { this.clock=+clock; this.updateClimate(); }
       this.clear(); let i=0;
-      for (let p=2;p<u.length;p+=2){ const t=u[p], n=u[p+1]; for (let k=0;k<n;k++,i++){ this.type[i]=t; this.temp[i]=t===E?this.ambAt((i/this.W)|0):EL[t].t0; this.shade[i]=(R()*64)|0; const l=EL[t].life; this.life[i]=l?l[0]:0; } }
+      for (let p=2;p<u.length;p+=2){ const t=u[p], n=u[p+1]; for (let k=0;k<n;k++,i++){ this.type[i]=t; this.temp[i]=t===E?this.ambAt((i/this.W)|0):EL[t].t0; this.shade[i]=(R()*64)|0; const l=EL[t].life; this.life[i]=l?l[0]:EL[t].soil; } }
+      if (soil){   // older saves have no soil section: dirt keeps its default moisture
+        const s=unpack(soil); let p=0, left=s.length?s[1]:0;
+        for (let j=0;j<this.type.length && p<s.length;j++){ if (!KEEP_LIFE.has(this.type[j])) continue; this.life[j]=s[p]; if (--left===0){ p+=2; left=s[p+1]; } }
+      }
       this.treesLoad(treeJson);
       this.wakeAll();
     }
@@ -586,7 +823,7 @@ const Sim = (() => {
     return (x,y,oct=4)=>{ let s=0,a=1,f=1,m=0; for(let o=0;o<oct;o++){ s+=v(x*f,y*f)*a; m+=a; a*=0.5; f*=2; } return s/m; };
   }
   function generate(g, worldSeed){
-    g.clear(); reseed(worldSeed);
+    g.clock=START; g.updateClimate(); g.clear(); reseed(worldSeed);
     const nz=noise2(worldSeed), cave=noise2(worldSeed+7), ore=noise2(worldSeed+13);
     const {W,H}=g; const surf=new Int16Array(W);
     for (let x=0;x<W;x++) surf[x]=(H*0.32 + (nz(x/90,0.5,4)-0.5)*H*0.35)|0;
@@ -594,7 +831,8 @@ const Sim = (() => {
       const i=g.idx(x,y); if (y<surf[x]) continue;
       const depth=y-surf[x], dn=y/H;
       let t=STONE;
-      if (depth<3+nz(x/20,y/20,2)*6) t=SAND;
+      const soil=4+nz(x/20,y/20,2)*8;
+      if (depth<soil) t = surf[x]>H*0.42 ? SAND : DIRT;               // topsoil, with sandy shores in the low valleys
       else {
         const c=cave(x/48,y/32,3), o=ore(x/30,y/30,3);
         if (c>0.62 && depth>8){ t=E;
@@ -609,20 +847,23 @@ const Sim = (() => {
         else if (c<0.3 && dn>0.5 && o>0.62) t=ICE;
       }
       if (y>=H-3) t=STONE;
-      if (t!==E) g.set(i,t);
+      if (t!==E) g.set(i,t, EL[t].t0===AMB ? g.ambAt(y) : undefined);   // the ground starts at the local ambient, so it doesn't spend its first minutes cooling
+      if (t===DIRT) g.life[i]=(40<<8)|Math.min(MOIST, 70+depth*18);      // damper with depth
     }
     // lakes: flood shallow dips in the surface
     for (let x=1;x<W-1;x++){ if (surf[x]>surf[x-1] && surf[x]>surf[x+1] && R()<0.5){ const lvl=Math.min(surf[x-1],surf[x+1]); for (let xx=x-25;xx<x+25;xx++){ if(xx<0||xx>=W)continue; for (let y=lvl;y<surf[xx];y++){ const i=g.idx(xx,y); if (g.type[i]===E) g.set(i,WATER); } } } }
+    // soil under and beside water starts soaked, so lakes don't drain into their own beds
+    for (let x=0;x<W;x++){ let wet=0; for (let y=0;y<H;y++){ const i=g.idx(x,y), t=g.type[i]; if (t===WATER) wet=12; else if (t===DIRT && wet>0){ g.life[i]=(g.life[i]&0xff00)|MOIST; wet--; } else if (t!==DIRT) wet=0; } }
     // trees: plant on the surface and let them grow up before the world is handed over
-    for (let x=8;x<W-8;x++){ if (R()<0.035 && g.type[g.idx(x,surf[x])]===SAND && g.type[g.idx(x,surf[x]-1)]===E){ g.plantTree(x,surf[x]-1); x+=10; } }
+    for (let x=8;x<W-8;x++){ if (R()<0.035 && g.type[g.idx(x,surf[x])]===DIRT && g.type[g.idx(x,surf[x]-1)]===E){ g.plantTree(x,surf[x]-1); x+=10; } }
     const grow=60+(R()*120|0);
-    for (const t of g.trees){ t.water=20; for (let n=0;n<grow;n++) if (!g.growTree(t)) break; }
+    for (const t of g.trees){ t.water=20; for (let n=0;n<grow;n++) if (!g.growTree(t,true)) break; }
     g.stepTrees();
     g.wakeAll();
     return surf;
   }
 
-  return {EL,N,CH,AMB,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH}};
+  return {EL,N,CH,AMB,DAY,YEAR,Grid,generate,reseed,R,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
 })();
 
 // ============================================================================
@@ -630,7 +871,7 @@ const Sim = (() => {
 // ============================================================================
 (() => {
 const {EL,Grid,CH,generate,ids}=Sim;
-const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH}=ids;
+const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}=ids;
 const ERASE=255, PAN=254;
 const W=960, H=480, VW=320, VH=200;
 const g=new Grid(W,H);
@@ -648,7 +889,7 @@ const light=new Float32Array(VW*VH);
 function computeLight(){
   const T=g.type;
   for (let vx=0;vx<VW;vx++){
-    const x=camX+vx; let tr=1;
+    const x=camX+vx; let tr=g.light;          // sky light follows the time of day
     for (let y=0;y<camY+VH;y++){
       const el=EL[T[y*W+x]];
       if (y>=camY) light[(y-camY)*VW+vx]=tr;
@@ -675,6 +916,7 @@ function rgbOf(i,out){
     case SMOKE:{ const a=l/240; out[0]=50+a*40;out[1]=52+a*40;out[2]=58+a*40; return; }
     case CLOUD:{ const a=Math.min(1,l/1200); out[0]=170+a*50;out[1]=176+a*48;out[2]=190+a*42; return; }
     case STEAM:{ const a=Math.min(1,(g.temp[i]-90)/60); out[0]=150+a*60;out[1]=165+a*60;out[2]=180+a*60; return; }
+    case DIRT:{ const m=(l&255)/255, r=(l>>8)/255*0.15, v=EL[DIRT].vary*s, k=1-0.42*m-r; out[0]=(120+v)*k;out[1]=(86+v*0.7)*k;out[2]=(54+v*0.5)*k*(1-0.15*m); return; }   // darker when wet or rich
     case LAVA:{ const p=0.5+0.5*Math.sin((g.frame*0.1)+s*6), c=Math.min(1,(g.temp[i]-600)/600); out[0]=160+c*60+p*35;out[1]=30+c*40+p*50+s*20;out[2]=10+s*15; return; }
     default:{ const [r,gg,b]=BASE[t], v=EL[t].vary*s; out[0]=r+v*0.8;out[1]=gg+v*0.7;out[2]=b+v*0.5; }
   }
@@ -684,13 +926,21 @@ function heatColor(T){
   if (T<0) return C(80,120,255);
   return C(255*Math.min(1,a*2.2), 255*Math.max(0,Math.min(1,(a-0.25)*2)), 255*Math.max(0,(0.2-a)*4)+255*Math.max(0,(a-0.75)*4));
 }
-let showChunks=false, heatView=false;
+function moistColor(i){
+  const t=g.type[i];
+  if (t===DIRT){ const m=(g.life[i]&255)/255; return C(90*(1-m)+20, 70*(1-m)+60*m, 50+200*m); }
+  if (t===WATER) return C(40,90,255);
+  if (t===ROOT) return C(200,160,90);
+  return t===E?C(10,10,14):C(32,32,38);
+}
+let showChunks=false, heatView=false, moistView=false;
 const tmp=[0,0,0];
 function render(){
-  if (!heatView) computeLight();
+  if (!heatView && !moistView) computeLight();
   for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
     const i=(camY+vy)*W+camX+vx, o=vy*VW+vx;
     if (heatView){ px[o]=g.type[i]===E?C(10,10,14):heatColor(g.temp[i]); continue; }
+    if (moistView){ px[o]=moistColor(i); continue; }
     rgbOf(i,tmp);
     const gl=EL[g.type[i]].glow, L=gl>0?1:0.12+0.88*Math.max(0,light[o]);
     px[o]=C(tmp[0]*L,tmp[1]*L,tmp[2]*L);
@@ -706,7 +956,7 @@ function render(){
 
 // --- element rack ---
 const GROUPS=[
-  ['Powders',[SAND,GUNP,SALT,SEED,SNOW,RUBBLE,ASH]],
+  ['Powders',[SAND,DIRT,GUNP,SALT,SEED,SNOW,RUBBLE,ASH,LITTER]],
   ['Liquids',[WATER,OIL,ACID,LAVA,BRINE]],
   ['Solids', [STONE,WOOD,ICE,GLASS,CHAR,PLANT,TIP]],
   ['Gases',  [FIRE,SMOKE,STEAM,CLOUD,GAS]],
@@ -781,6 +1031,7 @@ document.getElementById('pause').addEventListener('click',e=>{paused=!paused; e.
 document.getElementById('clear').addEventListener('click',()=>{ g.clear(); msg('Cleared'); });
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
 document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
+document.getElementById('moistview').addEventListener('click',e=>{moistView=!moistView; e.target.setAttribute('aria-pressed',moistView);});
 let worldSeed=(Math.random()*1e9)|0;
 function newWorld(seedN){
   worldSeed=seedN; const surf=generate(g,worldSeed);
@@ -808,6 +1059,9 @@ function loop(now){
     chunkEl.textContent=d+'/'+g.dirty.length+' chunks awake';
     camEl.textContent='cam '+camX+','+camY;
     document.getElementById('wind').textContent='wind '+(g.wind<0?'←':'→')+' '+Math.abs(g.wind).toFixed(2);
+    const hr=(g.dayPhase*24+6)%24;   // the day starts at sunrise, 06:00
+    const deg=Math.round(g.climate);
+    document.getElementById('clock').textContent=g.seasonName+', day '+(((g.clock%Sim.YEAR)/Sim.DAY|0)+1)+', '+String(hr|0).padStart(2,'0')+':'+String((hr%1)*60|0).padStart(2,'0')+', '+(deg>0?'+':'')+deg+'°';
   }
   requestAnimationFrame(loop);
 }
