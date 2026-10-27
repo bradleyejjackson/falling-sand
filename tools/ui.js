@@ -106,7 +106,38 @@ function suite(threads) {
   for (const x of [95, 120, 145, 170]) { cv.fire('pointerdown', at(x, cy(100))); cv.fire('pointerup', at(x, cy(100))); p.run(1); }
   for (let k = 0; k < 7200 && gv.state === 'play'; k++) p.run(1);
   check('Green the valley is won through the brush', gv.state === 'won', `${gv.state} ${gv.why} at ${(gv.t / 60).toFixed(0)} s; ${gv.goals[0].value} tall trees; seeds left ${gv.left('Seed')}`);
+  p.els.leave.fire('click'); p.run(2);
+
+  // Flood defence through the brush: a clay wall dragged down the hillside below the river, sand banked against its far side
+  scn('Flood defence').fire('click'); p.run(2);
+  const fd = p.sf.game();
+  const vsweep = (x, y0, y1) => { cv.fire('pointerdown', at(x, cy(y0))); for (let y = y0; y <= y1; y += 2) { cv.fire('pointermove', at(x, cy(y))); p.run(1); } cv.fire('pointerup', at(x, cy(y1))); };
+  btn('Clay <b>250</b>').fire('click'); for (const x of [104, 108]) vsweep(x, 92, 124);
+  btn('Sand <b>700</b>').fire('click'); for (const x of [113, 118, 122]) vsweep(x, 92, 130);
+  for (let k = 0; k < 4800 && fd.state === 'play'; k++) p.run(1);
+  check('Flood defence is won through the brush', fd.state === 'won', `${fd.state} ${fd.why} at ${(fd.t / 60).toFixed(0)} s; water in town ${fd.goals[0].value}; clay left ${fd.left('Clay')}, sand left ${fd.left('Sand')}`);
+
+  // the sandbox row: hidden in a scenario, and Speed runs the scenario's clock faster
+  check('the sandbox row hides in a scenario', p.els.sbox.classList.contains('off'));
+  scn('Volcano').fire('click'); p.run(2);
+  const vt = p.sf.game().t; p.els.speed.fire('click'); p.run(10);
+  check('Speed ×2 runs two ticks a frame', p.sf.game().t - vt === 20 && p.els.speed.textContent === 'Speed ×2', `${p.sf.game().t - vt} ticks in 10 frames`);
+  p.els.speed.fire('click'); p.els.speed.fire('click'); p.run(1);   // (×4, then back to ×1)
   p.els.leave.fire('click'); unlock.fire('click'); p.run(2);
+  check('leaving a scenario shows the sandbox row', !p.els.sbox.classList.contains('off'));
+  p.els.flatworld.fire('click'); p.run(2);
+  const cf = census(g, Sim.EL);
+  check('Flat world lays level ground with grass, one window wide', g.worldW === g.W && cf.Plant > 900 && cf.Dirt > 900 * 20 && g.trees.length === 0, `${cf.Plant} grass, ${cf.Dirt} dirt, world ${g.worldW}`);
+  const s0 = g.seasonName; p.els.season.fire('click'); p.run(1);
+  check('Next season moves the calendar on a season', g.seasonName !== s0 && /^(Spring|Summer|Autumn|Winter)$/.test(p.els.msg.textContent), `${s0} -> ${g.seasonName}`);
+  p.els.hold.fire('click'); const c0 = g.clock; p.run(30);
+  check('Hold time stops the clock', g.clock === c0 && g.hold, `${g.clock - c0} ticks passed`);
+  p.els.hold.fire('click'); p.run(5); check('and releasing it starts it again', g.clock > c0);
+  p.els.windset.fire('click'); p.run(5);
+  check('the wind button holds the wind', g.wind === 0 && /calm/.test(p.els.windset.textContent), `${g.wind} ${p.els.windset.textContent}`);
+  scn('Irrigation').fire('click'); p.run(2);
+  check('a scenario puts the wind and clock back to natural', g.windHold === null && !g.hold && /natural/.test(p.els.windset.textContent));
+  p.els.leave.fire('click'); p.run(2);
   p.close();
 }
 const mode = process.argv[2];

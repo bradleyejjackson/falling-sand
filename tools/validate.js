@@ -355,6 +355,19 @@ const scenarios = {
     console.log(`  mound ${x1 - x0 + 1} wide, ${h} high`);
     check('lava sets as a mound (height at least a third of its width)', h * 3 >= x1 - x0 + 1);
   },
+  quench() {
+    // water poured on a lava pool quenches its surface to a crust of rock, so a pool can be capped with a few hundred cells of water
+    Sim.reseed(4); const g = new Sim.Grid(80, 60); g.windHold = 0;
+    for (let x = 0; x < 80; x++) for (let y = 50; y < 60; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+    for (let y = 30; y < 50; y++) { g.set(g.idx(19, y), STONE, g.ambAt(y)); g.set(g.idx(60, y), STONE, g.ambAt(y)); }
+    for (let x = 20; x < 60; x++) for (let y = 40; y < 50; y++) g.set(g.idx(x, y), LAVA);
+    g.initAir(); g.wakeAll();
+    let poured = 0; run(g, 600, 1, f => { if (f < 300 && f % 4 === 0) for (let x = 20; x < 60; x += 2) { const i = g.idx(x, 20); if (g.type[i] === E) { g.set(i, WATER, g.ambAt(20)); poured++; } } });
+    let open = 0; for (let x = 20; x < 60; x++) for (let y = 1; y < 50; y++) { const i = g.idx(x, y); if (g.type[i] === LAVA && (g.type[i - g.W] === E || Sim.EL[g.type[i - g.W]].kind === 'gas')) open++; }
+    const c = census(g, Sim.EL);
+    console.log(`  ${poured} water poured on 400 lava: ${c.Lava || 0} lava left, ${open} of it open to the air`);
+    check('water crusts a lava pool over', open === 0 && (c.Lava || 0) > 100, `${open} open, ${c.Lava || 0} lava under the crust`);
+  },
   support() {
     // stone needs support, and a solid diagonally below counts: a pitched roof on two pillars and a lone diagonal brace stand,
     // while the same diagonal line floating in the air falls, and a flat shelf still breaks past its span

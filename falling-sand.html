@@ -32,6 +32,8 @@ canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rend
 .el:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .ctl{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;color:var(--muted)}
 .ctl label{display:flex;align-items:center;gap:8px}
+.ctl .tag{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;width:62px}
+.ctl.off{display:none}
 input[type=range]{accent-color:var(--accent);width:140px}
 .btn{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;font-size:12px;background:transparent;color:var(--fg);
   border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
@@ -88,6 +90,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 <div class="ctl">
   <label>Brush <input type="range" id="brush" min="1" max="24" value="4"><span id="brushv">4</span></label>
   <button class="btn" id="pause">Pause</button>
+  <button class="btn" id="speed" aria-label="Simulation speed">Speed ×1</button>
   <button class="btn" id="newworld">New world</button>
   <button class="btn" id="clear">Clear</button>
   <button class="btn" id="save">Save</button>
@@ -99,11 +102,18 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <button class="btn" id="windview" aria-pressed="false">Wind view</button>
   <span class="msg" id="msg"></span>
 </div>
+<div class="ctl" id="sbox">
+  <span class="tag">Sandbox</span>
+  <button class="btn" id="flatworld">Flat world</button>
+  <button class="btn" id="season">Next season</button>
+  <button class="btn" id="hold" aria-pressed="false">Hold time</button>
+  <button class="btn" id="windset">Wind: natural</button>
+</div>
 <div class="io" id="io">
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it, and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap. New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. The later scenarios: hold a river in flood off a town (dam it with a clay core: sand alone washes out), put out a volcano before its lava reaches the village (water crusts lava over, and the crater wants capping), and grow a forest in the desert (water sinks through sand, so line the beds with clay). Sandbox is free play: New world makes a fresh generated world, Flat world a level field of grass to build on, and the sandbox row skips to the next season, holds the clock still, or sets the wind. Speed runs up to four ticks a frame, in a scenario too. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it, and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap. New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools, and water quenches it to a crust of rock where they touch; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -240,6 +250,9 @@ const Sim = (() => {
   react(SEED, BRINE, 0.05, PLANT, E);
   react(MGLASS, WATER, 0.5, GLASS, STEAM);     // water quenches molten glass hard
   react(MGLASS, BRINE, 0.5, GLASS, STEAM);
+  react(LAVA, WATER, 0.5, STONE, STEAM);       // and lava to a crust of rock: without this a cell of lava (heat capacity 25) took ~20 of water
+                                               //   (3, plus the latent heat of boiling) to cool, so water could not put out a lava flow.
+                                               //   (Brine still just boils off lava, leaving its salt.)
   const has = new Uint8Array(N); for (const k of RX.keys()) has[(k/N)|0]=1;
   // dissolution: salt dissolves into water as brine's salt content; acid eats these and is used up, and water dilutes it
   const ACIDABLE = new Uint8Array(N); for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR,DIRT,LITTER,ROOT,MUD,CLAY,RUST]) ACIDABLE[t]=1;
@@ -349,7 +362,8 @@ const Sim = (() => {
       for (const name in L.at){ const [off,n,A]=L.at[name]; this[name]=new A(this.buffer,off,n); }
       this.CW=L.CW; this.CHh=L.CHh; this.AW=L.AW; this.AH=L.AH; this.TW=L.TW; this.TH=L.TH;
       this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;                    // the window the current tile may touch
-      this.frame=0; this.wind=0.3; this.windHold=null;                   // windHold pins the prevailing wind (tests)
+      this.frame=0; this.wind=0.3; this.windHold=null;                   // windHold pins the prevailing wind (tests, the sandbox)
+      this.hold=false;                                                    // hold stops the clock: the time of day and the season stay put
       this.top=Math.max(0,H-LAND_H);                                   // rows of sky above the land's layout
       this.skyY=this.top+(((H-this.top)*0.4)|0);
       this.trees=[]; this.treeId=1; this.springs=0; this.droughtKills=0;                       // tree entities; and a count of the water springs have let out
@@ -1232,6 +1246,7 @@ const Sim = (() => {
     }
 
     // ---- calendar: a seasonal swing and a day/night swing on top of the lapse rate ----
+    nextSeason(){ const q=YEAR/4; this.clock=(Math.floor(this.clock/q)+1)*q + this.clock%DAY; this.updateClimate(); }   // the start of the next season, at the same time of day
     updateClimate(){
       const p=(this.clock%YEAR)/YEAR, d=(this.clock%DAY)/DAY;
       const season=-3+9*Math.cos(2*Math.PI*(p-0.36));                       // warmest midsummer, coldest midwinter
@@ -1683,7 +1698,8 @@ const Sim = (() => {
       this.stepSoil();
       this.stepAir(this.frame%AIRSLOW, false);
       if (this.frame%WINDSLOW===2) this.stepWind();
-      this.clock++; this.updateClimate();
+      if (!this.hold) this.clock++;
+      this.updateClimate();
       this.frame++; this.wind=this.windHold!==null ? this.windHold : 0.55*Math.sin(this.frame*0.0007)+0.15*Math.sin(this.frame*0.0031);
     }
 
@@ -1844,6 +1860,17 @@ const Sim = (() => {
     return surf;
   }
 
+  // a flat world to build in: bedrock, a layer of damp soil with grass on it, and open sky. It is one window wide (it doesn't
+  // stream). Returns the surface row.
+  function flat(g){
+    g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=0; g.worldW=g.W; g.ox=0; g.blank=false;
+    const top=g.H-140;
+    for (let y=top;y<g.H;y++) for (let x=0;x<g.W;x++){ const i=g.idx(x,y); if (y<top+24){ g.set(i,DIRT,g.ambAt(y)); g.life[i]=(40<<8)|120; } else g.set(i,STONE,g.ambAt(y)); }
+    for (let x=0;x<g.W;x++){ const h=1+(R()*2|0); for (let y=top-1;y>=top-h;y--){ const i=g.idx(x,y); g.set(i,PLANT,g.ambAt(y)); g.life[i]=(SAP0<<8)|1; } }
+    g.initAir(); g.wakeAll();
+    return top;
+  }
+
   // ---- game loop: scenarios with goals, a material budget, reaction-chain scoring, and element unlocks ----------
   // A scenario is played in BOX, a 320×200 pit at the bottom middle of the grid (one screen), dug into solid stone and open to
   // the sky. Its goals and fails are data (element names, rectangles in box coordinates), so a scenario saves as JSON and a
@@ -1851,7 +1878,11 @@ const Sim = (() => {
   //   {count:'Water' | ['Fire','Ember'], rect:[x0,y0,x1,y1]}   cells of those elements in the rectangle
   //   {trees:true, rect, tall:n}                                living trees rooted in the rectangle with a trunk at least n cells
   //   {made:'Steam'}                                            cells of that element made by reactions since the start
-  // The scenario is won when every goal has held for HOLD_GOAL ticks, and lost when any fail's range is reached or time runs out.
+  //   {open:'Lava', rect}                                       cells of it in the rectangle open to the air (empty or gas above)
+  // The scenario is won when every goal has held for HOLD_GOAL ticks (or its own hold), and lost when any fail's range is reached or time runs out.
+  // A survive scenario (survive:true) is won instead by reaching the end of the clock with every goal met and no fail reached.
+  // sources: [{el:'Lava', rect, from, to, rate, temp}]: from tick `from` until `to`, up to `rate` cells a tick of that element appear in
+  // empty cells of the rectangle (a river in flood, a volcano's vent): fill or wall off the rectangle and it stops.
   const BOX = {x:320, y:WORLD.H-200, w:320, h:200};
   const byName = n => { const e=EL.find(e=>e.name===n); if (!e) throw new Error('no element '+n); return e.id; };
   const ids = v => (Array.isArray(v) ? v : [v]).map(byName);
@@ -1878,6 +1909,7 @@ const Sim = (() => {
     return b;
   }
   const DAMP = (40<<8)|200, DRY = (40<<8)|15;
+  const TOWN = [200,120,320,162], VILLAGE = [152,100,232,124], WOOD_LEFT = 230;   // (the huts hold 3×(16×18-12×16)=288 wood)
   const SCENARIOS = [
     { id:'irrigate', name:'Irrigation', seed:11, time:60*60,
       brief:'The basin on the right is dry. Open the reservoir and fill the basin with water.',
@@ -1938,13 +1970,52 @@ const Sim = (() => {
         b.rect(0,150,320,200,STONE);
         for (let x=0;x<320;x++){ const top=150-Math.round(28*Math.pow(Math.abs(x-160)/160,2)); b.rect(x,top,x+1,150,SAND); }   // a sandy valley
       } },
+    { id:'flood', name:'Flood defence', seed:16, time:75*60, survive:true,
+      brief:'The river is about to burst its banks, and the town sits at the bottom of the valley. Keep the water out of the town until the flood passes: the old quarry up on the hill could hold a lot of it.',
+      budget:{Sand:700, Clay:250, Erase:200}, unlocks:[],
+      goals:[{label:'Water in the town', count:'Water', rect:TOWN, max:79}],
+      fails:[{label:'Water in the town', count:'Water', rect:TOWN, min:80}],
+      sources:[{el:'Water', rect:[82,40,100,50], from:15*60, to:45*60, rate:3}],   // the river in spate, pouring off the hills
+      build(b){
+        b.rect(0,175,320,200,STONE);
+        for (let x=0;x<320;x++){   // a hilltop on the left, sloping down to a valley floor that dips a little toward the town
+          const top = x<70 ? 100 : x<160 ? 100+Math.round(58*(x-70)/90) : 158+Math.round(4*(x-160)/160);
+          b.rect(x,top,x+1,top+8,DIRT,DAMP); b.rect(x,top+8,x+1,175,STONE);
+        }
+        b.rect(8,100,62,150,E);                                                                 // the old quarry, cut into the hilltop
+        for (const x0 of [222,252,282]){ b.rect(x0,146,x0+20,160,BRICK); b.rect(x0+3,148,x0+17,160,E); b.rect(x0-1,144,x0+21,146,WOOD); b.rect(x0+8,152,x0+12,160,E); }   // three brick houses with doors
+      } },
+    { id:'volcano', name:'Volcano', seed:17, time:100*60, hold:5*60,   // the crust has to hold for 5 s
+      brief:'The volcano is erupting and the lava is heading for the village. Put it out: water quenches lava to a crust of rock. Crust over every bit of lava, and cap the crater so no more wells up.',
+      budget:{Water:1600, Stone:150}, unlocks:[],
+      goals:[{label:'Lava open to the air', open:'Lava', rect:[0,0,320,200], max:0}],
+      fails:[{label:'Wood left in the village', count:'Wood', rect:VILLAGE, max:WOOD_LEFT}],
+      sources:[{el:'Lava', rect:[98,70,122,104], from:1, to:1e9, rate:4, temp:1500}],   // the vent: lava wells up through the crater, brimming over its east rim, until it is sealed
+      build(b){
+        b.rect(0,172,320,200,STONE);
+        for (let x=0;x<320;x++){   // a cone, its west rim higher, so the overflow runs east toward the village
+          const top = x<96 ? 60+Math.round((96-x)*1.1) : x<124 ? 104 : Math.min(124, 80+Math.round((x-124)*2.2));
+          if (top<172) b.rect(x,top,x+1,172,STONE);
+        }
+        b.rect(96,60,98,104,STONE); b.rect(122,80,124,104,STONE);                                // the crater's rims, the west one higher
+        for (const x0 of [156,184,212]){ b.rect(x0,106,x0+16,124,WOOD); b.rect(x0+2,108,x0+14,124,E); }   // the village on a terrace below the crater: wooden huts
+      } },
+    { id:'desert', name:'Desert bloom', seed:18, time:120*60,
+      brief:'Water sinks straight through desert sand and the air is dry. Line beds with clay to hold the water, cover them with soil, and grow six trees.',
+      budget:{Clay:360, Dirt:900, Water:700, Seed:12}, unlocks:[], air:0.15,
+      goals:[{label:'Trees 20+ cells tall', trees:true, tall:20, rect:[0,0,320,200], min:6}],
+      fails:[],
+      build(b){
+        b.rect(0,170,320,200,STONE);
+        for (let x=0;x<320;x++){ const top=140-Math.round(10*Math.sin(x/23)+6*Math.sin(x/9+1)); b.rect(x,top,x+1,170,SAND,0); }   // dry dunes
+      } },
   ];
 
   // which elements the sandbox rack offers, and which scenarios are open, given progress {best:{id:score}}
   function unlocked(progress){ const s=new Set(STARTER); for (const sc of SCENARIOS) if (progress.best && progress.best[sc.id]!==undefined) for (const n of sc.unlocks) s.add(n); return s; }
   function scenarioOpen(progress,k){ return k===0 || !!(progress.best && progress.best[SCENARIOS[k-1].id]!==undefined); }
   // a scenario's data without its build function: what a save carries
-  const defOf = sc => ({id:sc.id, name:sc.name, brief:sc.brief, time:sc.time, budget:sc.budget, goals:sc.goals, fails:sc.fails, unlocks:sc.unlocks||[]});
+  const defOf = sc => ({id:sc.id, name:sc.name, brief:sc.brief, time:sc.time, budget:sc.budget, goals:sc.goals, fails:sc.fails, unlocks:sc.unlocks||[], survive:!!sc.survive, sources:sc.sources||[], hold:sc.hold});
 
   class Game {
     constructor(g, sc){
@@ -1952,6 +2023,7 @@ const Sim = (() => {
       this.spent={}; this.got=new Float64Array(64); this.last=Int32Array.from(g.made); this.seen=new Int32Array(64).fill(-1e9);
       this.points=0; this.chain=0; this.mult=1; this.chainNames=[]; this.score=0;
       this.goals=sc.goals.map(c=>this.prep(c)); this.fails=(sc.fails||[]).map(c=>this.prep(c));
+      this.sources=(sc.sources||[]).map(s=>Object.assign({}, s, {id:byName(s.el)}));
       this.value=new Float32Array(64); for (const n in VALUE) this.value[byName(n)]=VALUE[n];
       this.evaluate();
     }
@@ -1965,7 +2037,7 @@ const Sim = (() => {
       g.wakeAll();
       return new Game(g, sc);
     }
-    prep(c){ return Object.assign({}, c, {ids: c.count ? ids(c.count) : c.made ? ids(c.made) : null, value:0}); }
+    prep(c){ return Object.assign({}, c, {ids: c.count ? ids(c.count) : c.made ? ids(c.made) : c.open ? ids(c.open) : null, value:0}); }
     left(name){ const b=this.sc.budget[name]; return b===undefined ? 0 : b-(this.spent[name]||0); }
     inBox(x,y){ return x>=BOX.x && x<BOX.x+BOX.w && y>=BOX.y && y<BOX.y+BOX.h; }
     // the god-hand inside a scenario: place element t (E erases) at cell i, if the budget allows; false if nothing happened
@@ -1982,7 +2054,9 @@ const Sim = (() => {
       const [x0,y0,x1,y1]=c.rect, X0=BOX.x+x0, X1=BOX.x+x1, Y0=BOX.y+y0, Y1=BOX.y+y1;
       if (c.trees){ let n=0; for (const t of g.trees) if (!t.dead && !t.falling && t.segs[0].alive && t.x>=X0 && t.x<X1 && t.y>=Y0 && t.y<Y1 && t.segs[0].len>=(c.tall||0)) n++; return n; }
       const want=new Uint8Array(64); for (const id of c.ids) want[id]=1;
-      let n=0; for (let y=Y0;y<Y1;y++){ const r=y*g.W; for (let x=X0;x<X1;x++) n+=want[g.type[r+x]]; } return n;
+      let n=0;
+      if (c.open){ for (let y=Math.max(1,Y0);y<Y1;y++){ const r=y*g.W; for (let x=X0;x<X1;x++) if (want[g.type[r+x]]){ const a=g.type[r-g.W+x]; if (a===E || EL[a].kind==='gas') n++; } } return n; }
+      for (let y=Y0;y<Y1;y++){ const r=y*g.W; for (let x=X0;x<X1;x++) n+=want[g.type[r+x]]; } return n;
     }
     met(c){ return (c.min===undefined || c.value>=c.min) && (c.max===undefined || c.value<=c.max); }
     evaluate(){ for (const c of this.goals) c.value=this.measure(c); for (const c of this.fails) c.value=this.measure(c); }
@@ -1990,6 +2064,7 @@ const Sim = (() => {
     tick(){
       if (this.state!=='play') return;
       const g=this.g, made=g.made; this.t++;
+      for (const s of this.sources) if (this.t>=s.from && this.t<s.to) this.pour(s);
       let pts=0, names=[];
       for (let t=1;t<64;t++){ const d=made[t]-this.last[t]; this.last[t]=made[t]; if (d<=0) continue; this.got[t]+=d; if (this.value[t]>0){ this.seen[t]=this.t; pts+=d*this.value[t]*POINT; } }
       let chain=0; for (let t=1;t<64;t++) if (this.value[t]>0 && this.t-this.seen[t]<CHAIN_WINDOW){ chain++; names.push(EL[t].name); }
@@ -1999,15 +2074,27 @@ const Sim = (() => {
       this.evaluate();
       const lost=this.fails.find(c=>this.met(c));
       if (lost){ this.finish('lost', lost.label); return; }
-      if (this.goals.every(c=>this.met(c))){ this.held+=CHECK; if (this.held>=HOLD_GOAL){ this.finish('won'); return; } } else this.held=0;
+      const ok=this.goals.every(c=>this.met(c));
+      if (this.sc.survive){ if (this.t>=this.sc.time) this.finish(ok ? 'won' : 'lost', ok ? '' : 'Out of time'); return; }
+      if (ok){ this.held+=CHECK; if (this.held>=(this.sc.hold||HOLD_GOAL)){ this.finish('won'); return; } } else this.held=0;
       if (this.t>=this.sc.time) this.finish('lost','Out of time');
+    }
+    // a source's cells for this tick, at random empty cells of its rectangle (they are not reaction products)
+    pour(s){
+      const g=this.g, [x0,y0,x1,y1]=s.rect, w=x1-x0, h=y1-y0, amb=EL[s.id].t0===AMB;
+      for (let k=0;k<s.rate;k++){
+        const y=BOX.y+y0+((R()*h)|0), i=g.idx(BOX.x+x0+((R()*w)|0), y);
+        if (g.type[i]!==E) continue;
+        g.set(i,s.id,s.temp!==undefined ? s.temp : amb ? g.ambAt(y) : undefined); if (EL[s.id].kind!=='static') g.vy[i]=1; this.last[s.id]++;
+      }
     }
     finish(state, why=''){
       this.state=state; this.why=why;
       if (state!=='won'){ this.score=0; return; }
-      // a win scores 1000, up to 500 more for time left and 500 for material left over, plus the reaction points
+      // a win scores 1000, up to 500 more for time left (a survive scenario lasts its whole clock: 250) and 500 for material left
+      // over, plus the reaction points
       let total=0, left=0; for (const n in this.sc.budget){ total+=this.sc.budget[n]; left+=this.left(n); }
-      this.score=Math.round(1000 + 500*(1-this.t/this.sc.time) + (total ? 500*left/total : 0) + this.points);
+      this.score=Math.round(1000 + (this.sc.survive ? 250 : 500*(1-this.t/this.sc.time)) + (total ? 500*left/total : 0) + this.points);
     }
     timeLeft(){ return Math.max(0, this.sc.time-this.t); }
     // the scenario as text: its definition, the world, and how far into it the player is
@@ -2025,7 +2112,7 @@ const Sim = (() => {
   // is a piece of saved text a scenario (rather than a plain world)?
   const isScenario = text => /^\s*\{/.test(text);
 
-  return {WORLD,EL,N,CH,AMB,DAY,YEAR,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS}};
+  return {WORLD,EL,N,CH,AMB,DAY,YEAR,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,flat,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS}};
 })();
 
 // ============================================================================
@@ -2280,8 +2367,21 @@ function keyPan(){
 // --- controls ---
 const brushEl=document.getElementById('brush'), brushV=document.getElementById('brushv');
 brushEl.addEventListener('input',()=>{brush=+brushEl.value; brushV.textContent=brush;});
-let paused=false;
+let paused=false, speed=1;
 document.getElementById('pause').addEventListener('click',e=>{paused=!paused; e.target.textContent=paused?'Resume':'Pause';});
+document.getElementById('speed').addEventListener('click',e=>{ speed=speed>=4 ? 1 : speed*2; e.target.textContent='Speed ×'+speed; });   // ticks a frame (a scenario's clock counts ticks, so it is fair)
+// sandbox tools: a flat world to build on, the calendar, and the wind
+const sbox=document.getElementById('sbox'), holdEl=document.getElementById('hold'), windEl=document.getElementById('windset');
+const WINDS=[['natural',null],['calm',0],['east',0.5],['west',-0.5]]; let windK=0;
+const setWind=k=>{ windK=k; g.windHold=WINDS[k][1]; windEl.textContent='Wind: '+WINDS[k][0]; };
+const setHold=on=>{ g.hold=on; holdEl.setAttribute('aria-pressed',on); };
+document.getElementById('flatworld').addEventListener('click',()=>whenIdle(()=>{
+  if (game) leaveScenario(true);
+  const top=Sim.flat(g); camX=(W-VW)/2|0; camY=Math.max(0,top-VH*0.7|0); clampCam(); dims(); msg('Flat world');
+}));
+document.getElementById('season').addEventListener('click',()=>whenIdle(()=>{ g.nextSeason(); msg(g.seasonName); }));
+holdEl.addEventListener('click',()=>setHold(!g.hold));
+windEl.addEventListener('click',()=>setWind((windK+1)%WINDS.length));
 document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ if (game) leaveScenario(true); g.clear(); msg('Cleared'); }));
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
 document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
@@ -2313,12 +2413,13 @@ const mission=document.getElementById('mission'), banner=document.getElementById
 const fmt=t=>{ const s=Math.ceil(t/60); return (s/60|0)+':'+String(s%60).padStart(2,'0'); };
 function startScenario(sc){ game=Game.start(g,sc); enterScenario(); msg(sc.name); }
 function enterScenario(){
+  setHold(false); setWind(0); sbox.classList.add('off');   // a scenario runs on its own clock and weather
   clampCam(); dims(); shown=null; banner.classList.remove('on');
   document.getElementById('mname').textContent=game.sc.name; document.getElementById('mbrief').textContent=game.sc.brief;
   mission.classList.add('on'); refreshRack(); showMission();
 }
 function leaveScenario(keepWorld){
-  game=null; mission.classList.remove('on'); banner.classList.remove('on'); shown=null;
+  game=null; mission.classList.remove('on'); banner.classList.remove('on'); shown=null; sbox.classList.remove('off');
   if (!keepWorld) newWorld((Math.random()*1e9)|0);
   refreshRack();
 }
@@ -2379,7 +2480,9 @@ function loop(now){
   if (!busy){
     if (drawing && lastX>=0) paint(lastX,lastY);
     stream();
-    if (!paused){ const t=performance.now(); tick(); stepMs+=performance.now()-t; steps++; }
+    if (!paused){ const t=performance.now();
+      for (let k=1;k<speed;k++){ g.step(); if (game) game.tick(); steps++; }   // extra ticks on this thread, then the usual one
+      tick(); stepMs+=performance.now()-t; steps++; }
   }
   render(); frames++;
   g.prefetch();   // make the land just past the window ahead of time, a slice a frame (it never touches the shared world)
