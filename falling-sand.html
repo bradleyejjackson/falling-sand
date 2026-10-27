@@ -280,7 +280,7 @@ const Sim = (() => {
   const CLUMP = 30, SPRING = 245, SATM = 230, SPRING_P = 0.1;
   const MUD_AT = 200, MUD_P = 0.05, MUD_DRY = 190, MUD_FLOW = 0.15, CLAY_WET = 40;
   // rust: metal touching water flakes to rust at RUST_W a soil visit (brine RUST_B, damp soil half of RUST_W, saturated air RUST_AIR);
-  // hot metal stays dry and doesn't rust
+  // hot metal stays dry and frozen metal barely corrodes, so neither rusts
   const RUST_W = 0.0008, RUST_B = 0.005, RUST_AIR = 0.0001;
   const OIL_EAT = 0.03, OIL_FLAME = 0.3, SPATTER = 0.3;   // burning oil: chance a surface cell is used up a tick, that it sends a flame up, that water touching it flashes
   // wind-blown sand (saltation): dry sand (moisture under BLOW_DRY) on the surface hops downwind where the wind near the ground is
@@ -1366,7 +1366,7 @@ const Sim = (() => {
     }
     // rust: wet metal flakes away to rust, faster in salt water; the flakes fall off and bare the metal behind them to the water
     corrode(x,y,i){
-      if (this.temp[i]>=100) return;
+      if (this.temp[i]>=100 || this.temp[i]<0) return;   // (hot metal stays dry; frozen, it barely corrodes)
       const W=this.W, H=this.H, T=this.type; let p=0;
       for (let k=0;k<4;k++){ const nx=x+DX4[k], ny=y+DY4[k]; if (nx<0 || nx>=W || ny<0 || ny>=H) continue;
         const j=ny*W+nx, tj=T[j];

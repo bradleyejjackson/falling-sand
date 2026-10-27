@@ -203,7 +203,7 @@ glass already existed; they behave more like the real thing now.
 - Molten glass: sand past 900° melts into it (it used to turn straight to glass). It runs like cooling lava and sets into glass
   below 700°, settled where it lies; water quenches it at once. Glass past 1000° melts back to it (it used to melt to lava).
 - Rust (`Grid.corrode`, in the soil pass so sleeping metal rusts): metal next to water or mud flakes to rust at `RUST_W` a visit,
-  brine `RUST_B`, damp soil half of `RUST_W`, and fog or dew-point air `RUST_AIR`; metal at 100° or more stays dry. Rust is a
+  brine `RUST_B`, damp soil half of `RUST_W`, and fog or dew-point air `RUST_AIR`; metal at 100° or more stays dry, and metal below 0° doesn't rust (the frozen-plate check in `melt` caught that). Rust is a
   powder, so the flakes fall away and bare fresh metal. Measured (`validate.js rust`): a 4-thick wall loses 18 cells in a minute
   in fresh water, 71 in brine, none in dry air.
 - Oil (`Grid.burnOil`): oil past its flash point burns only where it meets the air. Oil's life is 1 while it is alight; a burning
