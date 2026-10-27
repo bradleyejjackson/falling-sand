@@ -25,14 +25,15 @@ function suite(threads) {
   p.run(1); g.clear();
   btn('Dirt').fire('click');
   for (let vx = 100; vx <= 220; vx += 4) { cv.fire('pointerdown', at(vx, 180)); cv.fire('pointerup', at(vx, 180)); }
-  p.run(120);
+  p.run(600);   // (the bed takes a while to settle; a seed sown while it is still falling gets buried)
   const c1 = census(g, Sim.EL);
   check('painting dirt places damp dirt', c1.Dirt > 300 && [...g.type].some((t, i) => t === Sim.ids.DIRT && (g.life[i] & 255) >= 60), `${c1.Dirt} cells`);
   btn('Seed').fire('click');
   p.els.brush.value = '1'; p.els.brush.fire('input');
-  cv.fire('pointerdown', at(160, 100)); cv.fire('pointerup', at(160, 100));
+  for (const vx of [130, 160, 190]) { cv.fire('pointerdown', at(vx, 100)); p.run(8); cv.fire('pointerup', at(vx, 100)); }   // (a click held for a few frames)
+  p.run(1); check('a seed click sows one seed', census(g, Sim.EL).Seed === 3, `${census(g, Sim.EL).Seed} seeds`);
   p.run(1200);
-  check('a seed dropped on painted dirt becomes a tree', g.trees.length >= 1, `${g.trees.length} trees`);
+  check('seeds dropped on painted dirt become trees', g.trees.length >= 1, `${g.trees.length} trees`);
 
   for (const id of ['moistview', 'heatview', 'windview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
   p.run(3);
@@ -88,6 +89,24 @@ function suite(threads) {
   p.els.load.fire('click'); p.run(2);
   check('loading the save resumes the scenario', p.sf.game() && p.sf.game().sc.id === 'lava' && p.sf.game().t >= 30, p.els.msg.textContent);
   p.els.leave.fire('click'); p.run(2);
+
+  // Green the valley played through the brush at its default size: a dirt bed (the budget covers two thirds of the valley),
+  // water over it, five seed clicks on the soil.
+  // (a seed click used to fill the whole brush circle, so the first one spent all ten seeds in one clump: one tree)
+  const unlock = p.created.find(e => e.id === 'unlockall');
+  unlock.fire('click'); scn('Green the valley').fire('click'); p.run(2);
+  const gv = p.sf.game(), box = Sim.BOX, cy = by => (by + 40) / 1.2;   // box y to canvas y (the view shows 40 rows of sky over the box)
+  p.els.brush.value = '4'; p.els.brush.fire('input');
+  const sweep = (y0, x0, x1) => { cv.fire('pointerdown', at(x0, cy(y0))); for (let x = x0; x <= x1; x += 3) { cv.fire('pointermove', at(x, cy(y0))); p.run(1); } cv.fire('pointerup', at(x1, cy(y0))); };
+  btn('Dirt <b>1200</b>').fire('click'); sweep(125, 60, 260); p.run(120);
+  btn('Water <b>900</b>').fire('click'); sweep(110, 60, 260); p.run(300);
+  btn('Seed <b>10</b>').fire('click');
+  cv.fire('pointerdown', at(70, cy(100))); p.run(8); cv.fire('pointerup', at(70, cy(100))); p.run(1);
+  check('one seed click sows one seed', gv.left('Seed') === 9, `${10 - gv.left('Seed')} sown`);
+  for (const x of [95, 120, 145, 170]) { cv.fire('pointerdown', at(x, cy(100))); cv.fire('pointerup', at(x, cy(100))); p.run(1); }
+  for (let k = 0; k < 7200 && gv.state === 'play'; k++) p.run(1);
+  check('Green the valley is won through the brush', gv.state === 'won', `${gv.state} ${gv.why} at ${(gv.t / 60).toFixed(0)} s; ${gv.goals[0].value} tall trees; seeds left ${gv.left('Seed')}`);
+  p.els.leave.fire('click'); unlock.fire('click'); p.run(2);
   p.close();
 }
 const mode = process.argv[2];
