@@ -11,7 +11,7 @@ Headless checks run in Node (no dependencies):
 ```
 node tools/validate.js        # all scenarios, or name some: sapling sand soak topple rot seasons snow
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
-                              #   tiles stream (stage 4) sky
+                              #   tiles stream (stage 4) sky precip storm steam level
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -66,6 +66,15 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
   sit relative to the land.
 - Weather was not retuned: thermals, cloud bases and rain are as before, and the extra sky gets higher cloud layers on cool nights
   that clear by day (`validate.js clouds` measures both).
+- Rain or snow (`Grid.fall`): precipitation leaves a cloud as a flake where the air there is below freezing and as a drop
+  where it isn't, at the air's temperature. Flakes flutter down at most a cell a tick, so a flake falling through air above 2°
+  melts into rain within about 60 rows; rain falling into air below 0° still freezes. (It used to be one temperature for the
+  whole sky, set by the season, so spring and autumn clouds snowed onto ground at 6-8°.) `validate.js precip` measures it.
+- Lapse rate (`ambAt`): 0.12° a row up to 100 rows over `skyY` (past the hilltops), 0.06° a row for 150 rows above that, then
+  none. Typical ground (50 rows over `skyY`) is 11° plus the climate, as before; hilltops and the cloud layer are 1-3° warmer
+  than with the old steady 0.18° a row, and the high sky up to 5° warmer. Under a tall cloud over ground at 6°
+  (`validate.js precip`), the share of what reaches the ground as snow went from 65% to 7% in early spring and from 32% to 0
+  in late autumn; winter still snows all the way down. The cloud-base check is now judged per snapshot (bases rise and fall with the air from day to day).
 - The view is 320×240 (4:3); in a scenario it shows the box with 40 rows of sky above it.
 - Saves from the 480-row world load into the taller one with the sky added on top (cells, trees, vapour and stored regions shifted
   down; `validate.js sky`).
