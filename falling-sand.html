@@ -503,7 +503,7 @@ const Sim = (() => {
       for (let k=1;k<=need;k++){ if (y-k<0 || this.type[i-k*this.W]!==t) return false; }
       return true;
     }
-    thin(i,y){   // is the wetting liquid under cell i (counting i) at most 2 deep? deeper water ignores surface tension
+    thin(i,y){   // is the wetting liquid under cell i (counting i) at most 3 deep? deeper water ignores surface tension
       const W=this.W, T=this.type;
       return !(y+3<this.H && TENS[T[i+W]] && TENS[T[i+2*W]] && TENS[T[i+3*W]]);
     }
