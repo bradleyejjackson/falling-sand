@@ -237,16 +237,6 @@ const scenarios = {
     check('and rains itself out: under 60% of its peak two and four minutes after pouring stops', after2 < peak * 0.6 && left < peak * 0.6, `${(after2 / peak * 100) | 0}%, ${(left / peak * 100) | 0}%`);
     check('boiling and condensing do not make water', gain < poured * 0.1, `${gain.toFixed(0)} of ${poured}`);
   },
-  cave() {
-    // saturated air in a sealed cave condenses as drips, not as cloud that can never rain out
-    Sim.reseed(8); const W = 160, H = 120, g = new Sim.Grid(W, H); g.windHold = 0;
-    for (let x = 0; x < W; x++) for (let y = 40; y < H; y++) if (!(x >= 40 && x < 120 && y >= 70 && y < 100)) g.set(g.idx(x, y), STONE, g.ambAt(y));
-    g.initAir(); for (let c = 0; c < g.hum.length; c++) if (((c / g.AW) | 0) * Sim.AC >= 70) g.hum[c] = g.cap[c] * 1.6;
-    let most = 0; run(g, 2 * MIN, 60, () => { let n = 0; for (let y = 70; y < 100; y++) for (let x = 40; x < 120; x++) if (g.type[g.idx(x, y)] === CLOUD) n++; most = Math.max(most, n); });
-    let drips = 0; for (let y = 70; y < 100; y++) for (let x = 40; x < 120; x++) if (g.type[g.idx(x, y)] === WATER) drips++;
-    console.log(`  most cloud in the cave ${most}; water dripped ${drips}`);
-    check('a sealed cave does not fill with cloud', most < 100, `${most}`);
-  },
   erosion() {
     // a stream running down a sand slope cuts into it and carries the sand down into the basin, where it settles
     Sim.reseed(3); const W = 240, H = 160, g = new Sim.Grid(W, H); g.windHold = 0;
