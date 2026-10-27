@@ -12,7 +12,7 @@ Headless checks run in Node (no dependencies):
 node tools/validate.js        # all scenarios, or name some: sapling sand soak topple rot seasons snow
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
                               #   tiles stream (stage 4) sky precip storm steam level
-                              #   support cookoff conduct melt
+                              #   support cookoff conduct melt groundwater
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -123,3 +123,16 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
   air melted it through on its own by 28 s. Doing nothing still loses; the scripted blast still wins.
 - Saves don't carry `fuse` (half-melted cells restart their melt). Perf on the 960×640 world: tick 6.0-6.4 ms, render 3.9-4.4 ms (unchanged within noise);
   a winter world 7.5 ms (was 7.8).
+
+## Groundwater (E3)
+
+- Sand now holds moisture in its life value, like dirt's low byte (100 is one water cell). It soaks water up faster than dirt,
+  passes it on twice as fast (`PERM`) and holds less against gravity (`HOLDM`). Moisture flows between sand and dirt.
+- Soil lying on rock passes its excess diagonally down to the soil beside it, so groundwater runs downhill along bedrock.
+  At the top of a soaked zone (moisture ≥ `SATM`), water moves toward a neighbouring column whose water table is lower and
+  comes up there, so the table levels out under a hill and drains toward its foot.
+- Springs: soaked soil (≥ `SPRING`) with an open face beside it, under it, or over it where the table next door stands higher,
+  lets a water cell out there with chance `SPRING_P × (1 + head)`, head being how many soaked rows stand just behind the face.
+  The spring's own pool rises as high as the head reaches. `g.springs` counts the cells let out.
+- Damp sand (≥ `CLUMP`) doesn't slump: it stands in walls and trenches until it dries. Under water it slides again.
+- Saves carry sand moisture as an eighth part; older saves load with dry sand.
