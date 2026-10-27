@@ -139,7 +139,7 @@ const Sim = (() => {
   const FIRE  = def('Fire',     {kind:'gas', k:0.7, t0:700, hold:450, life:[40,80], rgb:[255,130,30], opaque:false, glow:1});
   const SMOKE = def('Smoke',    {kind:'gas', k:0.2, t0:120, life:[120,240], decay:E, rgb:[55,58,64], vary:18, opaque:false});
   const ACID  = def('Acid',     {kind:'liquid', density:1.1, disperse:4, tension:0.98, soil:255, k:0.4, rgb:[130,240,60], vary:30, opaque:false, glow:0.15});
-  const STEAM = def('Steam',    {kind:'gas', k:0.3, cap:14, t0:170, rgb:[165,180,195], vary:30, opaque:false});
+  const STEAM = def('Steam',    {kind:'gas', k:0.3, cap:28, t0:170, rgb:[165,180,195], vary:30, opaque:false});
   const EMBER = def('Ember',    {kind:'static', k:0.5, t0:650, hold:500, life:[180,320], decay:'burnout', rgb:[230,90,20], glow:0.8});
   const LAVA  = def('Lava',     {kind:'liquid', density:3.0, disperse:1, lazy:0.7, k:0.3, cap:25, t0:1300, rgb:[235,80,20], vary:40, glow:1});
   const ICE   = def('Ice',      {kind:'static', k:0.4, t0:-30, rgb:[170,215,245], vary:25, opaque:false});
@@ -235,6 +235,8 @@ const Sim = (() => {
   // ---- the grid --------------------------------------------------------------
   const CH = 16, G = 0.25, VMAX = 6;
   const DX4 = [0,-1,1,0], DY4 = [-1,0,0,1];
+  // steam: straight up with chance STEAM_UP, otherwise one of the other seven directions (down ones listed once, so rarer)
+  const STEAM_DX = [0, -1,1,-1,1, -1,1,-1,1, -1,1, 0], STEAM_DY = [-1, -1,-1,-1,-1, 0,0,0,0, 1,1, 1], STEAM_UP = 0.35, STEAM_REACH = 8;
   // Engine. The cell pass runs in TILE×TILE tiles. A tile's update may read and write only within REACH cells of the tile,
   // so tiles two apart in both directions never touch the same cell: the four checkerboard phases (even/odd column ×
   // even/odd row) each run all their tiles at once on any number of threads, and the result is the same on one thread or eight.
@@ -620,11 +622,27 @@ const Sim = (() => {
       if (tj===E || (KIND[tj]===2 && t!==FIRE) || (t===SMOKE && tj===STEAM)){ this.swap(i,j); return true; }
       return false;
     }
+    // Steam expands: each tick a steam cell heads off in a random direction (mostly up) and passes through the steam around it
+    // to the first free cell, so a puff thins out and keeps spreading instead of moving as a clump. It rises through the cloud it makes.
+    stepSteam(x,y,i,wv){
+      const W=this.W, T=this.type, {wx0,wx1,wy0,wy1}=this;
+      const r=R(), up=STEAM_UP-wv*0.5;
+      const d = r<up ? 0 : 1+((R()*(STEAM_DX.length-1))|0), dx=STEAM_DX[d], dy=STEAM_DY[d];
+      for (let k=1;k<=STEAM_REACH;k++){
+        const nx=x+dx*k, ny=y+dy*k; if (nx<wx0||nx>=wx1||ny<wy0||ny>=wy1) return false;
+        const j=ny*W+nx, tj=T[j];
+        if (tj===STEAM) continue;
+        if (tj===E || tj===CLOUD || (k===1 && KIND[tj]===2)){ this.swap(i,j); return true; }
+        return false;
+      }
+      return false;
+    }
     stepGas(x,y,i,t){
       if (t===FIRE && R()<0.8 && this.nearFuel(x,y)){ this.wake(x,y); return; }   // flames cling to fuel
       // the wind carries gases: sideways with the local flow, and faster upward in an updraft
       const w=this.wc(x,y), wu=this.uc[w], wv=this.vc[w];
       if (R()<Math.abs(wu)*2 && this.gasMove(i,t,x+(wu<0?-1:1),y)){ this.wake(x,y); return; }
+      if (t===STEAM && this.stepSteam(x,y,i,wv)) return;
       const up = R() < (t===FIRE?0.6:t===STEAM?0.75:0.45) - wv;
       if (up && this.gasMove(i,t,x,y-1)) return;
       const dir=R()<0.5?-1:1;
