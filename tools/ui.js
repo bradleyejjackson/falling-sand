@@ -40,7 +40,7 @@ function suite(threads) {
   check('view toggles render without errors', true);
 
   p.run(1); p.els.save.fire('click'); p.run(1); const saved = p.store['sandfall.world'];
-  check('save writes a 7-part world', saved && saved.split('|').length === 7, p.els.msg.textContent);
+  check('save writes a 8-part world', saved && saved.split('|').length === 8, p.els.msg.textContent);
   const trees = g.trees.length; p.run(1); g.clear(); p.els.load.fire('click'); p.run(1);
   check('load restores trees', g.trees.length === trees, `${g.trees.length}/${trees}; ${p.els.msg.textContent}`);
   p.els.export.fire('click'); p.run(1); const text = p.els.iotext.value;
@@ -61,7 +61,7 @@ function suite(threads) {
   let same = 0; for (let i = 0; i < here.length; i++) if (here[i] === g.type[i]) same++;
   check('panning back brings the first land back', g.ox === ox0 && same / here.length > 0.95, `${(100 * same / here.length).toFixed(1)}% of cells the same type`);
   p.run(1); p.els.save.fire('click'); p.run(1); const big = p.store['sandfall.world'];
-  check('a streamed world saves', big && big.split('|').length === 7, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
+  check('a streamed world saves', big && big.split('|').length === 8, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
 
   // scenarios: the Play row, a budgeted rack, winning through the brush, unlocks, and saving a scenario in progress
   const scn = n => p.created.find(e => e.className === 'el scn' && e.innerHTML.includes(n));
