@@ -4,7 +4,7 @@
 const { loadSim } = require('./load');
 const Sim = loadSim(process.env.SIMFILE);
 const { BOX, SCENARIOS, Game } = Sim;
-const { E, STONE, GUNP, FIRE, WATER, DIRT, SEED, WOOD } = Sim.ids;
+const { E, STONE, GUNP, FIRE, EMBER, WATER, DIRT, SEED, WOOD } = Sim.ids;
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
 const byId = id => SCENARIOS.find(s => s.id === id);
@@ -44,6 +44,14 @@ const solutions = {
     1500: game => { for (const x of [80, 120, 160, 200, 240]) paintRect(game, x, 60, x + 1, 61, SEED); },
   },
 };
+// Firebreak with water only: every 20 ticks, a water blob dropped just above the westmost column that is really burning
+// (three burning cells in three columns, so stray flames in the air don't draw it), the way a player chases the fire front
+function douse(game) {
+  const g = game.g, col = new Int32Array(BOX.w), top = new Int32Array(BOX.w).fill(BOX.h);
+  for (let y = 100; y < 150; y++) for (let x = 0; x < BOX.w; x++) { const t = g.type[g.idx(BOX.x + x, BOX.y + y)]; if (t === FIRE || t === EMBER) { col[x]++; top[x] = Math.min(top[x], y); } }
+  for (let x = 1; x < BOX.w - 1; x++) if (col[x - 1] + col[x] + col[x + 1] >= 3) { paintRect(game, x - 1, top[x] - 8, x + 6, top[x] - 2, WATER); return; }
+}
+const water = { fire: Object.fromEntries(Array.from({ length: 200 }, (_, k) => [30 + 20 * k, douse])) };   // (the first 67 s)
 const naive = {   // the obvious wrong move, where there is one
   grow: { 30: game => { for (const x of [80, 120, 160, 200, 240]) paintRect(game, x - 9, 80, x + 9, 96, WATER); }, 300: game => { for (const x of [80, 120, 160, 200, 240]) paintRect(game, x, 60, x + 1, 61, SEED); } },
   lava: { 60: game => { paintRect(game, 122, 150, 129, 156, E); paintRect(game, 60, 112, 66, 130, E); } },
@@ -58,6 +66,7 @@ for (const sc of SCENARIOS) tests[sc.id] = () => {
   const idle = play(sc.id, {});
   console.log(`  doing nothing: ${summary(idle)}`);
   check(`${sc.name}: doing nothing does not win`, idle.state === 'lost');
+  if (water[sc.id]) { const w = play(sc.id, water[sc.id]); console.log(`  water only: ${summary(w)}`); check(`${sc.name}: water alone can win`, w.state === 'won', w.why); }
   if (naive[sc.id]) { const n = play(sc.id, naive[sc.id]); console.log(`  naive: ${summary(n)}`); check(`${sc.name}: the naive move loses`, n.state === 'lost', n.why); }
 };
 tests.budget = () => {

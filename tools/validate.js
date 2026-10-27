@@ -166,6 +166,24 @@ const scenarios = {
     check('fire makes an updraft', up < -0.2);
     check('and pulls air in along the ground from both sides', left > 0.1 && right < -0.1 && calm < 0.05);
   },
+  douse() {
+    // water puts out a smouldering bed of charcoal, embers and all. Embers used to boil the water off and relight the flames,
+    // and hot ash boiled it before it got to them; now water quenches embers, soaks down through ash and cools what it boils on
+    const { EMBER, CHAR } = Sim.ids, burning = g => { let n = 0; for (const t of g.type) if (t === FIRE || t === EMBER) n++; return n; };
+    const seen = {};
+    for (const wet of [false, true]) {
+      Sim.reseed(5); const W = 160, H = 120, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let x = 0; x < W; x++) for (let y = H - 20; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+      for (let x = 60; x < 100; x++) for (let y = H - 26; y < H - 20; y++) g.set(g.idx(x, y), (x + y) % 3 ? CHAR : EMBER);
+      g.initAir(); g.wakeAll(); run(g, 300);
+      let poured = 0; seen[wet] = [burning(g)];
+      run(g, 300, 1, f => { if (wet && f <= 180 && f % 2 === 0) for (let x = 56; x < 104; x++) { const i = g.idx(x, H - 40); if (g.type[i] === E && poured < 600) { g.set(i, WATER); poured++; } } if (f % 60 === 0) seen[wet].push(burning(g)); });
+      console.log(`  ${wet ? `doused with ${poured} water` : 'left alone'}: cells burning each second ${seen[wet].join(' ')}`);
+    }
+    // (a few embers buried deep in the ash smoulder on until they burn out, so it's judged against the fire left alone, second by second)
+    const worst = Math.max(...[1, 2, 3, 4].map(k => seen[true][k] / seen[false][k]));
+    check('water knocks burning charcoal down and keeps it down, embers and all', worst < 0.25, `at worst ${(worst * 100) | 0}% as much burning as left alone`);
+  },
   fog() {
     // a lake in a valley: fog gathers over it in the small hours and burns off by midday; the hilltops stay clear
     Sim.reseed(9); const W = 320, H = 240, g = new Sim.Grid(W, H); g.clock = Sim.YEAR * 0.45; g.updateClimate(); g.windHold = 0;
