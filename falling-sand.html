@@ -103,7 +103,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -332,9 +332,10 @@ const Sim = (() => {
       for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const nx=x+dx, ny=y+dy; if (!this.inb(nx,ny)) continue; const j=this.idx(nx,ny); if (SPAN[this.type[j]]) { this.life[j]=0; this.wake(nx,ny); } }
     }
     supported(x,y,span){
-      // supported if something solid is under it, or a solid run leads to a supported column within `span` cells
+      // supported if something solid is under it, straight down or diagonally (so a sloping roof or a brace bears load like a
+      // wall does), or a solid run leads to a supported column within `span` cells
       const solidAt=(nx,ny)=> this.inb(nx,ny) && SUPPORTS.has(this.type[this.idx(nx,ny)]);
-      if (y+1>=this.H || solidAt(x,y+1)) return true;
+      if (y+1>=this.H || solidAt(x,y+1) || solidAt(x-1,y+1) || solidAt(x+1,y+1)) return true;
       for (const d of [-1,1]) for (let k=1;k<=span;k++){ const nx=x+d*k; if (!solidAt(nx,y)) break; if (solidAt(nx,y+1) || EL[this.type[this.idx(nx,y)]].kind==='powder') return true; }
       // hanging from above counts for a short distance (stalactites)
       for (let k=1;k<=2;k++){ if (!solidAt(x,y-k)) return false; if (solidAt(x-1,y-k)&&solidAt(x+1,y-k)) return true; }
@@ -1440,11 +1441,26 @@ const Sim = (() => {
     const top=g.top, LH=g.H-top;
     return g.noise={seed:s, nz, cave, ore, surf:gx=>top+((LH*0.32 + (nz(gx/90,0.5,4)-0.5)*LH*0.35)|0)};
   }
-  const LAKE=0x1a4e, TREE=0x7e3e, TREES_EVERY=12;
+  const LAKE=0x1a4e, TREE=0x7e3e, TREES_EVERY=12, COOK=12, GAP=4;
   // (a generator: it yields between slices of work, so a region can be made a little at a time in spare moments)
   function* columns(g, x0, x1){
     const {W,H,top}=g, LH=H-top, T=terrain(g), {nz,cave,ore}=T, gx0=g.ox+x0, gx1=g.ox+x1, s=g.worldSeed;
     const surf=new Int16Array(x1-x0); for (let x=x0;x<x1;x++) surf[x-x0]=T.surf(g.ox+x);
+    // lava lies in sealed chambers: nothing that burns starts within COOK cells of it (it would go off in the first seconds of a
+    // new world, and the fire would run along the cave to every gas pocket and oil pool). A gap of GAP cells of open air is left
+    // round the lava; past that, out to COOK, cave becomes rock, so fuel further off can't flow or drift in. The lava is found
+    // from the noise for COOK columns either side as well, so a region's edge sees the lava in the next region over, and
+    // lavaD is a chamfer distance (3 per step, 4 per diagonal) from it over the deep rows lava can lie in.
+    const LY0=Math.max(0,Math.floor(LH*0.9)-COOK), DW=x1-x0+2*COOK, DH=LH-LY0, lavaD=new Uint16Array(DW*DH).fill(65535);
+    for (let c=0;c<DW;c++){ const gx=gx0+c-COOK, sy=T.surf(gx);
+      for (let r=0;r<DH;r++){ const ly=LY0+r, y=ly+top, d=y-sy;
+        if (ly/LH>0.9 && d>8 && d>=4+nz(gx/20,ly/20,2)*8 && y<H-3 && cave(gx/48,ly/32,3)>0.66) lavaD[r*DW+c]=0; } }
+    for (let r=0;r<DH;r++) for (let c=0;c<DW;c++){ const i=r*DW+c; let v=lavaD[i];
+      if (c>0) v=Math.min(v,lavaD[i-1]+3); if (r>0){ v=Math.min(v,lavaD[i-DW]+3); if (c>0) v=Math.min(v,lavaD[i-DW-1]+4); if (c<DW-1) v=Math.min(v,lavaD[i-DW+1]+4); } lavaD[i]=v; }
+    for (let r=DH-1;r>=0;r--) for (let c=DW-1;c>=0;c--){ const i=r*DW+c; let v=lavaD[i];
+      if (c<DW-1) v=Math.min(v,lavaD[i+1]+3); if (r<DH-1){ v=Math.min(v,lavaD[i+DW]+3); if (c<DW-1) v=Math.min(v,lavaD[i+DW+1]+4); if (c>0) v=Math.min(v,lavaD[i+DW-1]+4); } lavaD[i]=v; }
+    const lavaDist=(x,ly)=> ly<LY0 ? Infinity : lavaD[(ly-LY0)*DW+x-x0+COOK]/3;
+    yield;
     for (let x=x0;x<x1;x++){ if (x>x0 && x%32===0) yield; reseed(mix(s, g.ox+x)); for (let y=0;y<H;y++){
       const gx=g.ox+x, i=g.idx(x,y), sy=surf[x-x0]; if (y<sy) continue;
       const depth=y-sy, ly=y-top, dn=ly/LH;   // (the land's noise is in its own rows, so the extra sky doesn't change it)
@@ -1458,9 +1474,10 @@ const Sim = (() => {
           else if (c>0.7 && dn>0.55 && o<0.4) t=OIL;
           else if (c>0.7 && dn<0.7 && o>0.6) t=WATER;
           else if (c>0.74 && o>0.45 && o<0.55) t=GAS;
+          if (t!==LAVA){ const d=lavaDist(x,ly); if (d<=COOK) t = d>GAP ? STONE : t===OIL||t===GAS ? E : t; }
         }
         else if (o>0.76 && depth>20 && depth<160) t=SAND;
-        else if (o<0.21 && depth>40) t=GUNP;
+        else if (o<0.21 && depth>40) t=lavaDist(x,ly)<=COOK ? STONE : GUNP;
         else if (o>0.70 && o<0.72 && depth>15) t=SALT;
         else if (c<0.3 && dn>0.5 && o>0.62) t=ICE;
       }
