@@ -13,6 +13,7 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
                               #   tiles stream (stage 4) sky precip storm steam level
                               #   support cookoff conduct melt groundwater dunes windfire channel
+                              #   grass compete seasonfire
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -158,3 +159,28 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
   before. A still pond never stirs. Measured (`validate.js channel`): a 2-cells/tick stream on a 1-in-30 sand plain cuts its bed
   10 cells deep near its head in 3 min and builds it up 3 cells where it slows, with sand conserved.
 - No save changes. Perf on the 960×640 world: tick 9.4 ms (10.6 before, noise), render ~6-7 ms.
+
+## Plants competing, and fire by season (E5)
+
+- Grass is Plant with no tree owner. Its life holds sap in the high byte and its growth budget in the low byte (tree leaves keep 1).
+  `Grid.grass` runs in the soil pass: the grass loses sap to the air at `TRANSP` × the air's drying power (the coarse air cell over
+  the top of the stand), and drinks it back from the dirt under it (`SIP` moisture for `SAP_GAIN` sap) while that holds at least
+  `GRASS_DRINK`. Rain landing on grass runs down into the soil. Green grass on soil holding `SPREAD_M` sends runners up to 3 cells
+  sideways onto bare damp dirt that isn't shaded. Leaves or rock overhead (a cone widening upward, `Grid.shaded`) kill it slowly,
+  a growing-season drought kills straw, and frost kills tall growth back to the dormant base. Measured (`validate.js grass`):
+  four cells on moisture-90 dirt cover 98 columns in 1.5 min; on moisture-30 dirt they dry out and don't spread.
+- Competition (`validate.js compete`): grass under a tree's leaves thins to 0.23 of the open meadow's density in 2.5 min. Seeds
+  falling on grass take root a quarter of the time (`SEED_IN_GRASS`) and clear the grass where they do (7 of 30 against 30 of 30
+  on bare dirt). A tree that can't drink through `THIRST` growth steps of the growing season (about two days) wilts at half that,
+  dropping its leaves, then dies, so seedlings on dry ground and losers among crowded roots go. Trees no longer take grass for
+  their own leaves.
+- The dry season (`g.dryness`, from early summer to mid autumn, worst at summer's end) raises the soil moisture grass needs to keep
+  drinking by up to `DRY_NEED`, so it cures to straw on the hills and stays green where the ground is soaked. Straw (sap under
+  `CURED`) catches at `CURED_P` (5× green grass), and green grass catches more slowly the more sap it holds (`GREEN_K`). Measured
+  (`validate.js seasonfire`): the same meadow's fire ran 32 cells in 5 s in spring and 295 in late summer. The stats line shows
+  "(dry season)". Grass is rendered from green to straw by its sap.
+- World gen lays grass on 75% of damp open dirt, away from tree sites, before the trees grow. Over a generated year the meadow
+  covers ~310 columns in spring, cures from late summer, and the spreading forest shades out about a third of it by the next
+  spring; 5-8 trees die of thirst.
+- Save has a 9th part: plant life (grass sap). Older saves load with green grass. Firebreak's grass is set to sap 200 so the
+  scenario plays as before (game.js passes). Perf on the 960×640 world: tick 9.6 ms (9.5 before), render ~6 ms.

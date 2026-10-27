@@ -35,7 +35,7 @@ const scenarios = {
       const roots = t0 ? t0.segs.filter(s => s.root && s.alive).length : 0;
       console.log(`  ${label}: trunk ${h} cells, ${roots} root segments, ${g.trees.length} trees, first 2nd-gen at ${gen2 < 0 ? 'never' : (gen2 / MIN).toFixed(1) + ' min'}, ${seeds} seeds lying`);
       if (label === 'damp') check('damp sapling seeds a 2nd generation within 4 min', gen2 > 0 && gen2 <= 4 * MIN, gen2 > 0 ? (gen2 / MIN).toFixed(1) + ' min' : 'never');
-      else check('dry sapling does not grow', h <= 1 && g.trees.length === 1, `trunk ${h}`);
+      else check('dry sapling does not grow (it dies of thirst)', h <= 1 && gen2 < 0 && g.trees.length <= 1, `trunk ${h}, ${g.droughtKills} died of thirst`);
     }
   },
   sand() {
@@ -43,7 +43,7 @@ const scenarios = {
     Sim.reseed(3); const W = 120, H = 100, g = new Sim.Grid(W, H);
     for (let y = H - 30; y < H; y++) for (let x = 0; x < W; x++) g.set(g.idx(x, y), y >= H - 3 ? STONE : Sim.ids.SAND);
     g.set(g.idx(60, H - 31), TIP); run(g, 2 * MIN);
-    check('sapling on bare sand does not grow', g.trees.length === 1 && g.trees[0].segs[0].len <= 1, `trunk ${g.trees[0] && g.trees[0].segs[0].len.toFixed(1)}`);
+    check('sapling on bare sand does not grow', g.trees.every(t => t.segs[0].len <= 1) && g.trees.length + g.droughtKills === 1, `trunk ${g.trees[0] ? g.trees[0].segs[0].len.toFixed(1) : '-'}, died of thirst ${g.droughtKills}`);
   },
   soak() {
     // water poured on dry dirt soaks in and seeps down; the surface then dries in the sun while the depths stay damp
@@ -100,6 +100,7 @@ const scenarios = {
     const Y = Sim.YEAR, rows = [], leafAt = {}, clim = {};
     run(g, Y, Y / 32, f => {
       const c = census(g, Sim.EL);
+      c.Plant = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === PLANT && g.owner[i]) c.Plant++;   // leaves only, not grass
       leafAt[g.seasonName] = Math.max(leafAt[g.seasonName] || 0, c.Plant || 0);
       clim[g.seasonName] = (clim[g.seasonName] || []).concat(g.climate);
       rows.push(`${g.seasonName.padEnd(6)} ${(g.yearPhase).toFixed(2)} climate ${g.climate.toFixed(1).padStart(5)} snow ${String(c.Snow || 0).padStart(5)} leaves ${String(c.Plant || 0).padStart(5)} litter ${String(c.Litter || 0).padStart(4)} trees ${g.trees.length} cloud ${c.Cloud || 0} water ${c.Water || 0}`);
@@ -766,6 +767,74 @@ const scenarios = {
     check('and lays the sand down again downstream', fill >= 3);
     check('sand is conserved', Math.abs(sand - sand0) <= 2);
     check('a still pond does not scour its floor', lifted <= 3);
+  },
+  grass() {
+    // grass spreads over damp dirt by runners and stays green; on dry dirt it doesn't spread, dries to straw and dies back
+    const res = {};
+    for (const [label, m] of [['damp', 90], ['dry', 30]]) {
+      const W = 200, H = 80, g = plot(W, H, 30, m), sy = H - 31;
+      for (let x = 98; x < 102; x++) { const i = g.idx(x, sy); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      run(g, 1.5 * MIN);   // spring into early summer
+      let cols = 0, cells = 0, sap = 0;
+      for (let x = 0; x < W; x++) { let any = false; for (let y = sy - 3; y <= sy; y++) { const i = g.idx(x, y); if (g.type[i] === PLANT) { any = true; cells++; sap += g.life[i] >> 8; } } if (any) cols++; }
+      res[label] = { cols, sap: cells ? sap / cells : 0 };
+      console.log(`  ${label} (moisture ${m}): grass covers ${cols} columns after 1.5 min, mean sap ${res[label].sap.toFixed(0)}`);
+    }
+    check('grass spreads over damp dirt', res.damp.cols >= 30 && res.damp.sap >= Sim.CURED, `${res.damp.cols} columns`);
+    check('grass on dry dirt does not spread and dries out', res.dry.cols <= 4 && res.dry.sap < Sim.CURED, `${res.dry.cols} columns, sap ${res.dry.sap.toFixed(0)}`);
+  },
+  compete() {
+    // a tree in a meadow: its shade and its roots thin the grass under it while the open meadow holds; seeds falling on grass
+    // take root less often than on bare dirt; a seedling that can't drink dies of thirst
+    // (judged over the columns the tree's leaves end up over, against open columns well away from it, over three seeds)
+    let under = 0, nu = 0, open = 0, no = 0;
+    for (const seed of [7, 8, 9]) {
+      const W = 200, H = 120, g = plot(W, H, 30, 90, seed), sy = H - 31;
+      for (let x = 0; x < W; x++) { const i = g.idx(x, sy); g.set(i, PLANT); g.life[i] = (220 << 8) | 1; }
+      g.set(g.idx(100, sy), TIP);
+      run(g, 2.5 * MIN);
+      for (let x = 0; x < W; x++) {
+        let leafy = false, n = 0;
+        for (let y = 0; y < sy - 3; y++) { const i = g.idx(x, y); if (g.type[i] === PLANT && g.owner[i]) leafy = true; }
+        for (let y = sy - 3; y <= sy; y++) { const i = g.idx(x, y); if (g.type[i] === PLANT && !g.owner[i]) n++; }
+        if (leafy) { under += n; nu++; } else if (Math.abs(x - 100) > 40 && x > 5 && x < W - 5) { open += n; no++; }
+      }
+    }
+    const du = under / Math.max(1, nu), dop = open / Math.max(1, no);
+    console.log(`  grass per column: ${du.toFixed(2)} under the trees' leaves (${nu} columns), ${dop.toFixed(2)} in the open`);
+    check('grass thins under a tree but holds in the open', du < 0.6 * dop && dop >= 1, `${(du / dop).toFixed(2)} of the open`);
+    // seeds: a row on bare damp dirt and a row on grass over the same dirt
+    const sprouted = onGrass => {
+      const s = plot(240, 100, 30, 150, 11), y = 100 - 31;
+      if (onGrass) for (let x = 0; x < 240; x++) { const i = s.idx(x, y); s.set(i, PLANT); s.life[i] = (220 << 8) | 1; }
+      for (let x = 6; x < 240; x += 8) { const i = s.idx(x, onGrass ? y - 1 : y); s.set(i, SEED); s.life[i] = 1; }
+      run(s, 40 * 60);
+      return s.trees.length;
+    };
+    const bare = sprouted(false), grassy = sprouted(true);
+    console.log(`  of 30 seeds, ${bare} took root on bare dirt and ${grassy} on grass`);
+    check('grass holds back seedlings', grassy < 0.6 * bare && grassy >= 1, `${grassy} vs ${bare}`);
+  },
+  seasonfire() {
+    // the same meadow burns slowly in spring, when the grass is green, and races in late summer, when it has cured to straw
+    const field = (pre, seed = 3) => {
+      Sim.reseed(seed); const W = 320, H = 100, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let y = H - 20; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 10) g.set(i, STONE, g.ambAt(y)); else { g.set(i, DIRT, g.ambAt(y)); g.life[i] = (40 << 8) | 90; } }
+      for (let x = 10; x < W - 10; x++) for (let y = H - 22; y < H - 20; y++) { const i = g.idx(x, y); g.set(i, PLANT, g.ambAt(y)); g.life[i] = (220 << 8) | 1; }
+      g.initAir(); g.wakeAll(); run(g, pre); return g;
+    };
+    const burn = pre => {
+      const g = field(pre), H = g.H; let sap = 0, n = 0;
+      for (let x = 10; x < g.W - 10; x++) { const i = g.idx(x, H - 21); if (g.type[i] === PLANT) { sap += g.life[i] >> 8; n++; } }
+      for (let y = H - 25; y < H - 22; y++) for (let x = 10; x < 14; x++) g.set(g.idx(x, y), FIRE);
+      let reach = 0;
+      run(g, 300, 10, () => { for (let x = g.W - 11; x > reach; x--) { let gone = 0; for (let y = H - 22; y < H - 20; y++) if (g.type[g.idx(x, y)] !== PLANT) gone++; if (gone === 2 && x - reach < 40) { reach = x; break; } } });
+      return { reach: reach - 14, sap: sap / Math.max(1, n), season: g.seasonName, dry: g.dryness };
+    };
+    const spring = burn(MIN / 4), late = burn(2.6 * MIN);
+    console.log(`  spring (sap ${spring.sap.toFixed(0)}): fire ran ${spring.reach} cells in 5 s; ${late.season} at dryness ${late.dry.toFixed(2)} (sap ${late.sap.toFixed(0)}): ${late.reach} cells`);
+    check('late-summer grass has cured to straw', late.sap < Sim.CURED);
+    check('a dry-season grass fire runs 2.5x+ faster than a spring one', late.reach >= 2.5 * spring.reach && spring.reach > 0, `${late.reach} vs ${spring.reach}`);
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
