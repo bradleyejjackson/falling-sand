@@ -251,6 +251,29 @@ const scenarios = {
     console.log(`  ${poured} water cells poured on lava; most water gained ${gain.toFixed(0)} cells`);
     check('boiling, raining and condensing do not make water', gain < poured * 0.05, `${gain.toFixed(0)} of ${poured}`);
   },
+  gas() {
+    // steam behaves like a gas: a puff keeps thinning out and spreading as it rises (instead of rising as a clump and stalling under
+    // the cloud it makes), and under a ceiling it spreads along it. Before: 2 s on, 9.6 wide (sd) with 1.8 steam neighbours each;
+    // highest steam 100 rows up; 77 cells wide under the ceiling after 4 s
+    const { STEAM } = Sim.ids;
+    const box = ceil => { Sim.reseed(5); const g = new Sim.Grid(320, 240); g.windHold = 0;
+      for (let x = 0; x < 320; x++) for (let y = 236; y < 240; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+      if (ceil) for (let x = 40; x < 280; x++) for (let y = ceil; y < ceil + 3; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+      g.initAir(); g.wakeAll(); return g; };
+    const steam = g => { const c = []; for (let i = 0; i < g.type.length; i++) if (g.type[i] === STEAM) c.push(i); return c; };
+    { const g = box(0); for (let y = 200; y < 216; y++) for (let x = 152; x < 168; x++) g.set(g.idx(x, y), STEAM);
+      let top = 240, sd = 0, crowd = 0;
+      run(g, 240, 1, f => { const c = steam(g); for (const i of c) top = Math.min(top, (i / 320) | 0);
+        if (f === 120) { let m = 0, q = 0, nb = 0; for (const i of c) { const x = i % 320; m += x; q += x * x; for (const d of [-321, -320, -319, -1, 1, 319, 320, 321]) if (g.type[i + d] === STEAM) nb++; }
+          m /= c.length; sd = Math.sqrt(q / c.length - m * m); crowd = nb / c.length; } });
+      console.log(`  puff of 256 cells: 2 s on, spread (sd) ${sd.toFixed(1)} cells with ${crowd.toFixed(2)} steam neighbours each; highest steam ${200 - top} rows up`);
+      check('a steam puff spreads out as it rises', sd > 12 && crowd < 1.2, `sd ${sd.toFixed(1)}, ${crowd.toFixed(2)} neighbours`);
+      check('and keeps rising through the cloud it makes', 200 - top > 125, `${200 - top} rows`); }
+    { const g = box(120); for (let y = 180; y < 196; y++) for (let x = 152; x < 168; x++) g.set(g.idx(x, y), STEAM);
+      run(g, 240); let x0 = 1e9, x1 = -1; for (const i of steam(g)) { x0 = Math.min(x0, i % 320); x1 = Math.max(x1, i % 320); }
+      console.log(`  under a ceiling the puff spreads ${x1 - x0 + 1} cells wide in 4 s`);
+      check('steam spreads along a ceiling', x1 - x0 + 1 > 100); }
+  },
   erosion() {
     // a stream running down a sand slope cuts into it and carries the sand down into the basin, where it settles
     Sim.reseed(3); const W = 240, H = 160, g = new Sim.Grid(W, H); g.windHold = 0;
