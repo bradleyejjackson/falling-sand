@@ -48,7 +48,7 @@ function suite(threads) {
   check('export/import round-trips', p.els.msg.textContent === 'Imported' && g.trees.length === trees, p.els.msg.textContent);
   p.els.newworld.fire('click'); p.run(60);
   check('new world generates with dirt and trees', (census(g, Sim.EL).Dirt || 0) > 1000 && g.trees.length > 5, `${census(g, Sim.EL).Dirt} dirt, ${g.trees.length} trees`);
-  check('the world is eight windows wide and starts in the middle', g.worldW === 7680 && g.ox > 0 && /7680/.test(p.els.dims.textContent), `${p.els.dims.textContent}, window at ${g.ox}`);
+  check('the world is ten windows wide and starts in the middle', g.worldW === Sim.WORLD.WIDE && g.worldW === 10 * g.W && g.ox > 0 && new RegExp(Sim.WORLD.WIDE).test(p.els.dims.textContent), `${p.els.dims.textContent}, window at ${g.ox}`);
 
   // walk right with the keyboard: the window streams along; walk back and the land is as we left it
   const ox0 = g.ox, here = Array.from(g.type);
@@ -85,7 +85,7 @@ function suite(threads) {
   p.run(30); p.els.save.fire('click'); p.run(1); const ss = p.store['sandfall.world'];
   check('saving in a scenario saves the scenario', ss && ss[0] === '{' && JSON.parse(ss).def.id === 'lava', p.els.msg.textContent);
   p.els.leave.fire('click'); p.run(2);
-  check('Sandbox leaves the scenario, with its unlocks', !p.sf.game() && !p.els.mission.classList.contains('on') && !btn('Oil').disabled && btn('Lava').disabled && g.worldW === 7680);
+  check('Sandbox leaves the scenario, with its unlocks', !p.sf.game() && !p.els.mission.classList.contains('on') && !btn('Oil').disabled && btn('Lava').disabled && g.worldW === Sim.WORLD.WIDE);
   p.els.load.fire('click'); p.run(2);
   check('loading the save resumes the scenario', p.sf.game() && p.sf.game().sc.id === 'lava' && p.sf.game().t >= 30, p.els.msg.textContent);
   p.els.leave.fire('click'); p.run(2);
