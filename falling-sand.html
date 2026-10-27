@@ -459,7 +459,8 @@ const Sim = (() => {
       // erosion: clean water landing hard, or running down a slope, picks up the loose grains it hits
       if (t===WATER && !muddy && impact>1.5 && cy+1<this.H){ const b=ci+W; if (ERODE[T[b]] && R()<0.03*impact*ERODE[T[b]]) this.erode(b); }
       // a wetting liquid sitting on its own kind won't run off the edge of its puddle as a lone drop (surface tension)
-      const held = el.tension && cy+1<this.H && TENS[T[ci+W]];
+      // only a thin puddle edge or a drop is held: water standing deeper than that is a body, and slumps flat like one
+      const thin = el.tension && this.thin(ci,cy), held = thin && cy+1<this.H && TENS[T[ci+W]];
       if (cy+1<this.H && (flow>=1 || R()<Math.max(flow,0.3))){
         for (let q=0;q<2;q++){
           const dx=q?-dir:dir, nx=cx+dx; if(nx<this.wx0||nx>=this.wx1) continue;
@@ -486,7 +487,7 @@ const Sim = (() => {
             if (tj===E || KIND[tj]===3) last=j; else break;
           }
           if (last>=0 && R()<0.95){
-            if (el.tension && R()<el.tension && this.cohesion(last,ci)<2){   // surface tension: a drop won't pull away from its body, and a puddle won't thin to a film
+            if (thin && R()<el.tension && this.cohesion(last,ci)<2){   // surface tension: a drop won't pull away from its body, and a puddle won't thin to a film
               const near=ci+dd; if (near!==last && cy>0 && T[ci-W]===t && this.cohesion(near,ci)>=2){ this.swap(ci,near); return; }   // but water pressed on from above still advances a step at a time
               continue;
             }
@@ -505,6 +506,10 @@ const Sim = (() => {
     head(i,y,t,need){   // is there at least `need` of the same liquid piled directly on top of cell i?
       for (let k=1;k<=need;k++){ if (y-k<0 || this.type[i-k*this.W]!==t) return false; }
       return true;
+    }
+    thin(i,y){   // is the wetting liquid under cell i (counting i) at most 3 deep? deeper water ignores surface tension
+      const W=this.W, T=this.type;
+      return !(y+3<this.H && TENS[T[i+W]] && TENS[T[i+2*W]] && TENS[T[i+3*W]]);
     }
     cohesion(j,from){   // how many wetting liquid cells would surround a drop at j (not counting the cell it came from)
       const W=this.W, x=j%W, y=(j/W)|0, T=this.type; let n=0;
