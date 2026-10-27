@@ -1188,13 +1188,7 @@ const Sim = (() => {
               if (T[j]!==E) continue; q=j;
               if ((cx>0 && T[j-1]===CLOUD) || (cx<W-1 && T[j+1]===CLOUD) || (cy>0 && T[j-W]===CLOUD) || (cy<H-1 && T[j+W]===CLOUD)) break;
             }
-            if (q<0) continue;
-            if (h<CQ){   // thin cold air holds less than a cloud cell's worth: it draws the rest from the air below, or waits
-              const b=c+AW; if (ay+1>=AH || hum[b]<CQ-h) break;
-              hum[b]-=CQ-h; h=CQ;
-            }
-            this.set(q,CLOUD,temp[q]);
-            h-=CQ;
+            if (q>=0){ this.set(q,CLOUD,temp[q]); h=Math.max(0,h-CQ); }   // (cold air high up holds less than a cell's worth: its clouds are thin)
           }
           hum[c]=h;
         }

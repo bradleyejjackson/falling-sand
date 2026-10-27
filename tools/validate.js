@@ -220,24 +220,36 @@ const scenarios = {
     check('snow settles once winter comes (stage 2 had none on this world)', snow > 50);
   },
   storm() {
-    // a lake poured onto lava boils into a storm cloud, which rains itself out within a few minutes instead of filling the sky.
-    // Water is conserved through the sky: hot cloud used to turn back into a whole cell of steam, ten times the water it held
-    Sim.reseed(6); const W = 480, H = 240, g = new Sim.Grid(W, H);   // (with the prevailing wind: in still air the rain falls straight back into the lava)
+    // a lake poured into a lava pit on the generated world boils into a storm cloud, which rains itself out in a minute or two
+    // instead of filling the screen (before the fix: 6.7 cloud cells per water cell at the peak, still 1.2 three minutes on)
     const { STEAM } = Sim.ids;
+    Sim.reseed(6); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), surf = Sim.generate(g, 12345, 7680, 3200), W = g.W;
+    const cx = 480; let top = g.H; for (let x = cx - 30; x < cx + 30; x++) top = Math.min(top, surf[x]);
+    for (let y = top - 10; y < top + 40; y++) for (let x = cx - 30; x < cx + 30; x++) g.set(g.idx(x, y), x < cx - 27 || x >= cx + 27 || y >= top + 37 ? STONE : y >= top + 25 ? LAVA : E);
+    g.wakeAll();
+    const clouds = () => { let c = 0; for (const t of g.type) if (t === CLOUD) c++; return c; };
+    run(g, 300); const c0 = clouds(); let poured = 0, peak = 0;
+    const watch = () => { peak = Math.max(peak, clouds()); };
+    run(g, MIN, 1, f => { for (let x = cx - 20; x < cx + 20; x += 2) { const i = g.idx(x, top - 5); if (g.type[i] === E && poured < 6000) { g.set(i, WATER); poured++; } } if (f % 300 === 0) watch(); });
+    let after1 = -1;
+    run(g, 3 * MIN, 300, f => { watch(); if (f === MIN) after1 = clouds(); });
+    const left = clouds();
+    console.log(`  ${poured} water cells poured on lava; cloud ${c0} before, peaks at ${peak} cells, ${after1} a minute after pouring stops, ${left} after three`);
+    check('the storm cloud stays small: under 4.5 cloud cells per water cell boiled', peak < 4.5 * poured, `${(peak / poured).toFixed(1)}`);
+    check('and rains itself out: three minutes on, under 0.6 extra cloud cells per water cell', left - c0 < 0.6 * poured, `${((left - c0) / poured).toFixed(2)}`);
+  },
+  steam() {
+    // water is conserved through the sky: lava boils a lake into steam, cloud and rain in a stone basin (no soil or trees to drink it).
+    // Hot cloud used to turn back into a whole cell of steam (ten times the water it held), and rain made water as it fell
+    Sim.reseed(6); const W = 480, H = 240, g = new Sim.Grid(W, H), { STEAM } = Sim.ids;
     for (let x = 0; x < W; x++) for (let y = H - 30; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
     for (let x = 210; x < 270; x++) for (let y = H - 30; y < H - 6; y++) g.set(g.idx(x, y), y < H - 18 ? E : LAVA);
     g.initAir(); g.wakeAll();
-    const tally = () => { let w = 0, c = 0; for (const t of g.type) { if (t === WATER || t === STEAM) w++; else if (t === CLOUD) c++; } let h = 0; for (const q of g.hum) h += q; return [w + h + c * 0.1, c]; };
-    const [eq0] = tally(); let poured = 0, peak = 0, gain = 0;
-    const watch = () => { const [eq, c] = tally(); peak = Math.max(peak, c); gain = Math.max(gain, eq - eq0 - poured); };
-    run(g, MIN, 1, f => { for (let x = 220; x < 260; x += 2) { const i = g.idx(x, H - 60); if (g.type[i] === E && poured < 3000) { g.set(i, WATER); poured++; } } if (f % 300 === 0) watch(); });
-    let after2 = -1;
-    run(g, 4 * MIN, 300, f => { watch(); if (f === 2 * MIN) after2 = tally()[1]; });
-    const left = tally()[1];
-    console.log(`  ${poured} water cells poured on lava; cloud peaks at ${peak} cells, ${after2} two minutes after pouring stops, ${left} after four; most water gained ${gain.toFixed(0)} cells`);
-    check('the storm cloud stays small: at most 3 cloud cells per water cell boiled (it was 8)', peak > 1000 && peak < 3 * poured, `${(peak / poured).toFixed(1)}`);
-    check('and rains itself out: under 60% of its peak two and four minutes after pouring stops', after2 < peak * 0.6 && left < peak * 0.6, `${(after2 / peak * 100) | 0}%, ${(left / peak * 100) | 0}%`);
-    check('boiling and condensing do not make water', gain < poured * 0.1, `${gain.toFixed(0)} of ${poured}`);
+    const tally = () => { let w = 0, c = 0; for (const t of g.type) { if (t === WATER || t === STEAM) w++; else if (t === CLOUD) c++; } let h = 0; for (const q of g.hum) h += q; return w + h + c * 0.1; };
+    const eq0 = tally(); let poured = 0, gain = 0;
+    run(g, 3 * MIN, 1, f => { if (f <= MIN) for (let x = 220; x < 260; x += 2) { const i = g.idx(x, H - 60); if (g.type[i] === E && poured < 3000) { g.set(i, WATER); poured++; } } if (f % 300 === 0) gain = Math.max(gain, tally() - eq0 - poured); });
+    console.log(`  ${poured} water cells poured on lava; most water gained ${gain.toFixed(0)} cells`);
+    check('boiling, raining and condensing do not make water', gain < poured * 0.05, `${gain.toFixed(0)} of ${poured}`);
   },
   erosion() {
     // a stream running down a sand slope cuts into it and carries the sand down into the basin, where it settles
