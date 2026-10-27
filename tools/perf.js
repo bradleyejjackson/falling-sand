@@ -1,10 +1,10 @@
-// Generate the 960x480 world and time step() and the page's render path.
+// Generate the page's world (Sim.WORLD, 960x640) and time step() and the page's render path.
 // usage: node tools/perf.js [seed] [frames]
 const { loadSim, loadPage, census } = require('./load');
 const seed = +(process.argv[2] || 12345), frames = +(process.argv[3] || 600);
 
 const Sim = loadSim();
-const g = new Sim.Grid(960, 480);
+const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H);
 let t0 = performance.now();
 Sim.generate(g, seed);
 const gen = performance.now() - t0;

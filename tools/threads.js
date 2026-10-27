@@ -9,7 +9,7 @@ const SimA = loadSim(process.env.SIMFILE), SimB = loadSim(process.env.SIMFILE);
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
 
-function world(Sim, shared) { Sim.reseed(1); const g = new Sim.Grid(960, 480, { shared }); Sim.generate(g, seed); return g; }
+function world(Sim, shared) { Sim.reseed(1); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H, { shared }); Sim.generate(g, seed); return g; }
 function spawn(g, n) {
   const src = simSource(process.env.SIMFILE);
   const code = `const { workerData } = require('worker_threads'); const Sim = new Function(workerData.src + '\\nreturn Sim;')();
