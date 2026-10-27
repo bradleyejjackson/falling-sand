@@ -103,7 +103,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -225,6 +225,7 @@ const Sim = (() => {
   // the air: vapour on a coarse grid of AC×AC cells, each row visited every AIRSLOW ticks; wind on the chunk grid, solved every WINDSLOW ticks.
   // Vapour is counted in water cells. Water leaves a surface a sixteenth at a time (EVQ: each evaporation adds that much vapour and
   // the cell itself goes with that chance), and a cloud cell is a tenth of a water cell (CQ), so water is conserved through the sky on average.
+  const REF_D = 50, REF_T = 11, LOW_LAPSE = 0.12, LOW_AIR = 100, LAPSE = 0.06, UPPER = 150;   // the lapse rate: per row up to LOW_AIR rows over skyY (past the hilltops), then per row for UPPER rows more, then none
   const AC = 4, AIRSLOW = 4, WINDSLOW = 4, S20 = 0.4, BG_RH = 0.55, EVQ = 1/16, CQ = 0.1, THERMAL = 80;   // how high a thermal can climb
   const SAT = T => S20*Math.exp(0.065*(Math.min(T,150)-20));    // vapour a fully open coarse cell holds at T (doubles every ~11°)
 
@@ -256,7 +257,7 @@ const Sim = (() => {
   ];
   // ctl slots: frame counter the workers wait on, finished frame, threads, per-phase next-tile and arrival counters, deferred count
   const C_GEN=0, C_DONE=1, C_THREADS=2, C_NEXT=3, C_ARRIVE=C_NEXT+PHASES, C_DEFER=C_ARRIVE+PHASES, C_FRAME=C_DEFER+1, C_SEED=C_FRAME+1, C_START=C_SEED+1, C_COUNT=C_START+PHASES, C_READY=C_COUNT+PHASES, C_JX=C_READY+1, C_JY=C_JX+1, C_SIZE=C_JY+1;
-  const G_PRECIPT=0;   // gf slots: per-frame floats the cell pass reads
+  // gf: per-frame floats the cell pass may read (none at the moment: precipitation now takes the air's temperature from ambRow)
   function layout(W,H){
     const CW=Math.ceil(W/CH), CHh=Math.ceil(H/CH), AW=Math.ceil(W/AC), AH=Math.ceil(H/AC), TW=Math.ceil(W/TILE)+1, TH=Math.ceil(H/TILE_H)+1;   // (one spare: the tiling shifts each tick)
     const len={cell:W*H, air:AW*AH, wind:CW*CHh, vface:CW*(CHh+1), chunk:CW*CHh, row:H, col:W, aircol:AW, types:64, ctl:C_SIZE, gf:4, jobs:TW*TH, defer:DEFER_MAX};
@@ -291,9 +292,11 @@ const Sim = (() => {
       this.clock=START; this.updateClimate();
       this.resetTemp(); this.initAir();
     }
-    // air gets colder with altitude (lapse rate) and a little warmer deep underground
-    // (it stops cooling 140 rows up, so the top of a tall world isn't a cold lid that every bit of vapour condenses against)
-    ambAt(y){ return (y<this.skyY ? 20-Math.min(140,this.skyY-y)*0.18 : Math.min(32, 20+(y-this.skyY)*0.05)) + this.climate; }
+    // air gets colder with altitude (lapse rate) and a little warmer deep underground. It cools steadily up through the
+    // air the hills stand in, then more gently above the hilltops, and stops cooling high in the extra sky (so the top of the
+    // world isn't a cold lid that every bit of vapour condenses against). The freezing level sits high in summer, comes
+    // down through the clouds in autumn and reaches the hills in winter. Typical ground (REF_D rows over skyY) is REF_T.
+    ambAt(y){ const d=this.skyY-y; return (d>0 ? REF_T-(Math.min(LOW_AIR,d)-REF_D)*LOW_LAPSE-Math.min(UPPER,Math.max(0,d-LOW_AIR))*LAPSE : Math.min(32, REF_T+REF_D*LOW_LAPSE-d*0.05)) + this.climate; }
     ac(x,y){ return (y>>2)*this.AW+(x>>2); }                          // the coarse air cell holding (x,y)
     wc(x,y){ return (y>>4)*this.CW+(x>>4); }                          // the wind cell holding (x,y)
     rh(c){ return this.cap[c]>0 ? this.hum[c]/this.cap[c] : 1; }        // relative humidity
@@ -445,8 +448,9 @@ const Sim = (() => {
         k=this.travel(ci,cx,cy,sx,0,n,d); ci=this.tci; cx=this.tcx; cy=this.tcy;
         VX[ci] = k<n ? 0 : VX[ci]*(liquid?0.9:0.7);
       }
-      // gravity
-      VY[ci]=Math.min(VMAX, VY[ci]+G);
+      // gravity (snowflakes flutter down at a cell every tick or two instead of dropping like stones, so there is time
+      // for warm air under a cloud to melt them into rain)
+      VY[ci]=Math.min(t===SNOW ? 1 : VMAX, VY[ci]+G);
       const vy=VY[ci], n=(Math.abs(vy)|0)+(R()<Math.abs(vy)%1?1:0), sy=vy<0?-1:1;
       k=this.travel(ci,cx,cy,0,sy,n,d); ci=this.tci; cx=this.tcx; cy=this.tcy;
       if (k===n && n>0) return;                                    // free fall
@@ -924,6 +928,9 @@ const Sim = (() => {
       }
     }
     openSky(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return true; const t=this.type[this.idx(x,y-k)]; if (t!==E && !isGas(t)) return false; } return true; }
+    // precipitation leaves a cloud as snow where the cloud is below freezing and as rain where it isn't, at the air's
+    // temperature there. Snow melts if the air it falls through is warm enough, and rain freezes if it is cold enough
+    fall(j,y){ const a=this.ambRow[y]; this.set(j, a<0 ? SNOW : WATER, a); }
     stepCloud(x,y,i){
       // a cloud cell is one water cell's worth of condensed vapour. It rides the wind, clumps, evaporates back into
       // air that isn't saturated, and rains from the underside when it is thick
@@ -937,7 +944,7 @@ const Sim = (() => {
       // in oversaturated air, cloud lying on the ground or water settles on it as dew: one drop per ten cells (otherwise a low steam cloud never leaves)
       if (wet>0.2 && y+1<this.H && T[i+W]!==E && !isGas(T[i+W]) && R()<0.004){ this.set(i,E); if (R()<CQ) this.set(i,WATER,this.temp[i]); return; }
       // a lone wisp in saturated air slowly drizzles out (a drop or a flake now and then)
-      if (n<=1 && R()<0.002){ this.set(i,E); if (R()<CQ && y+1<this.H && T[i+W]===E){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=1; Atomics.add(this.precip,x,1); } return; }
+      if (n<=1 && R()<0.002){ this.set(i,E); if (R()<CQ && y+1<this.H && T[i+W]===E){ const j=i+W; this.fall(j,y); this.vy[j]=1; Atomics.add(this.precip,x,1); } return; }
       // rain falls from the underside of a thick cloud; deeper clouds rain harder, and so do clouds in oversaturated air
       // (a storm built by a boiling lake rains itself out in a minute or so)
       if (below===0 && n>=3 && above>=1 && y+1<this.H && T[i+W]===E && R()<0.004*(1+Math.min(6,above))*(1+4*Math.min(wet,2))){   // (thin fog doesn't rain)
@@ -948,7 +955,7 @@ const Sim = (() => {
           if (x+dx<0 || x+dx>=W) continue;
           for (let k=dx?0:1;k<=12 && got<1/CQ && y-k>=0;k++){ const j=i+dx-k*W, t=T[j]; if (t===CLOUD){ this.set(j,E); got++; } else if (t!==E) break; }
         }
-        if (got*CQ>0.999){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=wu*8; Atomics.add(this.precip,x,1); }
+        if (got*CQ>0.999){ const j=i+W; this.fall(j,y); this.vy[j]=2; this.vx[j]=wu*8; Atomics.add(this.precip,x,1); }
         else this.hum[c]+=got*CQ;
         return;
       }
@@ -999,7 +1006,6 @@ const Sim = (() => {
       this.growth=Math.max(0, Math.min(1, (season+7)/7));                   // trees grow in the warm part of the year
       this.foliage=Math.max(0, Math.min(1, (season+6)/5));
       this.seeding=p>0.3 && p<0.72;
-      this.precipT=6+season;                                                 // rain in the warm months, snow in the cold ones
       this.yearPhase=p; this.dayPhase=d; this.seasonName=SEASONS[(p*4)|0];
       for (let y=0;y<this.H;y++) this.ambRow[y]=this.ambAt(y);
     }
@@ -1264,7 +1270,6 @@ const Sim = (() => {
         ctl[C_COUNT+p]=n-ctl[C_START+p]; ctl[C_NEXT+p]=0; ctl[C_ARRIVE+p]=0;
       }
       ctl[C_DEFER]=0; ctl[C_FRAME]=this.frame; ctl[C_SEED]=(R()*4294967296)|0;   // each tile's random stream comes from this, so the order tiles run in doesn't matter
-      this.gf[G_PRECIPT]=this.precipT;
       this.awakeTiles=n;
     }
     runTiles(order){   // all four phases on this thread (order: optionally rearranges each phase's tiles, which must not matter)
@@ -1301,7 +1306,7 @@ const Sim = (() => {
     stepTile(tile){
       const {W,H,CW,TW,type,done,dirty,ctl}=this, temp=this.temp;
       const tx=tile%TW, ty=(tile/TW)|0, frame=ctl[C_FRAME];
-      reseed(mix(ctl[C_SEED],tile)); this.precipT=this.gf[G_PRECIPT];
+      reseed(mix(ctl[C_SEED],tile));
       const [X0,X1,Y0,Y1]=this.tileRect(tx,ty);
       this.wx0=Math.max(0,X0-REACH); this.wx1=Math.min(W,X1+REACH); this.wy0=Math.max(0,Y0-REACH); this.wy1=Math.min(H,Y1+REACH);
       const ltr=(frame&1)===0, cx0=X0/CH, cx1=Math.ceil(X1/CH);
