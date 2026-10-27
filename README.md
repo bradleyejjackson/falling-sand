@@ -11,11 +11,11 @@ Headless checks run in Node (no dependencies):
 ```
 node tools/validate.js        # all scenarios, or name some: sapling sand soak topple rot seasons snow
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
-                              #   tiles stream (stage 4)
+                              #   tiles stream (stage 4) sky
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
-node tools/perf.js [seed]     # generates the 960x480 world and times step() and render
+node tools/perf.js [seed]     # generates the page's 960x640 world (Sim.WORLD) and times step() and render
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
 ```
 
@@ -57,3 +57,15 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
 - Five scenarios: Irrigation, Lava crossing, Demolition (an ice dam: stone barely chips under gunpowder), Firebreak, Green the valley.
 - Physics change: water pressed on from above now steps sideways into a cell where it stays joined to its body, so a reservoir
   drains through an opened gate at a sensible rate (surface tension had held it to ~20 cells/s). Lone drops still bead; a 100-cell puddle spreads a little wider (56 cells, was 47).
+
+## Sky
+
+- The page's grid is `Sim.WORLD`, 960×640. The land is laid out in the bottom 480 rows of any grid (`LAND_H`); the `g.top` rows
+  above it are extra sky (160 here), so a 480-row grid generates the same land it always did, and the 640-row world is that land
+  shifted down under more sky. Terrain noise, the climate's lapse rate (`skyY`) and the scenario box (`BOX`, at the bottom) all
+  sit relative to the land.
+- Weather was not retuned: thermals, cloud bases and rain are as before, and the extra sky gets higher cloud layers on cool nights
+  that clear by day (`validate.js clouds` measures both).
+- The view is 320×240 (4:3); in a scenario it shows the box with 40 rows of sky above it.
+- Saves from the 480-row world load into the taller one with the sky added on top (cells, trees, vapour and stored regions shifted
+  down; `validate.js sky`).

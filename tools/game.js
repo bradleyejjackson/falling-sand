@@ -13,7 +13,7 @@ const byId = id => SCENARIOS.find(s => s.id === id);
 function paintRect(game, x0, y0, x1, y1, t) { let n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) n += game.paint(game.g.idx(BOX.x + x, BOX.y + y), t) ? 1 : 0; return n; }
 // play a scenario: `moves` maps a tick to a function run before that tick's step; stops when it is decided
 function play(id, moves = {}, max) {
-  const g = new Sim.Grid(960, 480), game = Game.start(g, byId(id));
+  const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), game = Game.start(g, byId(id));
   const end = max || game.sc.time + 10;
   for (let f = 0; f < end && game.state === 'play'; f++) {
     if (moves[f]) moves[f](game);
@@ -33,7 +33,7 @@ const solutions = {
   },
   blast: {
     30: game => paintRect(game, 148, 136, 158, 150, GUNP),
-    120: game => paintRect(game, 158, 140, 175, 150, FIRE),
+    120: game => paintRect(game, 158, 145, 168, 150, FIRE),   // at the foot of the pile, which slumps differently each time
   },
   fire: {
     30: game => { paintRect(game, 150, 120, 200, 150, E); },   // clear a firebreak: grass and the trees in it
@@ -61,7 +61,7 @@ for (const sc of SCENARIOS) tests[sc.id] = () => {
   if (naive[sc.id]) { const n = play(sc.id, naive[sc.id]); console.log(`  naive: ${summary(n)}`); check(`${sc.name}: the naive move loses`, n.state === 'lost', n.why); }
 };
 tests.budget = () => {
-  const g = new Sim.Grid(960, 480), game = Game.start(g, byId('irrigate'));
+  const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), game = Game.start(g, byId('irrigate'));
   const n = paintRect(game, 0, 0, 320, 200, E);
   check('erasing stops at the budget', n === 120 && game.left('Erase') === 0, `${n} erased`);
   check('elements outside the budget cannot be placed', paintRect(game, 100, 10, 110, 20, WATER) === 0);
@@ -69,7 +69,7 @@ tests.budget = () => {
 };
 tests.score = () => {
   // fire on wood makes ember, charcoal, ash, smoke: the chain multiplier climbs, and painting the wood scores nothing itself
-  const g = new Sim.Grid(960, 480), sc = Object.assign({}, byId('irrigate'), { budget: { Wood: 2000, Fire: 50 }, goals: [], time: 3600 });
+  const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), sc = Object.assign({}, byId('irrigate'), { budget: { Wood: 2000, Fire: 50 }, goals: [], time: 3600 });
   const game = Game.start(g, sc); game.goals = [{ label: 'never', count: 'Glass', rect: [0, 0, 320, 200], min: 1, ids: [Sim.ids.GLASS], value: 0 }];
   paintRect(game, 100, 117, 160, 150, WOOD); g.step(); game.tick();
   check('painting is not scored as a reaction', game.points === 0, `${game.points}`);
@@ -87,11 +87,11 @@ tests.unlocks = () => {
   check('every rack element is unlocked by the last scenario', rack.every(n => all.has(n)), rack.filter(n => !all.has(n)).join(' '));
 };
 tests.saveload = () => {
-  const g = new Sim.Grid(960, 480), game = Game.start(g, byId('lava'));
+  const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), game = Game.start(g, byId('lava'));
   paintRect(game, 64, 145, 78, 150, STONE);
   for (let f = 0; f < 200; f++) { g.step(); game.tick(); }
   const text = game.save();
-  const g2 = new Sim.Grid(960, 480), back = Game.load(g2, text);
+  const g2 = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), back = Game.load(g2, text);
   check('a scenario save restores the time, budget and goals', back.t === game.t && back.left('Stone') === game.left('Stone') && back.sc.goals[0].min === 250 && back.fails.length === 1,
     `t ${back.t}, stone left ${back.left('Stone')}, ${(text.length / 1024) | 0} KB`);
   let same = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === g2.type[i]) same++;
@@ -99,7 +99,7 @@ tests.saveload = () => {
   check('scenario text is told apart from world text', Sim.isScenario(text) && !Sim.isScenario(g.save()));
   // a hand-made scenario: any world plus goals written as JSON
   const custom = JSON.parse(text); custom.def = { id: 'mine', name: 'Mine', brief: 'Fill it', time: 600, budget: { Water: 50 }, goals: [{ label: 'Water', count: 'Water', rect: [0, 0, 320, 200], min: 1 }], fails: [] };
-  const m = Game.load(new Sim.Grid(960, 480), JSON.stringify(custom));
+  const m = Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), JSON.stringify(custom));
   check('a hand-written scenario loads', m.sc.name === 'Mine' && m.left('Water') === 50 && m.goals[0].value > 0);
 };
 
