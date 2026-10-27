@@ -352,6 +352,50 @@ const scenarios = {
     console.log(`  mound ${x1 - x0 + 1} wide, ${h} high`);
     check('lava sets as a mound (height at least a third of its width)', h * 3 >= x1 - x0 + 1);
   },
+  support() {
+    // stone needs support, and a solid diagonally below counts: a pitched roof on two pillars and a lone diagonal brace stand,
+    // while the same diagonal line floating in the air falls, and a flat shelf still breaks past its span
+    Sim.reseed(4); const g = new Sim.Grid(120, 80); g.windHold = 0; const RUB = Sim.ids.RUBBLE;
+    const put = (x, y) => g.set(g.idx(x, y), STONE, g.ambAt(y));
+    for (let x = 0; x < 120; x++) for (let y = 76; y < 80; y++) put(x, y);
+    for (let y = 60; y < 76; y++) { put(20, y); put(40, y); put(110, y); }        // pillars
+    const roof = [], brace = [], loose = [], shelf = [];
+    for (let k = 1; k <= 10; k++) { roof.push([20 + k, 60 - k]); if (k < 10) roof.push([40 - k, 60 - k]); }   // an A-frame meeting at (30,50)
+    for (let k = 0; k < 16; k++) brace.push([60 + k, 75 - k]);                     // a lone brace leaning on nothing but the floor
+    for (let k = 0; k < 10; k++) loose.push([85 + k, 20 + k]);                    // the same line in mid-air
+    for (let x = 100; x < 110; x++) shelf.push([x, 60]);                          // a 10-cell shelf off the right pillar (stone spans 5)
+    for (const [x, y] of [...roof, ...brace, ...loose, ...shelf]) put(x, y);
+    g.initAir(); g.wakeAll(); run(g, 600);
+    const kept = cells => cells.filter(([x, y]) => g.type[g.idx(x, y)] === STONE).length;
+    let rubble = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === RUB) rubble++;
+    console.log(`  after 10 s: roof ${kept(roof)}/${roof.length}, brace ${kept(brace)}/${brace.length}, loose line ${kept(loose)}/${loose.length}, shelf ${kept(shelf)}/${shelf.length} (far half ${kept(shelf.slice(0, 5))}/5), ${rubble} rubble`);
+    check('a pitched roof of diagonal stone on two pillars stands', kept(roof) === roof.length);
+    check('a lone diagonal brace standing on the floor stands', kept(brace) === brace.length);
+    check('a diagonal line in mid-air falls', kept(loose) === 0);
+    check('a shelf still breaks past its span', kept(shelf.slice(0, 4)) === 0 && kept(shelf.slice(6)) === 4);
+    // knock out the left pillar: the left slope of the roof loses its footing and comes down (the apex rests on the right slope)
+    for (let y = 60; y < 76; y++) g.set(g.idx(20, y), E);
+    run(g, 600);
+    const left = roof.filter(([x]) => x < 30), right = roof.filter(([x]) => x > 30);
+    console.log(`  left pillar gone: left slope ${kept(left)}/${left.length}, right slope ${kept(right)}/${right.length}`);
+    check('take a pillar away and its side of the roof falls', kept(left) === 0 && kept(right) === right.length);
+  },
+  cookoff() {
+    // a new world makes nothing that burns within reach of lava: no gas or gunpowder goes off and no oil burns in its first minute,
+    // and the deep caves still hold plenty of each
+    const { GUNP, GAS } = Sim.ids;
+    for (const seed of [12345, 7]) {
+      Sim.reseed(1); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, seed, 7680, 3200);
+      const count = t => { let n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === t) n++; return n; };
+      const c0 = [GUNP, GAS, OIL, LAVA].map(count);
+      let booms = 0; const ex = g.explode.bind(g); g.explode = (x, y, r) => { booms++; ex(x, y, r); };
+      run(g, MIN);
+      const c1 = [GUNP, GAS, OIL].map(count);
+      console.log(`  seed ${seed}: gunpowder ${c0[0]} -> ${c1[0]}, gas ${c0[1]} -> ${c1[1]}, oil ${c0[2]} -> ${c1[2]}, lava ${c0[3]}; ${booms} explosions`);
+      check(`seed ${seed}: nothing explodes or burns in the first minute`, booms === 0 && c1[0] === c0[0] && c1[1] === c0[1] && c1[2] >= c0[2] - 10);
+      check(`seed ${seed}: the world still has lava, gunpowder, gas and oil`, c0.every(n => n > 1000));
+    }
+  },
   tension() {
     const box = (W, H) => { Sim.reseed(4); const g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y)); g.initAir(); g.wakeAll(); return g; };
     { // a block of water set on a flat floor holds together as a puddle

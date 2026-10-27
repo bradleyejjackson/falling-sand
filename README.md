@@ -12,6 +12,7 @@ Headless checks run in Node (no dependencies):
 node tools/validate.js        # all scenarios, or name some: sapling sand soak topple rot seasons snow
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
                               #   tiles stream (stage 4) sky precip storm steam level
+                              #   support cookoff
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -78,3 +79,18 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
 - The view is 320×240 (4:3); in a scenario it shows the box with 40 rows of sky above it.
 - Saves from the 480-row world load into the taller one with the sky added on top (cells, trees, vapour and stored regions shifted
   down; `validate.js sky`).
+
+## Rough edges fixed
+
+- Diagonal support (`Grid.supported`): stone, glass, ice and charcoal count a solid diagonally below as support, as they do one
+  straight below. A pitched roof of one-cell diagonal lines on two pillars and a lone diagonal brace now stand (before, both
+  crumbled to rubble in a second); a diagonal line in mid-air still falls, a flat shelf still breaks past its span, and taking
+  a pillar away still brings its side of the roof down (`validate.js support`).
+- Lava cook-off (`columns`, world generation): a new world used to set off 47-80 gas and gunpowder explosions in its first 20
+  seconds, and burn hundreds of cells of oil, because fuel was laid down beside lava in the same caves. Lava now lies in sealed
+  chambers: within `GAP` (4) cells of it oil and gas become open air, and from there out to `COOK` (12) cells any cave becomes
+  rock and gunpowder veins become stone, so fuel further off can't drift or flow in. The distance is a chamfer distance over
+  lava found from the noise, COOK columns past each side of the region, so streamed regions still match land made in place.
+  On four seeds, nothing explodes or burns in the first two minutes; the deep caves keep 93-98% of the gas, gunpowder and
+  oil they had (`validate.js cookoff`).
+
