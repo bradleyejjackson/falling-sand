@@ -184,3 +184,35 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
   spring; 5-8 trees die of thirst.
 - Save has a 9th part: plant life (grass sap). Older saves load with green grass. Firebreak's grass is set to sap 200 so the
   scenario plays as before (game.js passes). Perf on the 960×640 world: tick 9.6 ms (9.5 before), render ~6 ms.
+
+## New materials (E6)
+
+New elements are appended after Metal, so saved worlds keep their ids: Mud, Clay, Brick, Rust, Molten glass. Oil, smoke and
+glass already existed; they behave more like the real thing now.
+
+- Mud: dirt soaked past `MUD_AT` with clean water standing on it, at most 3 deep (a puddle or a flooded field, not a lake bed),
+  takes that water in and becomes mud (`MUD_P` per soil visit). Mud is a thick liquid (density 1.8, `MUD_FLOW`): it creeps off
+  slopes steeper than 1 in 2, so a heap slumps low and wide, and at rest it lets its chunk sleep (`Grid.canSlump`). Its life is
+  dirt's (richness and moisture); it barely drains (`PERM` 0.1) and dries in the sun back to dirt below `MUD_DRY`. On waterlogged
+  ground the dirt under it wicks it wet again, so it stays. Measured (`validate.js mud`): a 3-deep puddle on soaked dirt makes 20
+  mud in a minute and none under a 20-deep lake; drained, it is all dirt again after 6 min of summer sun.
+- Clay: a powder whose life is moisture. Damp clay (≥ `CLAY_WET`) is sticky and holds whatever shape it is piled in, under water
+  too; dry clay slumps. Water barely gets through it (`PERM` 0.02): once its lining has wetted, a clay pond loses about as much as
+  a stone one (41 vs 30 cells over 2 min), and a dirt-lined pit drains dry. Past 600° it fires to Brick.
+- Brick: static, k 0.12, carries load with a 4-cell span (falls as rubble), and doesn't melt in lava. Acid doesn't eat it.
+- Molten glass: sand past 900° melts into it (it used to turn straight to glass). It runs like cooling lava and sets into glass
+  below 700°, settled where it lies; water quenches it at once. Glass past 1000° melts back to it (it used to melt to lava).
+- Rust (`Grid.corrode`, in the soil pass so sleeping metal rusts): metal next to water or mud flakes to rust at `RUST_W` a visit,
+  brine `RUST_B`, damp soil half of `RUST_W`, and fog or dew-point air `RUST_AIR`; metal at 100° or more stays dry. Rust is a
+  powder, so the flakes fall away and bare fresh metal. Measured (`validate.js rust`): a 4-thick wall loses 18 cells in a minute
+  in fresh water, 71 in brine, none in dry air.
+- Oil (`Grid.burnOil`): oil past its flash point burns only where it meets the air. Oil's life is 1 while it is alight; a burning
+  surface cell sends flames up (`OIL_FLAME`) and is used up at `OIL_EAT` a tick, and smothered oil goes out. Before, a pool
+  flashed to flame all at once (450 cells in ~30 ticks); a 6-deep pan now burns for ~8 s. Half its flames send up a puff of
+  smoke (`Grid.soot`). Water that reaches burning oil flashes to steam (`SPATTER`) and throws the oil round it up into the air,
+  still burning; water boiling under hot oil throws the top of the oil column (`Grid.boilover`).
+- Smoke rises while it is hotter than the air round it (up to 0.6 a tick, down to 0.1 once it has cooled), so it climbs off a fire,
+  then drifts and gathers under a ceiling. Flames push through smoke: with cool smoke lingering, they couldn't, and Firebreak's
+  grass fire went out on its own (game.js caught it).
+- Rack: Clay and Mud are in the starter sandbox; Rust unlocks with Irrigation, Brick and Molten glass with Lava crossing.
+- No save changes beyond Mud and Clay joining the saved soil life. `validate.js glass mud clay rust oil smoke`.

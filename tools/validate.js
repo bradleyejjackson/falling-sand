@@ -836,6 +836,152 @@ const scenarios = {
     check('late-summer grass has cured to straw', late.sap < Sim.CURED);
     check('a dry-season grass fire runs 2.5x+ faster than a spring one', late.reach >= 2.5 * spring.reach && spring.reach > 0, `${late.reach} vs ${spring.reach}`);
   },
+  // ---------------- E6: new materials ----------------
+  glass() {
+    const { MGLASS, GLASS } = Sim.ids;
+    const box = (W, H) => { Sim.reseed(4); const g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - 6; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y)); g.initAir(); g.wakeAll(); return g; };
+    { // sand poured onto lava melts into molten glass (which floats on the lava), never lava or stone
+      const g = box(120, 80); for (let x = 40; x < 80; x++) for (let y = 66; y < 74; y++) g.set(g.idx(x, y), LAVA);
+      for (let x = 55; x < 65; x++) for (let y = 50; y < 60; y++) g.set(g.idx(x, y), SAND);
+      run(g, 1200); const c = census(g, Sim.EL);
+      console.log(`  100 sand on a lava pool after 20 s: ${c.Sand || 0} sand, ${c['Molten glass'] || 0} molten glass, ${c.Glass || 0} glass`);
+      check('sand on lava melts into molten glass', (c['Molten glass'] || 0) + (c.Glass || 0) >= 20);
+    }
+    { // a pour of molten glass runs out over a cold floor and sets into glass; a glass pane dropped in lava melts back to molten glass
+      const g = box(120, 80); for (let x = 50; x < 70; x++) for (let y = 54; y < 64; y++) g.set(g.idx(x, y), MGLASS);
+      let set = -1; run(g, 2400, 60, f => { if (set < 0 && !census(g, Sim.EL)['Molten glass']) set = f; });
+      let x0 = 999, x1 = -1; for (let i = 0; i < g.type.length; i++) if (g.type[i] === GLASS) { x0 = Math.min(x0, i % g.W); x1 = Math.max(x1, i % g.W); }
+      const c = census(g, Sim.EL);
+      console.log(`  200 cells of molten glass on cold stone: all set by ${set < 0 ? 'never' : (set / 60).toFixed(0) + ' s'}, ${c.Glass || 0} glass spread over ${x1 - x0 + 1} columns`);
+      check('molten glass sets into glass within 40 s', set > 0 && (c.Glass || 0) >= 190);
+      check('molten glass runs before it sets (wider than the pour)', x1 - x0 + 1 >= 24, `${x1 - x0 + 1} cols`);
+      const h = box(80, 60); for (let x = 10; x < 70; x++) h.set(h.idx(x, 53), GLASS);
+      for (let x = 10; x < 70; x++) for (let y = 43; y < 53; y++) h.set(h.idx(x, y), LAVA);
+      run(h, 600); const d = census(h, Sim.EL);
+      console.log(`  a glass floor under a lava pool after 10 s: ${d.Glass || 0} glass, ${d['Molten glass'] || 0} molten glass, lava ${d.Lava}`);
+      check('glass melts in lava to molten glass, not lava', (d['Molten glass'] || 0) >= 10 && d.Lava <= 600);
+    }
+  },
+  mud() {
+    const { MUD } = Sim.ids;
+    { // a puddle on soaked dirt churns it to mud (on damp ground it just soaks in); the puddle gone and the ground drained, the sun dries the mud back into dirt
+      const W = 120, H = 80, g = plot(W, H, 20, 240); g.windHold = 0; g.clock = Sim.YEAR * 0.4; g.updateClimate();
+      for (let y = H - 23; y < H - 20; y++) for (let x = 30; x < 90; x++) g.set(g.idx(x, y), WATER);
+      let peak = 0; run(g, MIN, 60, () => { peak = Math.max(peak, census(g, Sim.EL).Mud || 0); });
+      for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER) g.set(i, E);
+      for (let y = 0; y < H - 22; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (g.type[i] === MUD) g.set(i, E); }   // (leave only the mud lying on the field)
+      for (let i = 0; i < g.type.length; i++) if (g.type[i] === DIRT) g.life[i] = (40 << 8) | 100;   // and the field drained under it
+      const lying = census(g, Sim.EL).Mud || 0;
+      run(g, 6 * MIN, 1, () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = Math.min(g.hum[c], 0.3 * g.cap[c]); });
+      const left = census(g, Sim.EL).Mud || 0;
+      console.log(`  a 3-deep puddle on soaked dirt: up to ${peak} mud in a minute; ${lying} lying when drained, ${left} left after 6 min of sun`);
+      check('a puddle on soaked dirt makes mud', peak >= 20);
+      check('mud dries back into dirt', lying >= 20 && left <= lying / 4, `${left}/${lying}`);
+    }
+    { // under a deep lake the bed stays dirt
+      const W = 80, H = 80, g = plot(W, H, 20, 255); g.windHold = 0;
+      for (let y = H - 40; y < H - 20; y++) for (let x = 0; x < W; x++) g.set(g.idx(x, y), WATER);
+      run(g, MIN); const m = census(g, Sim.EL).Mud || 0;
+      console.log(`  a 20-deep lake on soaked dirt: ${m} mud after a minute`);
+      check('a deep lake bed does not turn to mud', m === 0);
+    }
+    { // a heap of mud slumps out flatter than the same heap of sand, then lies still (its chunk sleeps)
+      const heap = t => { Sim.reseed(4); const W = 120, H = 70, g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE); g.initAir();
+        for (let y = H - 24; y < H - 4; y++) for (let x = 55; x < 65; x++) { const i = g.idx(x, y); g.set(i, t); if (t === SAND) g.life[i] = 0; }
+        run(g, 1800); let top = H, x0 = W, x1 = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === t) { const x = i % W, y = (i / W) | 0; top = Math.min(top, y); x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+        let awake = 0; for (let k = 0; k < 60; k++) { g.step(); awake += g.dirty.reduce((a, b) => a + b, 0); }
+        return { h: H - 4 - top, w: x1 - x0 + 1, awake: awake / 60 }; };
+      const m = heap(MUD), s = heap(SAND);
+      console.log(`  200 cells after 30 s: mud ${m.h} high x ${m.w} wide (${m.awake.toFixed(1)} chunks awake), sand ${s.h} high x ${s.w} wide`);
+      check('mud slumps flatter than sand', m.h < s.h && m.w > s.w);
+      check('settled mud goes to sleep', m.awake <= 1);
+    }
+  },
+  clay() {
+    const { CLAY, BRICK } = Sim.ids;
+    const box = (W, H) => { Sim.reseed(4); const g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y)); g.initAir(); g.wakeAll(); return g; };
+    { // damp clay stands where it is piled; dry clay slumps
+      const tower = m => { const g = box(80, 60); for (let y = 36; y < 56; y++) for (let x = 38; x < 42; x++) { const i = g.idx(x, y); g.set(i, CLAY); g.life[i] = m; } run(g, 600); let top = 99; for (let i = 0; i < g.type.length; i++) if (g.type[i] === CLAY) top = Math.min(top, (i / 80) | 0); return 56 - top; };
+      const wet = tower(120), dry = tower(10);
+      console.log(`  a 20-high, 4-wide column after 10 s: damp clay ${wet} high, dry clay ${dry} high`);
+      check('damp clay holds its shape, dry clay slumps', wet === 20 && dry <= 12);
+    }
+    { // water in a clay-lined pit holds; in a dirt-lined one it soaks away
+      const pond = t => { const g = box(80, 70); g.clock = Sim.YEAR * 0.1; g.updateClimate();
+        for (let y = 36; y < 66; y++) for (let x = 0; x < 80; x++) { const i = g.idx(x, y); g.set(i, DIRT); g.life[i] = (40 << 8) | 20; }
+        for (let y = 36; y < 50; y++) for (let x = 20; x < 60; x++) g.set(g.idx(x, y), E);
+        for (let y = 50; y < 53; y++) for (let x = 17; x < 63; x++) { const i = g.idx(x, y); g.set(i, t); if (t === DIRT) g.life[i] = (40 << 8) | 20; }
+        for (let y = 36; y < 50; y++) for (const x of [17, 18, 19, 60, 61, 62]) { const i = g.idx(x, y); g.set(i, t); if (t === DIRT) g.life[i] = (40 << 8) | 20; }
+        for (let y = 40; y < 50; y++) for (let x = 20; x < 60; x++) g.set(g.idx(x, y), WATER);
+        run(g, MIN); const w1 = census(g, Sim.EL).Water || 0; run(g, 2 * MIN);
+        return [w1, census(g, Sim.EL).Water || 0]; };
+      const [c1, c] = pond(CLAY), [d1, d] = pond(DIRT), [s1, st] = pond(STONE);
+      console.log(`  400 cells of water after 1 min / 3 min: clay-lined pit ${c1}/${c}, dirt-lined ${d1}/${d}, stone-lined ${s1}/${st} (what evaporation takes)`);
+      check('a clay-lined pond holds its water once the clay has wetted', c1 - c <= (s1 - st) + 15 && d < c / 2, `lost ${c1 - c} in the last 2 min vs stone ${s1 - st}; dirt kept ${d}`);
+    }
+    { // clay laid against lava fires into brick; a brick lintel bears a span
+      const g = box(80, 60); for (let x = 10; x < 70; x++) for (let y = 50; y < 56; y++) g.set(g.idx(x, y), LAVA);
+      for (let x = 30; x < 50; x++) for (let y = 47; y < 50; y++) g.set(g.idx(x, y), CLAY);
+      run(g, 1800); const c = census(g, Sim.EL);
+      console.log(`  60 clay on lava after 30 s: ${c.Brick || 0} brick, ${c.Clay || 0} clay`);
+      check('clay fires into brick', (c.Brick || 0) >= 20);
+      const h = box(80, 60); for (let y = 30; y < 56; y++) { h.set(h.idx(30, y), BRICK); h.set(h.idx(38, y), BRICK); }
+      for (let x = 30; x <= 38; x++) h.set(h.idx(x, 29), BRICK);
+      run(h, 300); let span = 0; for (let x = 31; x < 38; x++) if (h.type[h.idx(x, 29)] === BRICK) span++;
+      check('a brick lintel spans a 7-cell gap', span === 7, `${span}/7 standing`);
+    }
+  },
+  rust() {
+    const { METAL, RUST } = Sim.ids;
+    const tank = (liquid, cover) => { Sim.reseed(4); const W = 60, H = 60, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE);
+      for (let y = 20; y < H - 4; y++) { g.set(g.idx(0, y), STONE); g.set(g.idx(W - 1, y), STONE); }
+      for (let y = 26; y < H - 4; y++) for (let x = 28; x < 32; x++) g.set(g.idx(x, y), METAL);   // a metal wall, 4 thick
+      if (liquid !== null) for (let y = 30; y < H - 4; y++) for (let x = 1; x < W - 1; x++) if (g.type[g.idx(x, y)] === E) { const i = g.idx(x, y); g.set(i, liquid); if (liquid === BRINE) g.life[i] = 200; }
+      g.initAir(); if (cover) for (let c = 0; c < g.hum.length; c++) g.hum[c] *= 0.3;
+      run(g, MIN); return 4 * (H - 4 - 26) - (census(g, Sim.EL).Metal || 0); };
+    const fresh = tank(WATER), salt = tank(BRINE), dry = tank(null, true);
+    console.log(`  a 4-thick metal wall standing a minute: ${fresh} cells rusted in fresh water, ${salt} in brine, ${dry} in dry air`);
+    check('metal under water rusts', fresh >= 8);
+    check('brine rusts it 3x+ faster', salt >= 3 * fresh);
+    check('dry metal does not rust', dry === 0);
+  },
+  oil() {
+    const { OIL, SMOKE } = Sim.ids;
+    // an oil fire in a pan burns down from its surface; water poured on it flashes to steam and throws the burning oil out of the pan
+    const pan = water => { Sim.reseed(4); const W = 120, H = 90, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE);
+      for (let y = 60; y < H - 4; y++) { g.set(g.idx(44, y), STONE); g.set(g.idx(75, y), STONE); }
+      for (let y = 72; y < H - 4; y++) for (let x = 45; x < 75; x++) g.set(g.idx(x, y), OIL);
+      g.initAir(); for (let x = 45; x < 75; x++) g.set(g.idx(x, 71), FIRE);
+      let out = 0, smoke = 0, burn = -1;
+      if (water) { run(g, 60); for (let y = 40; y < 44; y++) for (let x = 50; x < 70; x++) g.set(g.idx(x, y), WATER); }
+      run(g, 1800, 1, f => { if (f > 300 && f % 10) return; let oil = 0; for (let i = 0; i < g.type.length; i++) { const t = g.type[i]; if (t === OIL) { oil++; if (f <= 300 && ((i / W) | 0) < 68) out++; } if (t === SMOKE && f % 10 === 0) smoke++; } if (burn < 0 && oil === 0) burn = f; });
+      return { out, smoke: smoke / 180, burn }; };
+    const dryPan = pan(false), wet = pan(true);
+    console.log(`  a 6-deep oil fire in a pan: burnt out after ${dryPan.burn < 0 ? 'over 30' : (dryPan.burn / 60).toFixed(1)} s, mean smoke ${dryPan.smoke.toFixed(0)} cells; oil thrown 4+ rows over its surface in the first 5 s (summed every tick) ${dryPan.out} left alone, ${wet.out} with water poured on`);
+    check('a pool of oil burns down from its surface (3 s+), not in a flash', dryPan.burn < 0 || dryPan.burn >= 180);
+    check('an oil fire is smoky', dryPan.smoke >= 30);
+    check('water on burning oil throws it up into the air', wet.out >= 50 && dryPan.out === 0, `${wet.out} vs ${dryPan.out}`);
+  },
+  smoke() {
+    const { SMOKE } = Sim.ids;
+    // hot smoke climbs; smoke already at air temperature hangs about where it was let go
+    const puff = T => { Sim.reseed(4); const W = 80, H = 160, g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE); g.initAir();
+      for (let y = 140; y < 146; y++) for (let x = 36; x < 44; x++) g.set(g.idx(x, y), SMOKE, T === null ? g.ambAt(y) : T);
+      run(g, 90); let s = 0, n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === SMOKE) { s += (i / W) | 0; n++; } return 143 - s / Math.max(1, n); };
+    const hot = puff(250), cold = puff(null);
+    console.log(`  a puff of smoke after 1.5 s: hot smoke rose ${hot.toFixed(0)} rows, cool smoke ${cold.toFixed(0)}`);
+    check('hot smoke rises faster than cool smoke', hot > 2 * Math.max(1, cold));
+    // a fire in a closed room fills it with smoke from the ceiling down
+    Sim.reseed(4); const W = 80, H = 60, g = new Sim.Grid(W, H); g.windHold = 0;
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (x < 2 || x >= W - 2 || y < 2 || y >= H - 4) g.set(g.idx(x, y), STONE);
+    for (let y = 46; y < 56; y++) for (let x = 36; x < 44; x++) g.set(g.idx(x, y), WOOD);
+    g.initAir(); g.set(g.idx(40, 45), FIRE);
+    let up = 0, low = 0; run(g, 900, 30, () => { for (let i = 0; i < g.type.length; i++) if (g.type[i] === SMOKE) { const y = (i / W) | 0; if (y < 15) up++; else if (y >= 30) low++; } });
+    console.log(`  a woodpile burning in a closed room, 15 s: smoke in the top quarter ${up}, in the bottom half ${low} (summed)`);
+    check('smoke gathers under the ceiling', up > 2 * low);
+  },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
 
