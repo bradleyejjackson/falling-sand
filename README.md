@@ -12,7 +12,7 @@ Headless checks run in Node (no dependencies):
 node tools/validate.js        # all scenarios, or name some: sapling sand soak topple rot seasons snow
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
                               #   tiles stream (stage 4) sky precip storm steam level
-                              #   support cookoff conduct melt groundwater
+                              #   support cookoff conduct melt groundwater dunes windfire channel
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -136,3 +136,25 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
   The spring's own pool rises as high as the head reaches. `g.springs` counts the cells let out.
 - Damp sand (≥ `CLUMP`) doesn't slump: it stands in walls and trenches until it dries. Under water it slides again.
 - Saves carry sand moisture as an eighth part; older saves load with dry sand.
+
+## Wind and water shaping the land (E4)
+
+- Blown sand (`Grid.saltate`, in the soil pass so it reaches sleeping ground): a dry surface grain (moisture under `BLOW_DRY`)
+  hops downwind when the wind just above it (`Grid.windAt`) is faster than `BLOW_U`, with chance `BLOW_K` × the excess per visit.
+  It is launched a cell up with `HOP` cells/tick of sideways momentum and lands a few cells on. A grain with anything above a
+  1-in-4 line rising upwind within `SHELTER` cells is in the lee and stays put, so the wind strips windward slopes and drops sand
+  past the crest, which slides into a slip face. Damp sand (rain, dew, a water table) doesn't blow. Measured
+  (`validate.js dunes`): a 25-high mound in a steady 0.6 wind moves 45 cells in 5 min with a 0.3 back and a 1.0 slip face.
+- Fire and wind (`Grid.ignite`): the prevailing wind (not the local flow, which near a fire is mostly its own inflow) multiplies
+  the chance of lighting fuel downwind by up to 3 and upwind by as little as 0.1 (`FIRE_LEAN`). Embers throw sparks downwind
+  (`Grid.spark`, `SPARK_*`) that drop onto whatever lies 2 to ~17 cells on. Measured (`validate.js windfire`): grass burns 130
+  cells each way in ~7 s in still air; in a 0.6 wind 2.5 s downwind and 22 s upwind, and a 14-cell bare gap is crossed 4/4
+  times in wind, 0/4 in still air. Firebreak: water alone wins 14 of 18 scripted play styles (16 of 18 before); game.js uses a
+  timing that wins on both builds.
+- Streams (`Grid.drag`, `Grid.scour`): water's pull on its bed is its depth (up to `DEEP`) times the slope of its free surface
+  measured `REACH_S` cells each way (`Grid.level`, less one row so ripples and bubbles don't count; a wall or a dry bank gives no
+  reading). Over `TAU_C` it lifts a bed grain of sand or dirt (`ERODE`) into the water above as sediment; a grain-carrying cell
+  with the current over `TAU_C` moves downstream through the water and doesn't settle. Where the surface flattens, it settles as
+  before. A still pond never stirs. Measured (`validate.js channel`): a 2-cells/tick stream on a 1-in-30 sand plain cuts its bed
+  10 cells deep near its head in 3 min and builds it up 3 cells where it slows, with sand conserved.
+- No save changes. Perf on the 960×640 world: tick 9.4 ms (10.6 before, noise), render ~6-7 ms.

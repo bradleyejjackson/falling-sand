@@ -335,10 +335,11 @@ const scenarios = {
     }
     g.initAir(); g.wakeAll();
     const sandIn = (x0, x1) => { let n = 0; for (let y = 0; y < H; y++) for (let x = x0; x < x1; x++) if (g.type[g.idx(x, y)] === SAND) n++; return n; };
-    const up0 = sandIn(0, 50), all0 = census(g, Sim.EL).Sand;
+    const carried = () => { let n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER && (g.life[i] & 255) && !(g.life[i] & 256)) n++; return n; };   // sand grains riding in the stream
+    const up0 = sandIn(0, 50), all0 = census(g, Sim.EL).Sand + carried();
     run(g, 3 * MIN, 1, () => { for (let x = 4; x < 10; x++) { const i = g.idx(x, 40); if (g.type[i] === E) { g.set(i, WATER); g.vy[i] = 1; } } });
-    const up = sandIn(0, 50), basin = sandIn(150, W), all = census(g, Sim.EL).Sand;
-    console.log(`  upper slope ${up0} -> ${up} sand cells; basin 0 -> ${basin}; all sand ${all0} -> ${all}`);
+    const up = sandIn(0, 50), basin = sandIn(150, W), all = census(g, Sim.EL).Sand + carried();
+    console.log(`  upper slope ${up0} -> ${up} sand cells; basin 0 -> ${basin}; all sand (lying or carried) ${all0} -> ${all}`);
     check('the stream cuts into the upper slope', up0 - up > 25);
     check('and drops the sand in the basin (a delta)', basin > 60);
     check('sand is conserved', Math.abs(all - all0) < 20);
@@ -696,6 +697,75 @@ const scenarios = {
       const h = new Sim.Grid(64, 64); h.load(g.save());
       check('sand moisture survives save and load', h.life[h.idx(10, 62)] === 77 && h.type[h.idx(10, 62)] === SAND);
     }
+  },
+  dunes() {
+    // a mound of dry sand in a steady wind creeps downwind as a dune: the wind strips the windward slope and drops the sand past the
+    // crest, where it slides down a steep slip face. No wind, or damp sand, and it stays put
+    const mound = (hold, wet) => {
+      Sim.reseed(4); const W = 360, H = 120, g = new Sim.Grid(W, H); g.windHold = hold;
+      const top = x => H - 20 - Math.round(25 * Math.exp(-(((x - 100) / 40) ** 2)));
+      for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const i = g.idx(x, y); if (y >= H - 12) g.set(i, STONE, g.ambAt(y)); else if (y >= top(x)) { g.set(i, SAND, g.ambAt(y)); g.life[i] = wet; } }
+      g.initAir(); if (!wet) for (let c = 0; c < g.hum.length; c++) g.hum[c] *= 0.3; g.wakeAll();
+      const sand0 = census(g, Sim.EL).Sand;
+      const shape = () => { const h = []; for (let x = 0; x < W; x++) { let y = 0; while (y < H && g.type[g.idx(x, y)] !== SAND && g.type[g.idx(x, y)] !== STONE) y++; h.push(H - 12 - y); }
+        let m = 0, mx = 0, pk = 0; for (let x = 0; x < W; x++) { const v = Math.max(0, h[x] - 8); m += v; mx += v * x; if (h[x] > h[pk]) pk = x; } return { cx: mx / m, h, pk }; };
+      const c0 = shape().cx; run(g, 5 * MIN);
+      const s = shape(), p = s.pk, windward = (s.h[p] - s.h[Math.max(0, p - 30)]) / 30;
+      let lee = 0; for (let x = p; x < Math.min(W - 4, p + 20); x++) lee = Math.max(lee, (s.h[x] - s.h[x + 4]) / 4);   // the steepest stretch of the lee side
+      return { moved: s.cx - c0, windward, lee, lost: sand0 - census(g, Sim.EL).Sand };
+    };
+    const blown = mound(0.6, 0), calm = mound(0, 0), damp = mound(0.6, 120);
+    console.log(`  in a steady wind the mound's middle moved ${blown.moved.toFixed(1)} cells downwind in 5 min, windward slope ${blown.windward.toFixed(2)}, lee ${blown.lee.toFixed(2)}; no wind ${calm.moved.toFixed(1)}; damp sand ${damp.moved.toFixed(1)}`);
+    check('wind drives a dune downwind', blown.moved > 30, blown.moved.toFixed(1));
+    check('with a gentle windward back and a steep slip face', blown.lee >= 0.75 && blown.lee > 2 * blown.windward);
+    check('still air or damp sand leaves it be', Math.abs(calm.moved) < 2 && Math.abs(damp.moved) < 2);
+    check('no sand is lost', blown.lost === 0 && calm.lost === 0, `${blown.lost}`);
+  },
+  windfire() {
+    // dry grass burns both ways from a spark in still air; in a wind it races downwind, creeps back upwind, and embers carry it
+    // over a bare gap that a still-air fire can't cross
+    const { PLANT } = Sim.ids;
+    const field = (hold, gap, seed) => {
+      Sim.reseed(seed); const W = 320, H = 100, g = new Sim.Grid(W, H); g.windHold = hold;
+      for (let x = 0; x < W; x++) for (let y = H - 20; y < H; y++) { const i = g.idx(x, y); if (y >= H - 10) g.set(i, STONE, g.ambAt(y)); else { g.set(i, DIRT, g.ambAt(y)); g.life[i] = (40 << 8) | 20; } }
+      for (let x = 10; x < W - 10; x++) if (!(gap && x >= 150 && x < 164)) for (let y = H - 23; y < H - 20; y++) g.set(g.idx(x, y), PLANT, g.ambAt(y));
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] *= 0.3; g.wakeAll(); run(g, 120);
+      return g;
+    };
+    const gone = (g, x) => { for (let y = g.H - 23; y < g.H - 20; y++) if (g.type[g.idx(x, y)] === PLANT) return false; return true; };
+    const spread = hold => { const g = field(hold, false, 1); for (let x = 158; x < 163; x++) g.set(g.idx(x, g.H - 24), FIRE);
+      let l = 0, r = 0; run(g, 1800, 15, f => { if (!l && gone(g, 30)) l = f; if (!r && gone(g, 290)) r = f; }); return [(l || 1800) / 60, (r || 1800) / 60]; };
+    const jumps = hold => { let n = 0; for (const seed of [1, 2, 3, 4]) { const g = field(hold, true, seed); for (let x = 98; x < 103; x++) g.set(g.idx(x, g.H - 24), FIRE); let j = 0; run(g, 1200, 30, () => { if (gone(g, 170)) j = 1; }); n += j; } return n; };
+    const still = spread(0), windy = spread(0.6), jumpStill = jumps(0), jumpWindy = jumps(0.6);
+    console.log(`  130 cells of grass each way burn in ${still[0].toFixed(1)} s / ${still[1].toFixed(1)} s in still air, ${windy[0].toFixed(1)} s upwind / ${windy[1].toFixed(1)} s downwind in a wind; a 14-cell gap is crossed in ${jumpStill}/4 still runs, ${jumpWindy}/4 windy`);
+    check('in still air fire spreads alike both ways', Math.max(...still) < 1.5 * Math.min(...still));
+    check('in a wind it races downwind and creeps upwind', windy[1] < 0.6 * still[1] && windy[0] > 2 * still[0]);
+    check('sparks carry a wind-driven fire over a gap', jumpWindy >= 3 && jumpStill <= 1);
+  },
+  channel() {
+    // a stream fed onto a sand plain scours its bed where it runs fast and drops the sand where it slows: it cuts a channel into the
+    // plain. A still pond on the same sand stays clear and keeps its floor
+    Sim.reseed(3); const W = 480, H = 160, g = new Sim.Grid(W, H); g.windHold = 0;
+    const bed = x => Math.round(70 + x / 30);
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) { const i = g.idx(x, y);
+      if (y >= bed(x) + 25 || (x < 3 && y >= 40)) g.set(i, STONE, g.ambAt(y)); else if (y >= bed(x) && x < W - 20) { g.set(i, SAND, g.ambAt(y)); g.life[i] = 250; } }
+    g.initAir(); g.wakeAll();
+    const surf = () => { const h = []; for (let x = 0; x < W; x++) { let y = 0; while (y < H && g.type[g.idx(x, y)] !== SAND && g.type[g.idx(x, y)] !== STONE) y++; h.push(y); } return h; };
+    const carried = () => { let n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER && (g.life[i] & 255)) n++; return n; };
+    const h0 = surf(), sand0 = census(g, Sim.EL).Sand;
+    run(g, 3 * MIN, 1, () => { for (let x = 4; x < 6; x++) { const i = g.idx(x, 50); if (g.type[i] === E) g.set(i, WATER); } for (let y = 0; y < H; y++) for (let x = W - 4; x < W; x++) if (g.type[g.idx(x, y)] === WATER) g.set(g.idx(x, y), E); });
+    const h = surf(); let cut = 0, fill = 0; for (let x = 10; x < 400; x++) { cut = Math.max(cut, h[x] - h0[x]); fill = Math.max(fill, h0[x] - h[x]); }
+    const sand = census(g, Sim.EL).Sand + carried();
+    // the pond: sand floor, stone walls, still water
+    Sim.reseed(4); const p = new Sim.Grid(160, 80); p.windHold = 0;
+    for (let x = 0; x < 160; x++) for (let y = 0; y < 80; y++) { const i = p.idx(x, y); if (y >= 70 || x < 5 || x >= 155) { if (y >= 40) p.set(i, STONE, p.ambAt(y)); } else if (y >= 60) { p.set(i, SAND, p.ambAt(y)); p.life[i] = 250; } else if (y >= 45) p.set(i, WATER, p.ambAt(y)); }
+    p.initAir(); p.wakeAll(); run(p, 2 * MIN);
+    let lifted = 0; for (let i = 0; i < p.type.length; i++) if ((p.type[i] === WATER && (p.life[i] & 255)) || (p.type[i] === SAND && ((i / 160) | 0) < 60)) lifted++;
+    console.log(`  the stream cut its bed down ${cut} cells at most and built it up ${fill} where it slowed; sand lying or carried ${sand0} -> ${sand}; the still pond stirred ${lifted} grains`);
+    check('a stream cuts a channel into a sand plain', cut >= 6);
+    check('and lays the sand down again downstream', fill >= 3);
+    check('sand is conserved', Math.abs(sand - sand0) <= 2);
+    check('a still pond does not scour its floor', lifted <= 3);
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
