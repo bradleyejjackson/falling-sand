@@ -167,7 +167,7 @@ const Sim = (() => {
   phase(BRINE, {hi:{at:108,to:'boil'}, lo:{at:-20,to:ICE}});
   phase(ICE,   {hi:{at:40,to:WATER}});        // stable in ambient air; melts near anything burning
   phase(STEAM, {lo:{at:85,to:'condense'}});   // cloud under open sky, water in a cave
-  phase(CLOUD, {hi:{at:120,to:STEAM}});
+  phase(CLOUD, {hi:{at:120,to:'evaporate'}});   // back into the air as the vapour it was made of (not a whole steam cell: that would make ten times the water)
   phase(LAVA,  {lo:{at:450,to:STONE}});
   phase(STONE, {hi:{at:1280,to:LAVA}});   // only the floor of a deep fresh pool gets this hot
   phase(SAND,  {hi:{at:900,to:GLASS}});
@@ -378,6 +378,7 @@ const Sim = (() => {
       if (v<=HIAT[t] && v>=LOAT[t]) return false;
       const el=EL[t], ph = v>HIAT[t] ? el.hi : el.lo;
       if (ph.to==='explode'){ this.explode(x,y,ph.r); return true; }
+      if (ph.to==='evaporate'){ this.set(i,E,v); this.hum[this.ac(x,y)]+=CQ; return true; }
       if (ph.to==='condense'){ if (this.openSky(x,y)){ this.set(i,E,v); this.hum[this.ac(x,y)]+=1; } else this.set(i,WATER,v); return true; }   // cooled steam joins the air's vapour; in a cave it drips
       if (ph.to==='boil'){ const s=this.life[i]; this.set(i, R()<s/SALT_UNIT ? SALT : STEAM, v); if (this.type[i]===STEAM) T[i]=Math.max(v,130); return true; }   // boiling brine leaves its salt behind
       if (ph.to==='freeze'){ const b=y+1<this.H?this.type[this.idx(x,y+1)]:STONE; this.set(i, (b===E||isGas(b)||b===SNOW) ? SNOW : ICE, v); if (this.type[i]===ICE) this.life[i]=1; return true; }   // life 1 marks weather ice, which thaws in spring
@@ -911,17 +912,26 @@ const Sim = (() => {
       // air that isn't saturated, and rains from the underside when it is thick
       const W=this.W, T=this.type, c=this.ac(x,y), cp=this.cap[c];
       if (this.hum[c]<cp*0.95 && R()<0.015*Math.min(1,(cp-this.hum[c])/CQ)){ this.set(i,E,this.temp[i]); this.hum[c]+=CQ; return; }
-      let n=0, below=0, above=0;
+      const wet=Math.max(0,this.hum[c]/Math.max(cp,1e-3)-1);   // how far past saturation the air is: steam off a boiling lake drives it far past
+      let n=0, below=0, above=0;   // above: cloud in the dozen cells over it (gaps and all: a storm's underside is ragged)
       for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ if(!dx&&!dy) continue; const nx=x+dx, ny=y+dy; if (nx>=0&&nx<W&&ny>=0&&ny<this.H && T[ny*W+nx]===CLOUD){ n++; if (dy===1) below++; } }
-      for (let k=1;k<=6;k++){ if (y-k<0) break; if (T[i-k*W]===CLOUD) above++; else break; }
+      for (let k=1;k<=12 && y-k>=0;k++){ const t=T[i-k*W]; if (t===CLOUD) above++; else if (t!==E) break; }
       const w=this.wc(x,y), wu=this.uc[w], wv=this.vc[w];
+      // in oversaturated air, cloud lying on the ground or water settles on it as dew: one drop per ten cells (otherwise a low steam cloud never leaves)
+      if (wet>0.2 && y+1<this.H && T[i+W]!==E && !isGas(T[i+W]) && R()<0.004){ this.set(i,E); if (R()<CQ) this.set(i,WATER,this.temp[i]); return; }
       // a lone wisp in saturated air slowly drizzles out (a drop or a flake now and then)
       if (n<=1 && R()<0.002){ this.set(i,E); if (R()<CQ && y+1<this.H && T[i+W]===E){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=1; Atomics.add(this.precip,x,1); } return; }
-      // rain falls from the underside of a thick cloud; heavier clouds rain harder
-      if (below===0 && n>=3 && above>=1 && y+1<this.H && T[i+W]===E && R()<0.004*(1+above)){   // (thin fog doesn't rain)
-        // a drop is ten cloud cells' worth: it gathers them from the column above, and only falls if it found enough
-        let got=1; this.set(i,E); for (let k=1;k<1/CQ && y-k>=0 && T[i-k*W]===CLOUD;k++){ this.set(i-k*W,E); got++; }
-        if (R()<got*CQ){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=wu*8; Atomics.add(this.precip,x,1); }
+      // rain falls from the underside of a thick cloud; deeper clouds rain harder, and so do clouds in oversaturated air
+      // (a storm built by a boiling lake rains itself out in a minute or so)
+      if (below===0 && n>=3 && above>=1 && y+1<this.H && T[i+W]===E && R()<0.004*(1+Math.min(6,above))*(1+4*Math.min(wet,2))){   // (thin fog doesn't rain)
+        // a drop is ten cloud cells' worth: it gathers them from the cloud above, and only falls if it found enough;
+        // otherwise what it gathered goes back to the air (a drop on a chance of got/10 *and* the rest returned made water)
+        let got=1; this.set(i,E);
+        for (const dx of [0,-1,1]){   // its own column first, then the two beside it
+          if (x+dx<0 || x+dx>=W) continue;
+          for (let k=dx?0:1;k<=12 && got<1/CQ && y-k>=0;k++){ const j=i+dx-k*W, t=T[j]; if (t===CLOUD){ this.set(j,E); got++; } else if (t!==E) break; }
+        }
+        if (got*CQ>0.999){ const j=i+W; this.set(j,WATER,this.precipT); this.vy[j]=2; this.vx[j]=wu*8; Atomics.add(this.precip,x,1); }
         else this.hum[c]+=got*CQ;
         return;
       }
@@ -1161,7 +1171,13 @@ const Sim = (() => {
               if (T[j]!==E) continue; q=j;
               if ((cx>0 && T[j-1]===CLOUD) || (cx<W-1 && T[j+1]===CLOUD) || (cy>0 && T[j-W]===CLOUD) || (cy<H-1 && T[j+W]===CLOUD)) break;
             }
-            if (q>=0){ this.set(q,CLOUD,temp[q]); h=Math.max(0,h-CQ); }
+            if (q<0) continue;
+            if (h<CQ){   // thin cold air holds less than a cloud cell's worth: it draws the rest from the air below, or waits
+              const b=c+AW; if (ay+1>=AH || hum[b]<CQ-h) break;
+              hum[b]-=CQ-h; h=CQ;
+            }
+            this.set(q,CLOUD,temp[q]);
+            h-=CQ;
           }
           hum[c]=h;
         }
