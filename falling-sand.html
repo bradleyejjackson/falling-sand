@@ -103,7 +103,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -122,7 +122,9 @@ const Sim = (() => {
   // ---- element registry ----------------------------------------------------
   // kind: powder | liquid | gas | static.  density: who sinks through whom.
   // disperse: liquid sideways scan.  lazy: viscosity (chance to skip a tick).
-  // k: thermal conductivity 0..1.  cap: heat capacity (how slowly its own temperature moves).  t0: temperature when spawned.  hold: never cools below this while alive.
+  // k: thermal conductivity 0..1 (how fast heat crosses it).  cap: heat capacity (how much heat it takes to warm it a degree, so how slowly
+  // its own temperature moves). Metal is all conductivity and little capacity, so it heats through fast; stone is a poor conductor with
+  // a lot of capacity, so it warms slowly and holds it.  t0: temperature when spawned.  hold: never cools below this while alive.
   // life: [min,max] ticks before decay (0 = immortal).  decay: what it becomes (array = random pick).
   // hi/lo: phase change when temperature crosses it → {at, to} (to may be 'explode').
   // tension: surface tension, the chance a liquid refuses to step off on its own (drops bead, films don't creep).
@@ -131,9 +133,9 @@ const Sim = (() => {
   const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,tension:0,k:0.2,cap:1,t0:20,hold:null,life:0,soil:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
 
   const E     = def('Empty',    {kind:'static', k:0.05, rgb:[8,8,10], opaque:false});
-  const SAND  = def('Sand',     {kind:'powder', density:1.6, k:0.2, rgb:[205,170,90], vary:30});
+  const SAND  = def('Sand',     {kind:'powder', density:1.6, k:0.2, cap:1.2, rgb:[205,170,90], vary:30});
   const WATER = def('Water',    {kind:'liquid', density:1.0, disperse:5, tension:0.995, k:0.6, cap:3, rgb:[30,110,200], vary:30, opaque:false});
-  const STONE = def('Stone',    {kind:'static', k:0.15, rgb:[95,100,112], vary:25});
+  const STONE = def('Stone',    {kind:'static', k:0.15, cap:2, rgb:[95,100,112], vary:25});
   const WOOD  = def('Wood',     {kind:'static', k:0.1, rgb:[100,62,32], vary:22});
   const OIL   = def('Oil',      {kind:'liquid', density:0.8, disperse:3, k:0.3, rgb:[70,58,36], vary:12, opaque:false});
   const FIRE  = def('Fire',     {kind:'gas', k:0.7, t0:700, hold:450, life:[40,80], rgb:[255,130,30], opaque:false, glow:1});
@@ -142,7 +144,7 @@ const Sim = (() => {
   const STEAM = def('Steam',    {kind:'gas', k:0.3, cap:28, t0:170, rgb:[165,180,195], vary:30, opaque:false});
   const EMBER = def('Ember',    {kind:'static', k:0.5, t0:650, hold:500, life:[180,320], decay:'burnout', rgb:[230,90,20], glow:0.8});
   const LAVA  = def('Lava',     {kind:'liquid', density:3.0, disperse:1, lazy:0.7, k:0.3, cap:25, t0:1300, rgb:[235,80,20], vary:40, glow:1});
-  const ICE   = def('Ice',      {kind:'static', k:0.4, t0:-30, rgb:[170,215,245], vary:25, opaque:false});
+  const ICE   = def('Ice',      {kind:'static', k:0.5, cap:1.5, t0:-30, rgb:[170,215,245], vary:25, opaque:false});
   const GUNP  = def('Gunpowder',{kind:'powder', density:1.4, k:0.2, rgb:[40,38,42], vary:14});
   const SEED  = def('Seed',     {kind:'powder', density:0.9, k:0.1, life:[8,20], rgb:[150,120,60], vary:20});
   const PLANT = def('Plant',    {kind:'static', k:0.15, life:[8,20], rgb:[50,160,60], vary:40, opaque:false});
@@ -151,21 +153,20 @@ const Sim = (() => {
   const GLASS = def('Glass',    {kind:'static', k:0.1, rgb:[140,190,200], vary:30, opaque:false});
   const GAS   = def('Gas',      {kind:'gas', k:0.2, rgb:[120,150,110], vary:20, opaque:false});
   const CLOUD = def('Cloud',    {kind:'gas', k:0.15, cap:6, t0:10, rgb:[205,210,222], vary:25, opaque:false});
-  const SNOW  = def('Snow',     {kind:'powder', density:0.5, lazy:0.5, k:0.2, t0:-6, rgb:[232,238,248], vary:12, opaque:false});
-  const RUBBLE= def('Rubble',   {kind:'powder', density:2.4, k:0.15, rgb:[88,92,102], vary:30});
+  const SNOW  = def('Snow',     {kind:'powder', density:0.5, lazy:0.5, k:0.1, t0:-6, rgb:[232,238,248], vary:12, opaque:false});
+  const RUBBLE= def('Rubble',   {kind:'powder', density:2.4, k:0.12, cap:2, rgb:[88,92,102], vary:30});
   const CHAR  = def('Charcoal', {kind:'static', k:0.12, rgb:[38,34,32], vary:16});
   const ASH   = def('Ash',      {kind:'powder', density:0.7, k:0.1, rgb:[150,146,140], vary:22});
   const TIP   = def('Sapling',  {kind:'static', k:0.1, rgb:[130,95,45], vary:25});   // marker cell: becomes a Tree entity on its first tick
   const DIRT  = def('Dirt',     {kind:'powder', density:1.5, k:0.25, cap:1.5, soil:(40<<8)|90, rgb:[104,72,44], vary:20});   // life = richness<<8 | moisture, 0..255 each
   const LITTER= def('Litter',   {kind:'powder', density:0.6, lazy:0.3, k:0.1, rgb:[128,92,42], vary:30});   // fallen leaves and dead wood; rots into dirt
   const ROOT  = def('Root',     {kind:'static', k:0.1, rgb:[150,112,72], vary:20});   // drawn by a tree's root segments
+  const METAL = def('Metal',    {kind:'static', k:1.0, cap:1.2, rgb:[150,156,166], vary:10});   // conducts heat end to end in seconds; never melts at these temperatures
 
   // phase changes driven by temperature
   const phase = (t,o) => Object.assign(EL[t],o);
-  phase(WATER, {hi:{at:100,to:STEAM}, lo:{at:0,to:'freeze'}});   // snow if it is falling, ice if it is sitting
-  phase(SNOW,  {hi:{at:2,to:WATER}});
+  phase(WATER, {hi:{at:100,to:STEAM}});      // water, ice and snow change into each other at 0° by latent heat (stepHeat), not at a threshold
   phase(BRINE, {hi:{at:108,to:'boil'}, lo:{at:-20,to:ICE}});
-  phase(ICE,   {hi:{at:40,to:WATER}});        // stable in ambient air; melts near anything burning
   phase(STEAM, {lo:{at:85,to:'condense'}});   // cloud under open sky, water in a cave
   phase(CLOUD, {hi:{at:120,to:'evaporate'}});   // back into the air as the vapour it was made of (not a whole steam cell: that would make ten times the water)
   phase(LAVA,  {lo:{at:450,to:STONE}});
@@ -195,6 +196,17 @@ const Sim = (() => {
   }
   // a flame or a puff of steam is a little hot gas, next to a whole cell of water: it can't heat the water much before it's spent
   for (const g of [FIRE,STEAM,SMOKE]) for (const l of [WATER,BRINE]){ KH[g*N+l]*=0.2; KH[l*N+g]*=0.2; }
+  // a snowflake is all surface: it takes the temperature of the air around it far faster than a solid lump would (snow lying in a
+  // drift is still a good insulator, through its low k, against the ground and whatever is buried in it)
+  KH[SNOW*N+E]*=4; KH[E*N+SNOW]*=4;
+  // and a bar of metal is the opposite: it carries heat along itself far faster than it can hand it to the still air around it,
+  // so a rod with one end in lava gets hot all the way along instead of losing it all in the first few cells
+  KH[METAL*N+E]*=0.03; KH[E*N+METAL]*=0.03;
+  // a block of ice in warm air melts from its faces over minutes, not seconds: still air hands it heat slowly
+  KH[ICE*N+E]*=0.3; KH[E*N+ICE]*=0.3;
+  // latent heat of fusion, in heat units (capacity × degrees): what a frozen cell must soak up at 0° to melt, and what water must
+  // give off at 0° to freeze into it. Ice is a cell of water: 80 water-degrees, as in life. A snow cell is mostly air, a third of that.
+  const FUSE = new Float32Array(N); FUSE[ICE] = 80*3; FUSE[SNOW] = 80;
   const TENS = new Uint8Array(N); for (const e of EL) TENS[e.id] = e.tension>0 ? 1 : 0;   // wetting liquids cohere with each other
   const isLiquid = t => KIND[t]===2, isGas = t => KIND[t]===3;
 
@@ -217,9 +229,10 @@ const Sim = (() => {
   const ERODE = new Float32Array(N); ERODE[SAND]=1; ERODE[DIRT]=0.4; ERODE[ASH]=1.2;
   // contact ignition: a flame licking fuel lights it faster than conduction alone would
   const FUEL = {[WOOD]:{p:0.02,to:EMBER},[TIP]:{p:0.03,to:EMBER},[OIL]:{p:0.35,to:FIRE},[PLANT]:{p:0.06,to:EMBER},[CHAR]:{p:0.01,to:EMBER},[SEED]:{p:0.1,to:FIRE},[GUNP]:{p:0.5,to:'explode',r:7},[GAS]:{p:0.5,to:'explode',r:3},[LITTER]:{p:0.12,to:FIRE},[ROOT]:{p:0.01,to:EMBER}};
+  const PERMAFROST = -25;   // the temperature of the rock round an ice vein when a world is made
   const SOURCE = new Set([FIRE,EMBER,LAVA]), WET = 150, BOIL = 0.25, LATENT = 300;   // WET: soil moisture that keeps the grass on it from catching; BOIL: chance heat boils off the water wetting fuel
   // structural integrity: which solids can carry weight, and how far each can cantilever before it gives way
-  const SUPPORTS = new Set([STONE,GLASS,ICE,WOOD,CHAR,SAND,GUNP,SALT,RUBBLE,SNOW,ASH,SEED,PLANT,TIP,DIRT,LITTER,ROOT]);
+  const SUPPORTS = new Set([STONE,GLASS,ICE,WOOD,CHAR,SAND,GUNP,SALT,RUBBLE,SNOW,ASH,SEED,PLANT,TIP,DIRT,LITTER,ROOT,METAL]);
   const SPAN = {[STONE]:5,[GLASS]:3,[ICE]:4,[CHAR]:2};
   const FALLS_AS = {[STONE]:RUBBLE,[GLASS]:RUBBLE,[ICE]:SNOW,[CHAR]:ASH};
   // ecology: a day is a minute at 60 fps and a year is eight days; the soil pass visits each row once every SLOW ticks
@@ -254,7 +267,7 @@ const Sim = (() => {
   // scope: cell W×H, air (AC×AC coarse cells), wind (one per chunk), vface (wind v faces), chunk, row, col, aircol, ctl.
   const FIELDS = [
     ['type',Uint8Array,'cell'], ['life',Uint16Array,'cell'], ['shade',Uint8Array,'cell'], ['done',Uint8Array,'cell'],
-    ['temp',Float32Array,'cell'], ['vx',Float32Array,'cell'], ['vy',Float32Array,'cell'], ['owner',Uint16Array,'cell'],   // owner: which tree a cell belongs to
+    ['temp',Float32Array,'cell'], ['fuse',Float32Array,'cell'], ['vx',Float32Array,'cell'], ['vy',Float32Array,'cell'], ['owner',Uint16Array,'cell'],   // owner: which tree a cell belongs to
     ['dirty',Uint8Array,'chunk'], ['next',Uint8Array,'chunk'],
     ['hum',Float32Array,'air'], ['cap',Float32Array,'air'], ['airF',Float32Array,'air'], ['airT',Float32Array,'air'], ['chill',Float32Array,'air'],
     // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
@@ -323,7 +336,7 @@ const Sim = (() => {
       const el=EL[t], was=this.type[i];
       if (t!==was) Atomics.add(this.made,t,1);
       if (SUPPORTS.has(was) && !SUPPORTS.has(t)) this.unsettle(i%this.W,(i/this.W)|0);
-      this.type[i]=t; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0;
+      this.type[i]=t; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0; this.fuse[i]=0;
       this.life[i] = el.life ? el.life[0]+((R()*(el.life[1]-el.life[0]))|0) : el.soil;
       this.temp[i] = temp===undefined ? el.t0 : temp;
       this.wake(i%this.W,(i/this.W)|0);
@@ -349,15 +362,15 @@ const Sim = (() => {
       this.wake(x,y); return false;
     }
     swap(a,b){
-      const T=this.type,L=this.life,S=this.shade,X=this.vx,Y=this.vy,H=this.temp;
+      const T=this.type,L=this.life,S=this.shade,X=this.vx,Y=this.vy,H=this.temp,F=this.fuse;
       let t=T[a];T[a]=T[b];T[b]=t; t=L[a];L[a]=L[b];L[b]=t; t=S[a];S[a]=S[b];S[b]=t;
-      t=X[a];X[a]=X[b];X[b]=t; t=Y[a];Y[a]=Y[b];Y[b]=t; t=H[a];H[a]=H[b];H[b]=t;
+      t=X[a];X[a]=X[b];X[b]=t; t=Y[a];Y[a]=Y[b];Y[b]=t; t=H[a];H[a]=H[b];H[b]=t; t=F[a];F[a]=F[b];F[b]=t;
       this.done[a]=1; this.done[b]=1;
       this.wake(a%this.W,(a/this.W)|0); this.wake(b%this.W,(b/this.W)|0);
       if (SUPPORTS.has(T[b]) && !SUPPORTS.has(T[a])) this.unsettle(a%this.W,(a/this.W)|0);   // something load-bearing moved away
     }
     clear(){   // empties the whole world, the parts streamed out of the window included; regions not yet visited come in empty too
-      this.type.fill(0); this.life.fill(0); this.resetTemp(); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll();
+      this.type.fill(0); this.life.fill(0); this.resetTemp(); this.fuse.fill(0); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll();
       this.store.clear(); this.storedTrees.clear(); this.blank=true; this.epoch=(this.epoch||0)+1; this.job=null;
     }
     // density of the cell itself: muddy water, brine and acid get heavier with what they carry
@@ -391,6 +404,7 @@ const Sim = (() => {
       if (t===E) d+=(this.ambRow[y]-v)*0.03;                        // air bleeds heat toward the local ambient
       d/=CAPT[t]; v+=d; if (v<h) v=h;                               // burning things stay hot while they burn
       T[i]=v; if (d>0.3 || d<-0.3) this.wake(x,y);
+      if (FUSE[t] || t===WATER){ if (this.fusion(x,y,i,t,v)) return true; v=T[i]; }
       if (v<=HIAT[t] && v>=LOAT[t]) return false;
       const el=EL[t], ph = v>HIAT[t] ? el.hi : el.lo;
       if (ph.to===EMBER && this.soaked(x,y,true)){ T[i]=100; return false; }   // wet fuel spends its water before it can catch
@@ -398,13 +412,34 @@ const Sim = (() => {
       if (ph.to==='evaporate'){ this.set(i,E,v); this.hum[this.ac(x,y)]+=CQ; return true; }
       if (ph.to==='condense'){ if (this.openSky(x,y)){ this.set(i,E,v); this.hum[this.ac(x,y)]+=1; } else this.set(i,WATER,v); return true; }   // cooled steam joins the air's vapour; in a cave it drips
       if (ph.to==='boil'){ const s=this.life[i]; this.set(i, R()<s/SALT_UNIT ? SALT : STEAM, v); if (this.type[i]===STEAM) T[i]=Math.max(v,130); return true; }   // boiling brine leaves its salt behind
-      if (ph.to==='freeze'){ const b=y+1<this.H?this.type[this.idx(x,y+1)]:STONE; this.set(i, (b===E||isGas(b)||b===SNOW) ? SNOW : ICE, v); if (this.type[i]===ICE) this.life[i]=1; return true; }   // life 1 marks weather ice, which thaws in spring
       if (ph.to===STEAM && t===WATER) this.latent(x,y,i);
       this.set(i, ph.to, v);
       if (ph.to===STEAM) T[i]=Math.max(v,130);
       return true;
     }
 
+    // melting and freezing: a frozen cell warmed past 0° is held at 0° and banks the heat in fuse[] until it has its latent heat,
+    // then melts; water chilled below 0° is held at 0° and gives off its latent heat (banked as a positive amount too) before it
+    // freezes. So a block of ice melts layer by layer with its meltwater at 0°, a lake skins over slowly and the water under the
+    // ice stays liquid, and meltwater running onto cold rock refreezes. Heat flowing the other way first unbanks what was saved.
+    fusion(x,y,i,t,v){
+      const T=this.temp, F=this.fuse, c=CAPT[t];
+      if (t!==WATER){
+        if (v<=0 && F[i]<=0) return false;
+        let f=F[i]+v*c; v=0; if (f<0){ v=f/c; f=0; }
+        T[i]=v; F[i]=f;
+        if (f<FUSE[t]) return false;
+        this.set(i, WATER, (f-FUSE[t])/CAPT[WATER]); return true;
+      }
+      if (v>=0 && F[i]<=0) return false;
+      let f=F[i]-v*c; v=0; if (f<0){ v=-f/c; f=0; }
+      T[i]=v; F[i]=f;
+      // what it freezes into: snow if it is falling or lies on snow (a drop freezing on the way down), ice if it is sitting
+      const b=y+1<this.H ? this.type[i+this.W] : STONE, to=(b===E || isGas(b) || b===SNOW) ? SNOW : ICE;
+      if (f<FUSE[to]) return false;
+      this.set(i, to, -(f-FUSE[to])/CAPT[to]); if (to===ICE) this.life[i]=1;
+      return true;
+    }
     // boiling takes far more heat than warming: water flashing to steam draws LATENT degrees' worth out of whatever hot neighbours
     // boiled it (shared between them, by heat capacity), so water poured on a fire cools it instead of only steaming off
     latent(x,y,i){
@@ -919,7 +954,7 @@ const Sim = (() => {
     }
     blankColumns(x0,x1){
       const {W,H}=this;
-      for (let y=0;y<H;y++){ const a=y*W+x0, b=y*W+x1, amb=this.ambRow[y]; this.type.fill(0,a,b); this.life.fill(0,a,b); this.shade.fill(0,a,b); this.temp.fill(amb,a,b); this.vx.fill(0,a,b); this.vy.fill(0,a,b); this.owner.fill(0,a,b); this.done.fill(0,a,b); }
+      for (let y=0;y<H;y++){ const a=y*W+x0, b=y*W+x1, amb=this.ambRow[y]; this.type.fill(0,a,b); this.life.fill(0,a,b); this.shade.fill(0,a,b); this.temp.fill(amb,a,b); this.fuse.fill(0,a,b); this.vx.fill(0,a,b); this.vy.fill(0,a,b); this.owner.fill(0,a,b); this.done.fill(0,a,b); }
       for (let ay=0;ay<this.AH;ay++){ const a=ay*this.AW+x0/AC, b=ay*this.AW+x1/AC; this.hum.fill(0,a,b); this.chill.fill(0,a,b); }
     }
     packRegion(x0){
@@ -1082,8 +1117,8 @@ const Sim = (() => {
               if (y+1<H && T[i+W]===DIRT && (this.life[i+W]&255)>=60 && this.life[i]<3 && R()<0.05){ this.life[i+W]-=20; this.life[i]++; this.wake(x,y); }
               break;
             case WATER: case BRINE:
-              if (y>0 && T[i-W]===E){
-                if (amb<0 && t===WATER){ temp[i]+=(amb-temp[i])*0.05; if (temp[i]<0) this.wake(x,y); }   // a still surface chills in freezing air, then freezes over
+              if (y>0 && (T[i-W]===E || (amb<0 && isGas(T[i-W])))){   // (freezing fog lying on a pond chills it like clear air)
+                if (amb<0 && t===WATER){ temp[i]+=(amb-temp[i])*0.2; if (temp[i]<0) this.wake(x,y); }   // a still surface chills in freezing air, then freezes over as it sheds its latent heat
                 else {
                   // evaporation: faster from warm water into dry air; salt holds water back
                   const a=this.ac(x,y-1), cp=this.cap[a], deficit=cp>0 ? 1-this.hum[a]/cp : 0;
@@ -1091,8 +1126,10 @@ const Sim = (() => {
                 }
               }
               break;
-            case SNOW: temp[i]+=(amb-temp[i])*0.05; if (temp[i]>2) this.wake(x,y); break;   // spring melt: warm snow goes back to the heat step
-            case ICE: if (this.life[i]===1 && amb>4 && y>0 && T[i-W]===E && R()<0.02) this.set(i,WATER,2); break;   // lake ice thaws; built ice (life 0) stays
+            case SNOW: temp[i]+=(amb-temp[i])*0.05; if (temp[i]>0){ this.wake(x,y); this.fusion(x,y,i,t,temp[i]); } break;   // spring melt: warm snow banks the heat toward melting
+            case ICE:   // ice open to the air takes the air's temperature: it melts in a thaw, and in a frost it carries the cold down into the water under it
+              if (y>0 && (T[i-W]===E || isGas(T[i-W]))){ temp[i]+=(amb-temp[i])*0.1; if (temp[i]>0){ this.wake(x,y); this.fusion(x,y,i,t,temp[i]); } else if (amb<0 && y+1<H && T[i+W]===WATER) this.wake(x,y); }
+              break;
           }
         }
       }
@@ -1464,7 +1501,7 @@ const Sim = (() => {
     for (let x=x0;x<x1;x++){ if (x>x0 && x%32===0) yield; reseed(mix(s, g.ox+x)); for (let y=0;y<H;y++){
       const gx=g.ox+x, i=g.idx(x,y), sy=surf[x-x0]; if (y<sy) continue;
       const depth=y-sy, ly=y-top, dn=ly/LH;   // (the land's noise is in its own rows, so the extra sky doesn't change it)
-      let t=STONE;
+      let t=STONE, frozen=false;
       const soil=4+nz(gx/20,ly/20,2)*8;
       if (depth<soil) t = sy>top+LH*0.42 ? SAND : DIRT;                    // topsoil, with sandy shores in the low valleys
       else {
@@ -1480,9 +1517,11 @@ const Sim = (() => {
         else if (o<0.21 && depth>40) t=lavaDist(x,ly)<=COOK ? STONE : GUNP;
         else if (o>0.70 && o<0.72 && depth>15) t=SALT;
         else if (c<0.3 && dn>0.5 && o>0.62) t=ICE;
+        frozen = c<0.36 && dn>0.47 && o>0.56;   // ice veins lie in a halo of frozen rock (permafrost), which keeps them frozen in the warm deep ground
       }
       if (y>=H-3) t=STONE;
       if (t!==E) g.set(i,t, EL[t].t0===AMB ? g.ambAt(y) : undefined);   // the ground starts at the local ambient, so it doesn't spend its first minutes cooling
+      if (frozen && (t===STONE || t===ICE)) g.temp[i]=PERMAFROST;
       if (t===DIRT) g.life[i]=(40<<8)|Math.min(MOIST, 70+depth*18);      // damper with depth
     } }
     // lakes: flood shallow dips in the surface (a dip just outside the range can still spill into it)
@@ -1550,14 +1589,14 @@ const Sim = (() => {
   // a chain: each different product made in the last CHAIN_WINDOW ticks adds CHAIN_STEP to the multiplier, up to CHAIN_MAX
   const POINT = 0.01;   // reaction points per unit of VALUE (a big fire turns over hundreds of thousands of cells)
   const CHAIN_WINDOW = 180, CHAIN_STEP = 0.5, CHAIN_MAX = 4, HOLD_GOAL = 90, CHECK = 6;
-  const STARTER = ['Sand','Dirt','Seed','Snow','Water','Stone','Wood','Fire','Smoke'];   // the sandbox rack before any unlocks
+  const STARTER = ['Sand','Dirt','Seed','Snow','Water','Stone','Metal','Wood','Fire','Smoke'];   // the sandbox rack before any unlocks
 
   // building helpers for a scenario's layout, in box coordinates
   function builder(g){
     const at=(x,y)=>g.idx(BOX.x+x, BOX.y+y);
     const b={
       put(x,y,t,life){ if (x<0||y<0||x>=BOX.w||y>=BOX.h) return; const i=at(x,y); g.set(i,t, EL[t].t0===AMB ? g.ambAt(BOX.y+y) : undefined); if (life!==undefined) g.life[i]=life; },
-      warm(x,y){ const i=at(x,y); g.temp[i]=g.ambAt(BOX.y+y); },
+      warm(x,y,T){ const i=at(x,y); g.temp[i]= T===undefined ? g.ambAt(BOX.y+y) : T; },   // set a cell's temperature (the air's there, by default)
       rect(x0,y0,x1,y1,t,life){ for (let y=y0;y<y1;y++) for (let x=x0;x<x1;x++) b.put(x,y,t,life); },
       tree(x,y,grow){   // a tree grown up in place, the way new worlds grow theirs
         if (!g.plantTree(BOX.x+x, BOX.y+y)) return null; const t=g.trees[g.trees.length-1]; t.water=20;
@@ -1602,8 +1641,9 @@ const Sim = (() => {
       fails:[],
       build(b){
         b.rect(0,150,320,200,STONE); b.rect(0,40,10,150,STONE);
-        b.rect(140,70,148,150,ICE); for (let y=70;y<150;y++) for (let x=140;x<148;x++) b.warm(x,y);   // an ice dam, at the air's temperature
-        b.rect(10,96,140,150,WATER);
+        b.rect(140,70,148,150,ICE);   // an ice dam, frozen hard (ice is made at -30°) onto frozen bedrock: the warm day melts it, but slower than the clock runs
+        for (let y=150;y<200;y++) for (let x=120;x<170;x++) b.warm(x,y,-30);
+        b.rect(10,96,140,150,WATER); for (let y=96;y<150;y++) for (let x=10;x<140;x++) b.warm(x,y,1);   // a glacial lake, barely above freezing
         b.rect(220,150,310,185,E);
       } },
     { id:'fire', name:'Firebreak', seed:14, time:90*60,
@@ -1714,7 +1754,7 @@ const Sim = (() => {
   // is a piece of saved text a scenario (rather than a plain world)?
   const isScenario = text => /^\s*\{/.test(text);
 
-  return {WORLD,EL,N,CH,AMB,DAY,YEAR,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
+  return {WORLD,EL,N,CH,AMB,DAY,YEAR,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL}};
 })();
 
 // ============================================================================
@@ -1722,7 +1762,7 @@ const Sim = (() => {
 // ============================================================================
 (() => {
 const {WORLD,EL,Grid,CH,generate,ids,REGION,BOX,SCENARIOS,Game}=Sim;
-const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}=ids;
+const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL}=ids;
 const ERASE=255, PAN=254;
 const W=WORLD.W, H=WORLD.H, VW=320, VH=240, WORLD_W=W*8;   // the grid is a 960-wide window that streams along a world eight times as wide
 const canThread=Sim.canShare && typeof Worker!=='undefined' && typeof Blob!=='undefined';
@@ -1819,7 +1859,10 @@ function render(){
     if (heatView){ px[o]=g.type[i]===E?C(10,10,14):heatColor(g.temp[i]); continue; }
     if (moistView){ px[o]=moistColor(i); continue; }
     rgbOf(i,tmp);
-    const gl=EL[g.type[i]].glow, L=gl>0?1:dark+(1-dark)*Math.max(0,light[o]);
+    let gl=EL[g.type[i]].glow;
+    const hot=g.temp[i];
+    if (hot>480 && !gl && g.type[i]!==E){ const a=Math.min(1,(hot-480)/700); tmp[0]+=(255-tmp[0])*a; tmp[1]+=(70+a*120-tmp[1])*a; tmp[2]+=(20-tmp[2])*a; gl=a; }   // red heat, then orange: hot rock and metal glow
+    const L=gl>0?Math.max(gl,dark+(1-dark)*Math.max(0,light[o])):dark+(1-dark)*Math.max(0,light[o]);
     px[o]=C(tmp[0]*L,tmp[1]*L,tmp[2]*L);
   }
   if (windView){   // a streak per wind cell, from its centre along the flow (×24 for visibility)
@@ -1842,7 +1885,7 @@ function render(){
 const GROUPS=[
   ['Powders',[SAND,DIRT,GUNP,SALT,SEED,SNOW,RUBBLE,ASH,LITTER]],
   ['Liquids',[WATER,OIL,ACID,LAVA,BRINE]],
-  ['Solids', [STONE,WOOD,ICE,GLASS,CHAR,PLANT,TIP]],
+  ['Solids', [STONE,METAL,WOOD,ICE,GLASS,CHAR,PLANT,TIP]],
   ['Gases',  [FIRE,SMOKE,STEAM,CLOUD,GAS]],
   ['Tools',  [ERASE,PAN]],
 ];
