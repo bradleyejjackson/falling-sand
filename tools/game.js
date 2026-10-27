@@ -33,7 +33,7 @@ const solutions = {
   },
   blast: {
     30: game => paintRect(game, 148, 136, 158, 150, GUNP),
-    120: game => paintRect(game, 158, 140, 175, 150, FIRE),
+    120: game => paintRect(game, 158, 145, 168, 150, FIRE),   // at the foot of the pile, which slumps differently each time
   },
   fire: {
     30: game => { paintRect(game, 150, 120, 200, 150, E); },   // clear a firebreak: grass and the trees in it

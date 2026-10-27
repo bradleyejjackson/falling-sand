@@ -383,8 +383,9 @@ const scenarios = {
     check('trees rooted in the region leave with it', ids.every(id => !g.trees.some(t => t.id === id) && g.storedTrees.has(id)), `${ids.length} trees`);
     ms = performance.now(); g.shift(-1); const tIn = performance.now() - ms;
     const t1 = snap('type'), l1 = snap('life'), o1 = snap('owner'), m1 = snap('temp');
-    let dt = 0, dl = 0, dm = 0, dow = 0; for (let k = 0; k < t0.length; k++) { if (t0[k] !== t1[k]) dt++; if (l0[k] !== l1[k]) dl++; if (Math.abs(m0[k] - m1[k]) > 0.5) dm++; if (o0[k] !== o1[k]) dow++; }
+    let dt = 0, dl = 0, dm = 0, dow = 0; for (let k = 0; k < t0.length; k++) { if (t0[k] !== t1[k]) dt++; if (l0[k] !== l1[k]) dl++; if (t0[k] === t1[k] && Math.abs(m0[k] - m1[k]) > 0.5) dm++; if (o0[k] !== o1[k]) dow++; }
     console.log(`  out and back: ${dt} types, ${dl} life values, ${dow} owners and ${dm} temperatures (beyond rounding) differ; shift out ${tOut.toFixed(0)} ms, back ${tIn.toFixed(0)} ms`);
+    // (a tree redrawn on return can fill a cell or two it was blocked from when it last grew; those cells take the air's temperature)
     check('a region comes back as it left', dt <= 30 && dl <= 30 && dm === 0, `${dt} types, ${dl} life values differ`);
     check('and so do its trees', ids.every(id => g.trees.some(t => t.id === id)));
     // walk five regions right, making each ahead of time the way the page does; then compare with the same land generated in place
@@ -401,6 +402,25 @@ const scenarios = {
     const s = g.save(), k = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); k.load(s);
     check('a streamed world saves and loads', k.ox === g.ox && k.worldW === 7680 && k.store.size === g.store.size && k.trees.length === g.trees.length, `${(s.length / 1024) | 0} KB`);
     k.shift(-1); check('and keeps streaming after loading', k.ox === g.ox - Sim.REGION && k.trees.length > 0);
+  },
+  sky() {
+    // the page's world is the 480-row land with extra sky over it: same land, shifted down; a 480-row save (streamed regions,
+    // trees and vapour included) loads into it with the sky added on top
+    const { W, H } = Sim.WORLD, a = new Sim.Grid(W, 480), b = new Sim.Grid(W, H), dy = b.top;
+    Sim.generate(a, 4242, 7680, 3200); Sim.generate(b, 4242, 7680, 3200);
+    let same = 0, n = 0; for (let y = 0; y < 480; y++) for (let x = 0; x < W; x++) { const i = a.idx(x, y); if (a.owner[i] || b.owner[b.idx(x, y + dy)]) continue; n++; if (a.type[i] === b.type[b.idx(x, y + dy)]) same++; }
+    let skyEmpty = true; for (let i = 0; i < dy * W; i++) if (b.type[i] !== E && !b.owner[i]) skyEmpty = false;
+    console.log(`  ${dy} rows of extra sky; the land matches the 480-row world on ${same}/${n} non-tree cells`);
+    check('the taller world is the same land with sky above it', dy === H - 480 && skyEmpty && same === n);
+    check('and keeps the same climate at the same height above the land', Math.abs(a.ambAt(200) - b.ambAt(200 + dy)) < 1e-9);
+    run(a, 200); a.shift(1); a.shift(1); run(a, 60);
+    // (compared with the same save loaded at its own size: loading redraws trees, which may differ by a cell or two from the live world)
+    const s = a.save(), k = new Sim.Grid(W, H), k0 = new Sim.Grid(W, 480); k.load(s); k0.load(s);
+    let ok = 0; for (let i = 0; i < k0.type.length; i++) if (k0.type[i] === k.type[i + dy * W]) ok++;
+    const hum = Math.abs(k0.hum[10 * a.AW + 7] - k.hum[(10 + dy / Sim.AC) * k.AW + 7]) < 0.01;
+    check('a save from the 480-row world loads into the taller one, shifted down', ok === k0.type.length && hum && k.trees.length === k0.trees.length && k.trees.every((t, j) => t.y === k0.trees[j].y + dy), `${ok}/${k0.type.length} cells`);
+    k.shift(-1); k0.shift(-1); ok = 0; for (let i = 0; i < k0.type.length; i++) if (k0.type[i] === k.type[i + dy * W]) ok++;
+    check('and its stored regions come back shifted down too', k.ox === a.ox - Sim.REGION && ok === k0.type.length && k.trees.length === k0.trees.length, `${ok}/${k0.type.length} cells`);
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
