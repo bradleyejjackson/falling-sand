@@ -112,13 +112,15 @@ const scenarios = {
   },
   snow() {
     // clouds snow in winter and rain in summer; snow on a cold hilltop lasts the winter and melts in spring
+    // (precipitation leaves the cloud as a flake or a drop: a flake counts as snow, and so does a drop that freezes on the way down)
     for (const [label, p] of [['winter', 0.88], ['summer', 0.42]]) {
-      const g = new Sim.Grid(200, 160); g.clock = Sim.YEAR * p; g.updateClimate();
+      const g = new Sim.Grid(200, 240); g.clock = Sim.YEAR * p; g.updateClimate();   // clouds 70 rows over the reference level, higher than most hills
       for (let y = 20; y < 26; y++) for (let x = 60; x < 140; x++) g.set(g.idx(x, y), Sim.ids.CLOUD);
       let sn = 0, rn = 0; const set = g.set.bind(g);
-      g.set = (i, t, tmp) => { if (t === SNOW && g.type[i] === WATER) sn++; if (t === WATER && g.type[i] === E) rn++; return set(i, t, tmp); };
+      // (counted where they leave the deck: wisps that drift down into the warm air near the floor drizzle rain, as they should)
+      g.set = (i, t, tmp) => { if (i < 40 * g.W && g.type[i] === E && (t === WATER || t === SNOW)) { rn++; if (t === SNOW) sn++; } else if (t === SNOW && g.type[i] === WATER) sn++; return set(i, t, tmp); };
       run(g, 1200);
-      console.log(`  ${label}: ${rn} drops fell, ${sn} froze into snow on the way down`);
+      console.log(`  ${label}: ${rn} drops or flakes fell, ${sn} of them as snow`);
       if (label === 'winter') check('winter clouds snow', rn > 5 && sn >= rn * 0.8);
       else check('summer clouds rain', rn > 5 && sn === 0);
     }
@@ -222,20 +224,51 @@ const scenarios = {
     // the generated world through an autumn: clouds form aloft with a level base, and it snows on the hills in winter.
     // The base is measured on the cloud in the land's own sky; the extra sky over it (rows above g.top) gets higher, night-time layers
     const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345); g.clock = Sim.YEAR * 0.55; g.updateClimate();
-    const bases = [], W = g.W; let snow = 0, cloud = 0, high = 0;
+    // A level base is a level base at one time: the base rises and falls with the air mass from one day to the next, so the
+    // spread is taken on each snapshot with enough cloud to measure, and the typical (median) snapshot has to be level
+    const bases = [], spreads = [], W = g.W; let snow = 0, cloud = 0, high = 0;
+    const q = (a, p) => a[Math.min(a.length - 1, (a.length * p) | 0)];
     run(g, 3 * Sim.DAY, Sim.DAY / 4, () => {
+      const now = [];
       for (let x = 0; x < W; x++) {
         let y = 0; while (y < g.H && (g.type[y * W + x] === E || Sim.EL[g.type[y * W + x]].kind === 'gas')) y++;
-        for (let yy = y - 8; yy >= 0; yy--) if (g.type[yy * W + x] === CLOUD) { if (g.type[(yy + 1) * W + x] !== CLOUD) { if (yy >= g.top) bases.push(yy); else high++; } break; }
+        for (let yy = y - 8; yy >= 0; yy--) if (g.type[yy * W + x] === CLOUD) { if (g.type[(yy + 1) * W + x] !== CLOUD) { if (yy >= g.top) now.push(yy); else high++; } break; }
       }
+      now.sort((a, b) => a - b); bases.push(...now); if (now.length >= 30) spreads.push(q(now, 0.9) - q(now, 0.1));
       const c = census(g, Sim.EL); snow = Math.max(snow, c.Snow || 0); cloud = Math.max(cloud, c.Cloud || 0);
     });
-    bases.sort((a, b) => a - b); const q = p => bases[Math.min(bases.length - 1, (bases.length * p) | 0)];
-    console.log(`  ${bases.length} cloud-base samples over 3 days; base p10 ${q(0.1)}, p50 ${q(0.5)}, p90 ${q(0.9)} rows; ${high} higher in the extra sky; most cloud ${cloud}, most snow lying ${snow}`);
+    bases.sort((a, b) => a - b); spreads.sort((a, b) => a - b);
+    const spread = spreads.length ? q(spreads, 0.5) : Infinity;
+    console.log(`  ${bases.length} cloud-base samples over 3 days; base p10 ${q(bases, 0.1)}, p50 ${q(bases, 0.5)}, p90 ${q(bases, 0.9)} rows; middle 80% of a snapshot spans ${spreads.join(' ')} rows; ${high} higher in the extra sky; most cloud ${cloud}, most snow lying ${snow}`);
     check('clouds form aloft', bases.length > 300);
-    check('with a consistent base (middle 80% within 70 rows)', q(0.9) - q(0.1) <= 70);
+    check('with a consistent base (middle 80% of a typical snapshot within 70 rows)', spread <= 70, `${spread} rows`);
     check('and the weather uses the extra sky above the land', high > 50, `${high} samples`);
     check('snow settles once winter comes (stage 2 had none on this world)', snow > 50);
+  },
+  precip() {
+    // rain or snow is decided by how cold the air is where the cloud lets it go, and what it falls through: a tall cloud over
+    // ground at 6° snows from its top, but the flakes melt on the way down and it rains; in winter the snow reaches the ground.
+    // (It used to be one temperature for the whole sky by season, so spring and autumn clouds snowed onto warm ground.)
+    const res = {};
+    for (const [label, p] of [['early spring', 0.02], ['summer', 0.3], ['late autumn', 0.63], ['winter', 0.85]]) {
+      Sim.reseed(4); const W = 160, H = Sim.WORLD.H, g = new Sim.Grid(W, H); g.clock = Sim.YEAR * p; g.updateClimate(); g.resetTemp(); g.windHold = 0;
+      const ground = g.skyY - 50; for (let y = ground; y < H; y++) for (let x = 0; x < W; x++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c];   // saturated air, so the cloud doesn't just evaporate
+      const base = ground - 35, top = ground - 130;   // a towering rain cloud
+      for (let y = top; y < base; y++) for (let x = 50; x < 110; x++) g.set(g.idx(x, y), CLOUD, g.ambAt(y));
+      let aloft = 0, flakes = 0, drops = 0; const fall = g.fall.bind(g);
+      g.fall = (j, y) => { if (g.ambRow[y] < 0) aloft++; return fall(j, y); };
+      g.wakeAll();
+      run(g, 1500, 10, () => {   // what is falling through the 30 rows over the ground
+        for (let y = ground - 30; y < ground - 1; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (g.type[i + W] !== E) continue; if (g.type[i] === SNOW) flakes++; else if (g.type[i] === WATER) drops++; }
+      });
+      console.log(`  ${label}: ground ${g.ambRow[ground - 1].toFixed(1)}°, cloud base ${g.ambRow[base].toFixed(1)}°, top ${g.ambRow[top].toFixed(1)}°; ${aloft} flakes formed aloft; near the ground ${drops} drops and ${flakes} flakes falling`);
+      res[label] = { aloft, flakes, drops, snow: flakes / Math.max(1, flakes + drops) };
+    }
+    const sp = res['early spring'], au = res['late autumn'], su = res.summer, wi = res.winter;
+    check('spring and autumn clouds over ground at 6° snow at the top but it melts into rain on the way down', sp.aloft > 50 && au.aloft > 50 && sp.snow < 0.15 && au.snow < 0.15, `${(sp.snow * 100).toFixed(0)}% and ${(au.snow * 100).toFixed(0)}% of what reaches the ground is snow`);
+    check('summer clouds rain', su.drops > 100 && su.flakes === 0);
+    check('winter clouds snow all the way down', wi.flakes > 100 && wi.flakes > 20 * wi.drops, `${wi.flakes} flakes, ${wi.drops} drops`);
   },
   storm() {
     // a lake poured into a lava pit on the generated world boils into a storm cloud, which rains itself out in a minute or two
