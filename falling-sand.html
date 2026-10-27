@@ -251,7 +251,8 @@ const Sim = (() => {
   react(MGLASS, WATER, 0.5, GLASS, STEAM);     // water quenches molten glass hard
   react(MGLASS, BRINE, 0.5, GLASS, STEAM);
   react(LAVA, WATER, 0.5, STONE, STEAM);       // and lava to a crust of rock: without this a cell of lava (heat capacity 25) took ~20 of water
-  react(LAVA, BRINE, 0.5, STONE, STEAM);       //   (3, plus the latent heat of boiling) to cool, so water could not put out a lava flow
+                                               //   (3, plus the latent heat of boiling) to cool, so water could not put out a lava flow.
+                                               //   (Brine still just boils off lava, leaving its salt.)
   const has = new Uint8Array(N); for (const k of RX.keys()) has[(k/N)|0]=1;
   // dissolution: salt dissolves into water as brine's salt content; acid eats these and is used up, and water dilutes it
   const ACIDABLE = new Uint8Array(N); for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR,DIRT,LITTER,ROOT,MUD,CLAY,RUST]) ACIDABLE[t]=1;
