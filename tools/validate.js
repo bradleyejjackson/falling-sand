@@ -267,6 +267,22 @@ const scenarios = {
       check('oil spreads into a film on water', cols >= 45 && thick <= 2);
     }
   },
+  level() {
+    // water poured from a spout onto an open floor runs out wide while it pours, and lies flat once it stops (it must not heap like sand)
+    Sim.reseed(4); const W = 300, H = 100, g = new Sim.Grid(W, H); g.windHold = 0;
+    for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y));
+    g.initAir(); g.wakeAll();
+    const prof = () => { const hs = []; for (let x = 0; x < W; x++) { let h = 0; for (let y = 0; y < H; y++) if (g.type[g.idx(x, y)] === WATER) h++; hs.push(h); } return hs; };
+    let cols10 = 0;
+    run(g, 1500, 1, f => {
+      if (f <= 1200) for (let dx = -1; dx <= 1; dx++) { const i = g.idx(150 + dx, 10); if (g.type[i] === E) { g.set(i, WATER); g.vy[i] = 1; } }
+      if (f === 600) cols10 = prof().filter(h => h > 0).length;
+    });
+    const hs = prof(), lo = Math.min(...hs), hi = Math.max(...hs);
+    console.log(`  after 10 s of pouring the water covers ${cols10} of ${W} columns; 5 s after the spout stops its depth is ${lo}..${hi}`);
+    check('poured water runs out wide while pouring', cols10 >= 200, `${cols10} columns`);
+    check('water settles level once the pour stops', hi - lo <= 3, `depth ${lo}..${hi}`);
+  },
   salt() {
     const box = (W, H, floor = 4) => { Sim.reseed(4); const g = new Sim.Grid(W, H); g.windHold = 0; for (let x = 0; x < W; x++) for (let y = H - floor; y < H; y++) g.set(g.idx(x, y), STONE, g.ambAt(y)); for (let y = 0; y < H; y++) { g.set(g.idx(0, y), STONE); g.set(g.idx(W - 1, y), STONE); } g.initAir(); g.wakeAll(); return g; };
     { // salt dropped into a tank dissolves; the brine is heavier and settles in a layer under the fresh water
