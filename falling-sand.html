@@ -18,7 +18,7 @@ h1{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04e
 h1 span{color:var(--accent)}
 .stats{color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:16px;flex-wrap:wrap}
 .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden;
-  aspect-ratio:8/5;max-width:100%;max-height:60vh;margin:0 auto;width:100%;flex-shrink:0}
+  aspect-ratio:4/3;max-width:100%;max-height:60vh;margin:0 auto;width:100%;flex-shrink:0}
 canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:crosshair}
 .groups{display:flex;flex-direction:column;gap:8px}
 .group{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
@@ -103,7 +103,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Hot air rises, so fires and lava make their own updrafts. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Ecology: Dirt holds moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward, and open ground dries in the sun. Plant a Sapling on damp dirt, or drop a Seed on it: trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water picks up sand and dirt and drops it where it slows, so streams cut channels and build deltas. Lava is thick and heaps into mounds as it cools; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -235,6 +235,9 @@ const Sim = (() => {
   // so tiles two apart in both directions never touch the same cell: the four checkerboard phases (even/odd column ×
   // even/odd row) each run all their tiles at once on any number of threads, and the result is the same on one thread or eight.
   // (A two-colour checkerboard would run diagonal neighbours together, and they share a corner.)
+  // The world the page plays in. The land is laid out in the bottom LAND_H rows of any grid; rows above that are extra sky,
+  // room for the weather to build and rain out over the hills (a 480-row grid has none and generates as it always did).
+  const WORLD = {W:960, H:640}, LAND_H = 480;
   const TILE = 64, TILE_H = TILE, REACH = TILE/2, PHASES = 4, DEFER_MAX = 4096;
   // Streaming: the grid is a window onto a wider world and moves REGION columns at a time (a multiple of the tile, chunk and air cell)
   const REGION = 320;
@@ -278,7 +281,8 @@ const Sim = (() => {
       this.CW=L.CW; this.CHh=L.CHh; this.AW=L.AW; this.AH=L.AH; this.TW=L.TW; this.TH=L.TH;
       this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;                    // the window the current tile may touch
       this.frame=0; this.wind=0.3; this.windHold=null;                   // windHold pins the prevailing wind (tests)
-      this.skyY=(H*0.4)|0;
+      this.top=Math.max(0,H-LAND_H);                                   // rows of sky above the land's layout
+      this.skyY=this.top+(((H-this.top)*0.4)|0);
       this.trees=[]; this.treeId=1;                                      // tree entities
       this.bfsQ=new Int32Array(1300); this.bfsMark=new Int32Array(W*H); this.bfsStamp=0;   // per-thread scratch
       this.ox=0; this.worldW=W; this.worldSeed=0; this.store=new Map(); this.storedTrees=new Map();   // streaming: where the window sits in a wider world
@@ -816,9 +820,9 @@ const Sim = (() => {
       for (let k=this.trees.length-1;k>=0;k--){ const t=this.trees[k]; if (t.dead){ this.trees.splice(k,1); continue; } if (t.falling) this.fallTree(t); else if ((this.frame+t.id)%TREE_TICK===0) this.growTree(t); }
     }
     treesSave(){ return JSON.stringify(this.trees.map(t=>this.treeRecord(t,0))); }
-    treesLoad(json){
+    treesLoad(json, dy=0){
       this.trees=[]; this.owner.fill(0); if (!json) return;
-      for (const d of JSON.parse(json)){ const t=this.treeFrom(d,0); this.trees.push(t); this.rasterTree(t); }
+      for (const d of JSON.parse(json)){ d.y+=dy; const t=this.treeFrom(d,0); this.trees.push(t); this.rasterTree(t); }
     }
     // ---- streaming: the window moves a region at a time. The region that leaves is packed into the store with the trees
     //      rooted in it; the region that enters comes back from the store, or is generated the first time. Regions outside
@@ -905,11 +909,19 @@ const Sim = (() => {
       const regions={}; for (const [k,r] of this.store) regions[k]={type:b64(r.type), life:b64(r.life), temp:b64(r.temp), owner:b64(r.owner), hum:b64(new Uint16Array(r.hum.buffer.slice(0))), trees:r.trees};
       return JSON.stringify({ox:this.ox, worldW:this.worldW, seed:this.worldSeed, blank:this.blank||undefined, treeId:this.treeId, regions});
     }
-    storeLoad(json){
+    storeLoad(json, dy=0){
       this.store.clear(); this.storedTrees.clear();
       if (!json){ this.ox=0; this.worldW=this.W; this.blank=true; return; }
       const d=JSON.parse(json); this.ox=d.ox; this.worldW=d.worldW; this.worldSeed=d.seed; this.blank=!!d.blank; this.treeId=Math.max(this.treeId,d.treeId||1);
-      for (const k in d.regions){ const r=d.regions[k]; this.store.set(+k,{type:unb64(r.type), life:unb64(r.life), temp:unb64(r.temp), owner:unb64(r.owner), hum:new Float32Array(unb64(r.hum).buffer), trees:r.trees}); for (const t of r.trees) this.storedTrees.set(t.id,+k); }
+      // (sky added over a shorter save's regions: empty air at the ambient temperature, and no vapour)
+      const pad=(rle,f)=>{ if (!dy) return rle; const a=unrle16(rle), b=new Uint16Array(a.length+REGION*dy); for (let k=0;k<REGION*dy;k++) b[k]=f((k/REGION)|0); b.set(a,REGION*dy); return rle16(b); };
+      const amb=y=>Math.round(this.ambAt(y))&0xffff, zero=()=>0;
+      for (const k in d.regions){
+        const r=d.regions[k], hum=new Float32Array(unb64(r.hum).buffer), h=new Float32Array(hum.length+REGION/AC*dy/AC); h.set(hum,h.length-hum.length);
+        for (const t of r.trees) t.y+=dy;
+        this.store.set(+k,{type:pad(unb64(r.type),zero), life:pad(unb64(r.life),zero), temp:pad(unb64(r.temp),amb), owner:pad(unb64(r.owner),zero), hum:h, trees:r.trees});
+        for (const t of r.trees) this.storedTrees.set(t.id,+k);
+      }
     }
     openSky(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return true; const t=this.type[this.idx(x,y-k)]; if (t!==E && !isGas(t)) return false; } return true; }
     stepCloud(x,y,i){
@@ -1350,18 +1362,20 @@ const Sim = (() => {
       const [rle,treeJson='',soil='',clock='',fluids='',air='',stream='']=str.split('|');
       const unpack=b64=>{ const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); return new Uint16Array(bytes.buffer); };
       const u=unpack(rle);
-      if (u[0]!==this.W||u[1]!==this.H) throw new Error('world size mismatch');
+      // a save from a shorter grid of the same land (before the world had its extra sky) loads with sky added over the top
+      const dy=this.H-u[1];
+      if (u[0]!==this.W || dy<0 || (dy && (dy%AC || Math.max(0,u[1]-LAND_H)+dy!==this.top))) throw new Error('world size mismatch');
       if (clock) { this.clock=+clock; this.updateClimate(); }
-      this.clear(); let i=0;
+      this.clear(); let i=dy*this.W;
       for (let p=2;p<u.length;p+=2){ const t=u[p], n=u[p+1]; for (let k=0;k<n;k++,i++){ this.type[i]=t; this.temp[i]=t===E?this.ambAt((i/this.W)|0):EL[t].t0; this.shade[i]=(R()*64)|0; const l=EL[t].life; this.life[i]=l?l[0]:EL[t].soil; } }
       const unrle=(b64,keep)=>{ const s=unpack(b64); let p=0, left=s.length?s[1]:0;
         for (let j=0;j<this.type.length && p<s.length;j++){ if (!keep.has(this.type[j])) continue; this.life[j]=s[p]; if (--left===0){ p+=2; left=s[p+1]; } } };
       if (soil) unrle(soil,KEEP_LIFE);     // older saves have no soil section: dirt keeps its default moisture
       if (fluids) unrle(fluids,FLUID_LIFE); // nor liquid state: water is clean, brine and acid take their defaults
-      this.storeLoad(stream);              // nor a wider world: it loads as a world the size of the window
-      this.treesLoad(treeJson);
+      this.storeLoad(stream, dy);          // nor a wider world: it loads as a world the size of the window
+      this.treesLoad(treeJson, dy);
       this.initAir();
-      if (air){ const s=unpack(air); for (let p=0,c=0;p<s.length;p+=2) for (let k=0;k<s[p+1];k++,c++) this.hum[c]=s[p]/100; }
+      if (air){ const s=unpack(air); for (let p=0,c=dy/AC*this.AW;p<s.length;p+=2) for (let k=0;k<s[p+1];k++,c++) this.hum[c]=s[p]/100; }
       this.wakeAll();
     }
   }
@@ -1378,21 +1392,22 @@ const Sim = (() => {
   function terrain(g){
     if (g.noise && g.noise.seed===g.worldSeed) return g.noise;
     const s=g.worldSeed, keep=seedNow(), nz=noise2(s), cave=noise2(s+7), ore=noise2(s+13); reseed(keep);
-    return g.noise={seed:s, nz, cave, ore, surf:gx=>(g.H*0.32 + (nz(gx/90,0.5,4)-0.5)*g.H*0.35)|0};
+    const top=g.top, LH=g.H-top;
+    return g.noise={seed:s, nz, cave, ore, surf:gx=>top+((LH*0.32 + (nz(gx/90,0.5,4)-0.5)*LH*0.35)|0)};
   }
   const LAKE=0x1a4e, TREE=0x7e3e, TREES_EVERY=12;
   // (a generator: it yields between slices of work, so a region can be made a little at a time in spare moments)
   function* columns(g, x0, x1){
-    const {W,H}=g, T=terrain(g), {nz,cave,ore}=T, gx0=g.ox+x0, gx1=g.ox+x1, s=g.worldSeed;
+    const {W,H,top}=g, LH=H-top, T=terrain(g), {nz,cave,ore}=T, gx0=g.ox+x0, gx1=g.ox+x1, s=g.worldSeed;
     const surf=new Int16Array(x1-x0); for (let x=x0;x<x1;x++) surf[x-x0]=T.surf(g.ox+x);
     for (let x=x0;x<x1;x++){ if (x>x0 && x%32===0) yield; reseed(mix(s, g.ox+x)); for (let y=0;y<H;y++){
       const gx=g.ox+x, i=g.idx(x,y), sy=surf[x-x0]; if (y<sy) continue;
-      const depth=y-sy, dn=y/H;
+      const depth=y-sy, ly=y-top, dn=ly/LH;   // (the land's noise is in its own rows, so the extra sky doesn't change it)
       let t=STONE;
-      const soil=4+nz(gx/20,y/20,2)*8;
-      if (depth<soil) t = sy>H*0.42 ? SAND : DIRT;                    // topsoil, with sandy shores in the low valleys
+      const soil=4+nz(gx/20,ly/20,2)*8;
+      if (depth<soil) t = sy>top+LH*0.42 ? SAND : DIRT;                    // topsoil, with sandy shores in the low valleys
       else {
-        const c=cave(gx/48,y/32,3), o=ore(gx/30,y/30,3);
+        const c=cave(gx/48,ly/32,3), o=ore(gx/30,ly/30,3);
         if (c>0.62 && depth>8){ t=E;
           if (dn>0.9 && c>0.66) t=LAVA;
           else if (c>0.7 && dn>0.55 && o<0.4) t=OIL;
@@ -1465,7 +1480,7 @@ const Sim = (() => {
   //   {trees:true, rect, tall:n}                                living trees rooted in the rectangle with a trunk at least n cells
   //   {made:'Steam'}                                            cells of that element made by reactions since the start
   // The scenario is won when every goal has held for HOLD_GOAL ticks, and lost when any fail's range is reached or time runs out.
-  const BOX = {x:320, y:280, w:320, h:200};
+  const BOX = {x:320, y:WORLD.H-200, w:320, h:200};
   const byName = n => { const e=EL.find(e=>e.name===n); if (!e) throw new Error('no element '+n); return e.id; };
   const ids = v => (Array.isArray(v) ? v : [v]).map(byName);
   // what a reaction product is worth. Weather (cloud, rain, snow, melt) and movement score nothing.
@@ -1636,17 +1651,17 @@ const Sim = (() => {
   // is a piece of saved text a scenario (rather than a plain world)?
   const isScenario = text => /^\s*\{/.test(text);
 
-  return {EL,N,CH,AMB,DAY,YEAR,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
+  return {WORLD,EL,N,CH,AMB,DAY,YEAR,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}};
 })();
 
 // ============================================================================
 //  RENDER + INPUT — browser-specific; replaced wholesale in the engine port.
 // ============================================================================
 (() => {
-const {EL,Grid,CH,generate,ids,REGION,BOX,SCENARIOS,Game}=Sim;
+const {WORLD,EL,Grid,CH,generate,ids,REGION,BOX,SCENARIOS,Game}=Sim;
 const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT}=ids;
 const ERASE=255, PAN=254;
-const W=960, H=480, VW=320, VH=200, WORLD_W=W*8;   // the grid is a 960-wide window that streams along a world eight times as wide
+const W=WORLD.W, H=WORLD.H, VW=320, VH=240, WORLD_W=W*8;   // the grid is a 960-wide window that streams along a world eight times as wide
 const canThread=Sim.canShare && typeof Worker!=='undefined' && typeof Blob!=='undefined';
 const g=new Grid(W,H,{shared:canThread});
 window.sandfall={g,Sim};   // handy for poking at the world from the console
@@ -1842,7 +1857,8 @@ function paint(cx,cy){
   }
 }
 let drawing=false,panning=false,lastX=-1,lastY=-1,panPX=0,panPY=0;
-const clampCam=()=>{ if (game){ camX=BOX.x; camY=BOX.y; return; } camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
+// (in a scenario the camera sits on the box, with the sky over it)
+const clampCam=()=>{ if (game){ camX=BOX.x; camY=BOX.y+BOX.h-VH; return; } camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
 const pos=e=>{ const r=cv.getBoundingClientRect(); return [camX+((e.clientX-r.left)/r.width*VW)|0, camY+((e.clientY-r.top)/r.height*VH)|0]; };
 function stroke(e){
   const [x,y]=pos(e), x0=lastX, y0=lastY;
@@ -1888,7 +1904,7 @@ let worldSeed=(Math.random()*1e9)|0;
 function newWorld(seedN){
   if (game) leaveScenario(true);
   worldSeed=seedN; const ox=Math.floor((WORLD_W-W)/2/REGION)*REGION, surf=generate(g,worldSeed,WORLD_W,ox);   // start in the middle of the world
-  camX=(W-VW)/2|0; camY=Math.max(0,surf[camX+VW/2|0]-VH*0.6|0); clampCam(); dims();
+  camX=(W-VW)/2|0; camY=Math.max(0,surf[camX+VW/2|0]-VH*0.7|0); clampCam(); dims();
   msg('World #'+worldSeed);
 }
 document.getElementById('newworld').addEventListener('click',()=>whenIdle(()=>newWorld((Math.random()*1e9)|0)));

@@ -201,20 +201,22 @@ const scenarios = {
     check('dew wets dry soil overnight, and dry air does not', got.humid > 2 && got.dry <= 0, `${got.humid.toFixed(1)} vs ${got.dry.toFixed(1)}`);
   },
   clouds() {
-    // the generated world through an autumn: clouds form aloft with a level base, and it snows on the hills in winter
-    const g = new Sim.Grid(960, 480); Sim.generate(g, 12345); g.clock = Sim.YEAR * 0.55; g.updateClimate();
-    const bases = [], W = 960; let snow = 0, cloud = 0;
+    // the generated world through an autumn: clouds form aloft with a level base, and it snows on the hills in winter.
+    // The base is measured on the cloud in the land's own sky; the extra sky over it (rows above g.top) gets higher, night-time layers
+    const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345); g.clock = Sim.YEAR * 0.55; g.updateClimate();
+    const bases = [], W = g.W; let snow = 0, cloud = 0, high = 0;
     run(g, 3 * Sim.DAY, Sim.DAY / 4, () => {
       for (let x = 0; x < W; x++) {
         let y = 0; while (y < g.H && (g.type[y * W + x] === E || Sim.EL[g.type[y * W + x]].kind === 'gas')) y++;
-        for (let yy = y - 8; yy >= 0; yy--) if (g.type[yy * W + x] === CLOUD) { if (g.type[(yy + 1) * W + x] !== CLOUD) bases.push(yy); break; }
+        for (let yy = y - 8; yy >= 0; yy--) if (g.type[yy * W + x] === CLOUD) { if (g.type[(yy + 1) * W + x] !== CLOUD) { if (yy >= g.top) bases.push(yy); else high++; } break; }
       }
       const c = census(g, Sim.EL); snow = Math.max(snow, c.Snow || 0); cloud = Math.max(cloud, c.Cloud || 0);
     });
     bases.sort((a, b) => a - b); const q = p => bases[Math.min(bases.length - 1, (bases.length * p) | 0)];
-    console.log(`  ${bases.length} cloud-base samples over 3 days; base p10 ${q(0.1)}, p50 ${q(0.5)}, p90 ${q(0.9)} rows; most cloud ${cloud}, most snow lying ${snow}`);
+    console.log(`  ${bases.length} cloud-base samples over 3 days; base p10 ${q(0.1)}, p50 ${q(0.5)}, p90 ${q(0.9)} rows; ${high} higher in the extra sky; most cloud ${cloud}, most snow lying ${snow}`);
     check('clouds form aloft', bases.length > 300);
     check('with a consistent base (middle 80% within 70 rows)', q(0.9) - q(0.1) <= 70);
+    check('and the weather uses the extra sky above the land', high > 50, `${high} samples`);
     check('snow settles once winter comes (stage 2 had none on this world)', snow > 50);
   },
   storm() {
@@ -394,20 +396,21 @@ const scenarios = {
   stream() {
     // a window streaming along a world eight times as wide: regions round-trip exactly, streamed land matches land generated in place,
     // trees go and come back with their regions, and a stored region is a small fraction of its size in memory
-    const g = new Sim.Grid(960, 480); Sim.generate(g, 4242, 7680, 3200); run(g, 120);
+    const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 4242, 7680, 3200); run(g, 120);
     const snap = f => { const o = []; for (let y = 0; y < g.H; y++) for (let x = 0; x < Sim.REGION; x++) o.push(g[f][y * g.W + x]); return o; };
     const t0 = snap('type'), l0 = snap('life'), o0 = snap('owner'), m0 = snap('temp'), ids = g.trees.filter(t => t.x < Sim.REGION).map(t => t.id).sort();
     let ms = performance.now(); g.shift(1); const tOut = performance.now() - ms;
     check('trees rooted in the region leave with it', ids.every(id => !g.trees.some(t => t.id === id) && g.storedTrees.has(id)), `${ids.length} trees`);
     ms = performance.now(); g.shift(-1); const tIn = performance.now() - ms;
     const t1 = snap('type'), l1 = snap('life'), o1 = snap('owner'), m1 = snap('temp');
-    let dt = 0, dl = 0, dm = 0, dow = 0; for (let k = 0; k < t0.length; k++) { if (t0[k] !== t1[k]) dt++; if (l0[k] !== l1[k]) dl++; if (Math.abs(m0[k] - m1[k]) > 0.5) dm++; if (o0[k] !== o1[k]) dow++; }
+    let dt = 0, dl = 0, dm = 0, dow = 0; for (let k = 0; k < t0.length; k++) { if (t0[k] !== t1[k]) dt++; if (l0[k] !== l1[k]) dl++; if (t0[k] === t1[k] && Math.abs(m0[k] - m1[k]) > 0.5) dm++; if (o0[k] !== o1[k]) dow++; }
     console.log(`  out and back: ${dt} types, ${dl} life values, ${dow} owners and ${dm} temperatures (beyond rounding) differ; shift out ${tOut.toFixed(0)} ms, back ${tIn.toFixed(0)} ms`);
+    // (a tree redrawn on return can fill a cell or two it was blocked from when it last grew; those cells take the air's temperature)
     check('a region comes back as it left', dt <= 30 && dl <= 30 && dm === 0, `${dt} types, ${dl} life values differ`);
     check('and so do its trees', ids.every(id => g.trees.some(t => t.id === id)));
     // walk five regions right, making each ahead of time the way the page does; then compare with the same land generated in place
     let slices = 0, worst = 0; for (let k = 0; k < 5; k++) { for (;;) { const a = performance.now(); const more = g.prefetch(); worst = Math.max(worst, performance.now() - a); if (!more) break; slices++; } g.shift(1); }
-    const h = new Sim.Grid(960, 480); Sim.generate(h, 4242, 7680, g.ox);
+    const h = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(h, 4242, 7680, g.ox);
     let same = 0, tot = 0; for (let i = 0; i < g.type.length; i++) { if (i % g.W < 2 * Sim.REGION || g.owner[i] || h.owner[i]) continue; tot++; if (g.type[i] === h.type[i]) same++; }
     console.log(`  new regions made ahead in ${slices} slices, the longest ${worst.toFixed(1)} ms; the newest region matches in-place generation on ${same}/${tot} non-tree cells`);
     check('streamed land is the same land', same === tot);
@@ -416,9 +419,28 @@ const scenarios = {
     console.log(`  ${g.store.size} regions stored, ${(per / 1024).toFixed(0)} KB each against ${(raw / 1024).toFixed(0)} KB live (${(raw / per).toFixed(0)}x)`);
     check('a stored region takes a small fraction of its live memory', per * 10 < raw);
     // save and load the streamed world
-    const s = g.save(), k = new Sim.Grid(960, 480); k.load(s);
+    const s = g.save(), k = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); k.load(s);
     check('a streamed world saves and loads', k.ox === g.ox && k.worldW === 7680 && k.store.size === g.store.size && k.trees.length === g.trees.length, `${(s.length / 1024) | 0} KB`);
     k.shift(-1); check('and keeps streaming after loading', k.ox === g.ox - Sim.REGION && k.trees.length > 0);
+  },
+  sky() {
+    // the page's world is the 480-row land with extra sky over it: same land, shifted down; a 480-row save (streamed regions,
+    // trees and vapour included) loads into it with the sky added on top
+    const { W, H } = Sim.WORLD, a = new Sim.Grid(W, 480), b = new Sim.Grid(W, H), dy = b.top;
+    Sim.generate(a, 4242, 7680, 3200); Sim.generate(b, 4242, 7680, 3200);
+    let same = 0, n = 0; for (let y = 0; y < 480; y++) for (let x = 0; x < W; x++) { const i = a.idx(x, y); if (a.owner[i] || b.owner[b.idx(x, y + dy)]) continue; n++; if (a.type[i] === b.type[b.idx(x, y + dy)]) same++; }
+    let skyEmpty = true; for (let i = 0; i < dy * W; i++) if (b.type[i] !== E && !b.owner[i]) skyEmpty = false;
+    console.log(`  ${dy} rows of extra sky; the land matches the 480-row world on ${same}/${n} non-tree cells`);
+    check('the taller world is the same land with sky above it', dy === H - 480 && skyEmpty && same === n);
+    check('and keeps the same climate at the same height above the land', Math.abs(a.ambAt(200) - b.ambAt(200 + dy)) < 1e-9);
+    run(a, 200); a.shift(1); a.shift(1); run(a, 60);
+    // (compared with the same save loaded at its own size: loading redraws trees, which may differ by a cell or two from the live world)
+    const s = a.save(), k = new Sim.Grid(W, H), k0 = new Sim.Grid(W, 480); k.load(s); k0.load(s);
+    let ok = 0; for (let i = 0; i < k0.type.length; i++) if (k0.type[i] === k.type[i + dy * W]) ok++;
+    const hum = Math.abs(k0.hum[10 * a.AW + 7] - k.hum[(10 + dy / Sim.AC) * k.AW + 7]) < 0.01;
+    check('a save from the 480-row world loads into the taller one, shifted down', ok === k0.type.length && hum && k.trees.length === k0.trees.length && k.trees.every((t, j) => t.y === k0.trees[j].y + dy), `${ok}/${k0.type.length} cells`);
+    k.shift(-1); k0.shift(-1); ok = 0; for (let i = 0; i < k0.type.length; i++) if (k0.type[i] === k.type[i + dy * W]) ok++;
+    check('and its stored regions come back shifted down too', k.ox === a.ox - Sim.REGION && ok === k0.type.length && k.trees.length === k0.trees.length, `${ok}/${k0.type.length} cells`);
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
