@@ -61,6 +61,33 @@ function suite(threads) {
   check('panning back brings the first land back', g.ox === ox0 && same / here.length > 0.95, `${(100 * same / here.length).toFixed(1)}% of cells the same type`);
   p.run(1); p.els.save.fire('click'); p.run(1); const big = p.store['sandfall.world'];
   check('a streamed world saves', big && big.split('|').length === 7, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
+
+  // scenarios: the Play row, a budgeted rack, winning through the brush, unlocks, and saving a scenario in progress
+  const scn = n => p.created.find(e => e.className === 'el scn' && e.innerHTML.includes(n));
+  check('the sandbox rack starts with the starter elements only', btn('Lava').disabled && !btn('Water').disabled && /Lava crossing/.test(btn('Lava').title), btn('Lava').title);
+  check('only the first scenario is open', !scn('Irrigation').disabled && scn('Lava crossing').disabled);
+  scn('Irrigation').fire('click'); p.run(2);
+  const game = p.sf.game();
+  check('a scenario opens with its mission and a budgeted rack', game && p.els.mission.classList.contains('on') && /Erase <b>120<\/b>/.test(btn('Erase <b>120</b>') ? btn('Erase <b>120</b>').innerHTML : '') && btn('Water').style.display === 'none',
+    `${p.els.mname.textContent}; ${p.created.filter(e => e.className === 'el' && e.style.display !== 'none').map(e => e.innerHTML.replace('<i></i>', '')).join(', ')}`);
+  btn('Erase <b>120</b>').fire('click'); p.els.brush.value = '3'; p.els.brush.fire('input');
+  for (const vy of [114, 118, 122, 126, 129]) for (const vx of [62, 66]) { cv.fire('pointerdown', at(vx, vy)); cv.fire('pointerup', at(vx, vy)); p.run(1); }
+  check('erasing through the brush spends the budget', game.left('Erase') < 120 && /Erase <b>\d+<\/b>/.test(p.created.find(e => e.className === 'el' && e.innerHTML.startsWith('<i></i>Erase')).innerHTML), `${game.left('Erase')} left`);
+  for (let k = 0; k < 4000 && game.state === 'play'; k++) p.run(1);
+  p.run(2);
+  check('the scenario is won and the banner says so', game.state === 'won' && p.els.banner.classList.contains('on') && /Scenario won/.test(p.els.bannerh.textContent), `${game.state} ${game.why} at ${(game.t / 60).toFixed(0)} s; ${p.els.bannerp.textContent}`);
+  check('winning records the best score and opens the next scenario', p.sf.progress().best.irrigate === game.score && !scn('Lava crossing').disabled && /best/.test(scn('Irrigation').innerHTML));
+  check('the banner offers the next scenario', p.els.banneracts.children.some(b => /Next: Lava crossing/.test(b.textContent)));
+  p.els.banneracts.children.find(b => /Next/.test(b.textContent)).fire('click'); p.run(2);
+  const g2 = p.sf.game();
+  check('Next starts the next scenario', g2 && g2.sc.id === 'lava' && !p.els.banner.classList.contains('on') && btn('Stone <b>250</b>'));
+  p.run(30); p.els.save.fire('click'); p.run(1); const ss = p.store['sandfall.world'];
+  check('saving in a scenario saves the scenario', ss && ss[0] === '{' && JSON.parse(ss).def.id === 'lava', p.els.msg.textContent);
+  p.els.leave.fire('click'); p.run(2);
+  check('Sandbox leaves the scenario, with its unlocks', !p.sf.game() && !p.els.mission.classList.contains('on') && !btn('Oil').disabled && btn('Lava').disabled && g.worldW === 7680);
+  p.els.load.fire('click'); p.run(2);
+  check('loading the save resumes the scenario', p.sf.game() && p.sf.game().sc.id === 'lava' && p.sf.game().t >= 30, p.els.msg.textContent);
+  p.els.leave.fire('click'); p.run(2);
   p.close();
 }
 const mode = process.argv[2];
