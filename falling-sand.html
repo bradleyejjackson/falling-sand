@@ -193,6 +193,8 @@ const Sim = (() => {
     HIAT[e.id] = e.hi ? e.hi.at : Infinity; LOAT[e.id] = e.lo ? e.lo.at : -Infinity;
     for (const f of EL) KH[e.id*N+f.id] = 2*e.k*f.k/(e.k+f.k)*0.24;   // harmonic mean: the poorer conductor limits the flow
   }
+  // a flame or a puff of steam is a little hot gas, next to a whole cell of water: it can't heat the water much before it's spent
+  for (const g of [FIRE,STEAM,SMOKE]) for (const l of [WATER,BRINE]){ KH[g*N+l]*=0.2; KH[l*N+g]*=0.2; }
   const TENS = new Uint8Array(N); for (const e of EL) TENS[e.id] = e.tension>0 ? 1 : 0;   // wetting liquids cohere with each other
   const isLiquid = t => KIND[t]===2, isGas = t => KIND[t]===3;
 
@@ -1589,7 +1591,7 @@ const Sim = (() => {
       } },
     { id:'fire', name:'Firebreak', seed:14, time:90*60,
       brief:'Lightning has set the east end of the wood alight. Stop the fire before it reaches the west.',
-      budget:{Water:1200, Erase:400}, unlocks:['Plant','Litter','Sapling'],
+      budget:{Water:1200, Erase:400}, unlocks:['Plant','Litter','Sapling'], air:0.3,   // a dry spell: the fire can't raise a storm that rains it out
       goals:[{label:'Trees standing in the west', trees:true, rect:[0,0,130,200], min:3},
              {label:'Fire left burning', count:['Fire','Ember'], rect:[0,0,320,200], max:0}],
       fails:[{label:'Trees standing in the west', trees:true, rect:[0,0,130,200], max:2}],
@@ -1631,7 +1633,8 @@ const Sim = (() => {
       g.clear(); g.worldW=g.W; g.ox=0; g.worldSeed=0; g.clock=START; g.updateClimate(); g.resetTemp();
       for (let y=BOX.y;y<g.H;y++) for (let x=0;x<g.W;x++) if (x<BOX.x || x>=BOX.x+BOX.w) g.set(g.idx(x,y),STONE,g.ambAt(y));
       sc.build(builder(g));
-      g.initAir(); g.wakeAll();
+      g.initAir(); if (sc.air!==undefined) for (let c=0;c<g.hum.length;c++) g.hum[c]*=sc.air;   // air: how humid, against the usual
+      g.wakeAll();
       return new Game(g, sc);
     }
     prep(c){ return Object.assign({}, c, {ids: c.count ? ids(c.count) : c.made ? ids(c.made) : null, value:0}); }
