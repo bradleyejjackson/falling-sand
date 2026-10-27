@@ -198,15 +198,16 @@ const Sim = (() => {
   for (const g of [FIRE,STEAM,SMOKE]) for (const l of [WATER,BRINE]){ KH[g*N+l]*=0.2; KH[l*N+g]*=0.2; }
   // a snowflake is all surface: it takes the temperature of the air around it far faster than a solid lump would (snow lying in a
   // drift is still a good insulator, through its low k, against the ground and whatever is buried in it)
-  KH[SNOW*N+E]*=4; KH[E*N+SNOW]*=4;
+  KH[SNOW*N+E]*=8; KH[E*N+SNOW]*=8;
   // and a bar of metal is the opposite: it carries heat along itself far faster than it can hand it to the still air around it,
   // so a rod with one end in lava gets hot all the way along instead of losing it all in the first few cells
   KH[METAL*N+E]*=0.03; KH[E*N+METAL]*=0.03;
   // a block of ice in warm air melts from its faces over minutes, not seconds: still air hands it heat slowly
   KH[ICE*N+E]*=0.3; KH[E*N+ICE]*=0.3;
   // latent heat of fusion, in heat units (capacity × degrees): what a frozen cell must soak up at 0° to melt, and what water must
-  // give off at 0° to freeze into it. Ice is a cell of water: 80 water-degrees, as in life. A snow cell is mostly air, a third of that.
-  const FUSE = new Float32Array(N); FUSE[ICE] = 80*3; FUSE[SNOW] = 80;
+  // give off at 0° to freeze into it. Ice is a cell of water: 80 water-degrees, as in life. A snow cell is mostly air, an eighth of that
+  // (so a flake falling into air above freezing melts into rain within a few dozen rows, as before).
+  const FUSE = new Float32Array(N); FUSE[ICE] = 80*3; FUSE[SNOW] = 30;
   const TENS = new Uint8Array(N); for (const e of EL) TENS[e.id] = e.tension>0 ? 1 : 0;   // wetting liquids cohere with each other
   const isLiquid = t => KIND[t]===2, isGas = t => KIND[t]===3;
 

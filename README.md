@@ -102,13 +102,14 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
   pairwise, so it is conserved between cells. New: **Metal** (k 1.0, cap 1.2) carries heat end to end; stone (k 0.15, now
   cap 2) warms slowly and holds it; sand 1.2 and rubble 2 also hold more. Two contact factors on top of the table: a metal bar
   hands heat to still air at 3% of the plain rate (otherwise a rod in air loses it all in a few cells), a block of ice at
-  30%, and a snowflake to air at 4× (all surface). In 10 s with one end held at 600°, a metal bar is 118° 15 cells along and
+  30%, and a snowflake to air at 8× (all surface). In 10 s with one end held at 600°, a metal bar is 118° 15 cells along and
   a stone bar is still 20° 5 cells along; a 10×10 block heated from one face for 5 s averages 272° in metal, 77° in stone
   (`validate.js conduct`).
 - Solids glow red, then orange, above ~480° (render only).
 - Melting and freezing are latent heat, not thresholds (`Grid.fusion`, `fuse` field). Ice or snow warmed past 0° is held at
-  0° and banks the heat; it melts once it has `FUSE` (240 heat units for ice, a cell of water's 80 water-degrees; 80 for
-  snow, which is mostly air). Water chilled below 0° is held at 0° and gives the same amount off before it freezes (to snow
+  0° and banks the heat; it melts once it has `FUSE` (240 heat units for ice, a cell of water's 80 water-degrees; 30 for
+  snow, which is mostly air, so flakes falling into air above freezing still melt into rain on the way down: 8% of what
+  reaches 6° ground under a tall spring cloud is snow, was 7%). Water chilled below 0° is held at 0° and gives the same amount off before it freezes (to snow
   if it's falling, ice if it's sitting). Heat flowing back first unbanks what was saved. Before, ice melted at 40° and water
   froze the instant it touched 0°.
 - In the soil pass, exposed ice follows the air like bare ground does (so lake ice melts in a thaw and carries the frost down in
@@ -117,8 +118,8 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
   in a minute with all of its bottom half still liquid, and is gone after a minute of spring; water poured on a -40° metal
   plate freezes on it (`validate.js melt`).
 - World generation: ice veins in the deep (17-32°) rock would now melt, so they lie in a halo of rock at `PERMAFROST` (-25°),
-  taken from the same noise (no change to the land itself). A new world keeps 99.9% of its ice over 30 s.
+  taken from the same noise (no change to the land itself). A new world keeps 99.6% of its ice over 30 s (it lost 16% in the first minute without the permafrost).
 - Demolition: the ice dam (now -30°) stands on frozen bedrock and holds back a glacial lake at 1°; otherwise the 26-33° box
   air melted it through on its own by 28 s. Doing nothing still loses; the scripted blast still wins.
-- Saves don't carry `fuse` (half-melted cells restart their melt). Perf on the 960×640 world: tick 6.4 ms, render 4.4 ms;
+- Saves don't carry `fuse` (half-melted cells restart their melt). Perf on the 960×640 world: tick 6.0-6.4 ms, render 3.9-4.4 ms (unchanged within noise);
   a winter world 7.5 ms (was 7.8).

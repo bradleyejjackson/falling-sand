@@ -618,13 +618,13 @@ const scenarios = {
     }
     // water poured onto a frozen metal plate freezes on it (the plate is cold enough to take its latent heat)
     {
-      const g = new Sim.Grid(60, 40);
-      for (let y = 30; y < 33; y++) for (let x = 10; x < 50; x++) g.set(g.idx(x, y), METAL, -40);
+      Sim.reseed(6); const g = new Sim.Grid(60, 40);
+      for (let y = 30; y < 38; y++) for (let x = 10; x < 50; x++) g.set(g.idx(x, y), METAL, -40);
       for (let x = 25; x < 35; x++) g.set(g.idx(x, 29), WATER, 5);
-      run(g, 1200);
+      run(g, 1800);
       let ice = 0, water = 0; for (let i = 0; i < g.type.length; i++) { if (g.type[i] === ICE) ice++; if (g.type[i] === WATER) water++; }
-      console.log(`  water on a -40° metal plate after 20 s: ${ice} ice, ${water} water`);
-      check('water refreezes on cold metal', ice >= 8);
+      console.log(`  water on a -40° metal plate after 30 s: ${ice} ice, ${water} water`);
+      check('water refreezes on cold metal', ice >= 8 && water === 0);
     }
     // a new world's ice veins stay frozen (they lie in permafrost; before, warm deep rock melted them in the first minute)
     {
