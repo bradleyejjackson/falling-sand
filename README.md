@@ -15,6 +15,7 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   support cookoff conduct melt groundwater dunes windfire channel
                               #   grass compete seasonfire ... widen (E8) ... landslide frost beams (R5)
                               #   scrub cactus reeds biomes (R6)
+                              #   nutrients (R7)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -22,6 +23,7 @@ node tools/perf.js [seed]     # generates the page's world (Sim.WORLD, mid-world
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
 BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
 OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
+OX=0 node tools/soil.js [seed] [seasons]   # R7: topsoil and subsoil nutrients by cover (forest, meadow, scrub, bare), each season
 ```
 
 ## Engine (stage 4)
@@ -281,3 +283,23 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   second summer, regrowing after. Flat worlds and scenarios have no climate. `validate.js clouds` now measures at column 640,
   clear of seed 12345's own desert at 0-600 (a dry stretch widens the cloud-base spread across the whole window); its line is 90
   (R5 measures 82 there, R6 78-85). Perf A/B vs R5 equal.
+- Soil nutrients (R7): dirt, mud and clay carry fertility in the high byte of life (it was "richness", which only trees read and
+  nothing ever took away). Sources: rotting litter makes dirt at `LITTER_N` (was 200), rotting roots at `ROOT_N`, river silt
+  settles at 140, and ash now dissolves into the soil under it (through grass or litter) for `ASH_N`, at `ASH_WET` a visit once
+  rain or damp soil wets it, instead of turning into a cell of dirt at 255. Sinks: water draining down past what a cell holds
+  carries `LEACH` of the nutrients in its share of the water (`leached`), into the cell below, or lost into sand; groundwater
+  carries them downhill and a spring off; grass, roots and wild plants take them up as they drink and grow. Response,
+  `fert(n)`: 1 at `NREF` (60, painted dirt and scenario soil, so scenarios play as before), 0.3 on spent soil, up to 2 on rich.
+  It scales grass thickening and runners and whether its seed takes, how often a tree's growth step happens (half-weight) and
+  how far it grows (rich soil only), its seed drop, and reed and shrub growth (shrubs half-weight; cacti not at all). A tree's
+  `fert` is a running mean of the soil its roots drink from (saved). Generated topsoil starts at `HUMUS` (110) at the surface,
+  15 poorer a row down to 40, poorer again in the dry country. Soil view shows it; rich dirt renders darker.
+  Measured (`validate.js nutrients`): bare topsoil at 150 rained on hard for 3 min falls to ~48 while the subsoil gains; grass
+  on spent soil covers 67 columns in 36 s, on rich soil 200; saplings over 3 seeds grow trunks 40 vs 44 and 346 vs 410 wood in
+  1 min; a burnt meadow's ash leaves its topsoil 30 -> ~55. Over two years on 4 seeds (`tools/soil.js`), topsoil settles at
+  110-130 where the old build filled to 190-220 with litter, and meadow and tree counts stay within seed noise of R6 (year 2
+  trees 8/24/4 vs 3/30/8; the big second-summer wildfires that clear most of the forest on some seeds happen on R6 too).
+  Scenarios swept on 6 seeds match R6. Perf A/B vs R6 equal (tick ~9.5 ms p50, render ~5 ms). Test plots now lay dirt at
+  `NREF`. Checks that hung on one random stream now take more runs: `dew` averages four plots, `mud` sums eight (four plots
+  made 42-67 mud on R6 and 23-95 on R7 by the random stream alone). `compete`'s line is 0.65 of the open: the tree's litter
+  makes rich dirt under it (topsoil ~82 there against ~59 in the open), so the grass under it grows back faster (0.60; R6 0.54).

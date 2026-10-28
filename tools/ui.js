@@ -35,7 +35,7 @@ function suite(threads) {
   p.run(1200);
   check('seeds dropped on painted dirt become trees', g.trees.length >= 1, `${g.trees.length} trees`);
 
-  for (const id of ['moistview', 'heatview', 'windview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
+  for (const id of ['moistview', 'heatview', 'windview', 'soilview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
   p.run(3);
   check('view toggles render without errors', true);
 
