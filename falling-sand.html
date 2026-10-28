@@ -108,12 +108,13 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <button class="btn" id="season">Next season</button>
   <button class="btn" id="hold" aria-pressed="false">Hold time</button>
   <button class="btn" id="windset">Wind: natural</button>
+  <button class="btn" id="front">Send a cold front</button>
 </div>
 <div class="io" id="io">
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. The later scenarios: hold a river in flood off a town (dam it with a clay core: sand alone washes out), put out a volcano before its lava reaches the village (water crusts lava over, and the crater wants capping), and grow a forest in the desert (water sinks through sand, so line the beds with clay). Sandbox is free play: New world makes a fresh generated world, Flat world a level field of grass to build on, and the sandbox row skips to the next season, holds the clock still, or sets the wind. Speed runs up to four ticks a frame, in a scenario too. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt, however big the lake behind them. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Damp dirt is firm: it holds a bank twice as steep as dry dirt, which slumps like sand, and soaked dirt slumps again. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it, and its seed blows further off, so a meadow takes back ground a fire or a dead tree has cleared; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it (and reach drier soil than grass can use), and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap. New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools, and water quenches it to a crust of rock where they touch; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. The later scenarios: hold a river in flood off a town (dam it with a clay core: sand alone washes out), put out a volcano before its lava reaches the village (water crusts lava over, and the crater wants capping), and grow a forest in the desert (water sinks through sand, so line the beds with clay). Sandbox is free play: New world makes a fresh generated world, Flat world a level field of grass to build on, and the sandbox row skips to the next season, holds the clock still, or sets the wind. Speed runs up to four ticks a frame, in a scenario too. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt, however big the lake behind them. Rock, glass, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Damp dirt is firm: it holds a bank twice as steep as dry dirt, which slumps like sand, and soaked dirt slumps again. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it, and its seed blows further off, so a meadow takes back ground a fire or a dead tree has cleared; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it (and reach drier soil than grass can use), and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Weather comes in air masses that drift in from the west: warm, humid air and cold, dry air in turn, a few days apart (Heat view tints the air warmer or colder than usual). Cold air is denser, so the barometer on the stats line rises when cold air comes in and falls when warm air does, and it dips in the trough along a front. Where cold air drives into warm air (a cold front) it forces the warm air up into a line of tall shower clouds with heavy rain, tallest in summer; a warm front, where warm air rides in over cold, comes in gently. A deep storm cloud throws lightning at the highest thing under it: a hilltop, a tall tree, and a metal mast most of all (a lightning rod). It fuses sand to glass, and in the dry season it sets grass and trees alight; in the wet season it mostly scorches them. In the sandbox, Send a cold front brings one in from the west of the screen. Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap. New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools, and water quenches it to a crust of rock where they touch; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -320,6 +321,30 @@ const Sim = (() => {
   const REF_D = 50, REF_T = 11, LOW_LAPSE = 0.12, LOW_AIR = 100, LAPSE = 0.06, UPPER = 150;   // the lapse rate: per row up to LOW_AIR rows over skyY (past the hilltops), then per row for UPPER rows more, then none
   const AC = 4, AIRSLOW = 4, WINDSLOW = 4, S20 = 0.4, BG_RH = 0.55, EVQ = 1/16, CQ = 0.1, THERMAL = 80;   // how high a thermal can climb
   const SAT = T => S20*Math.exp(0.065*(Math.min(T,150)-20));    // vapour a fully open coarse cell holds at T (doubles every ~11°)
+  // ---- air masses and fronts. The world's air comes in bands MASS_L cells across (give or take MASS_JIT), warm and humid ones
+  //      and cold and dry ones in turn, MASS_T° off the usual at full strength (a band is 55-100% of that). The bands drift east at
+  //      STEER cells a tick, plus STEER_W of the prevailing wind. A band's warmth is in the low air (all of it up to MASS_LOW rows
+  //      over skyY, fading out by MASS_TOP), and the air within MASS_MIXH rows of the ground drifts toward its humidity, MASS_RH
+  //      +- MASS_RHK (MASS_MIX of the way a visit). Where cold air advances on warm air (a cold front) the change comes over
+  //      FRONT_COLD columns; where warm air advances on cold (a warm front) it is spread over FRONT_WARM. Cold air is denser, so the
+  //      surface pressure is higher under it: P0 - PRESS_K hPa per degree of warmth, and TROUGH hPa less per degree of change across a front.
+  //      A cold front is sharp enough to lift the warm air it runs into (where the mass changes by more than half a band across
+  //      FRONT_SPAN coarse columns either way): FRONT_LIFT of the vapour in MASS_MIXH rows of that air a visit, times how sharp the
+  //      change is, rises to its cloud base (within FRONT_REACH rows) and builds a shower cloud upward from there, up to STORM_UP
+  //      rows tall when the warm sector is at full warmth and the season is warm. A warm front is too gentle to set one off. ----
+  const MASS_L = 2000, MASS_JIT = 600, MASS_T = 4, STEER = 0.25, STEER_W = 0.1, MASS_LOW = 60, MASS_TOP = 200, MASS_MIXH = 60,
+        MASS_RH = 0.5, MASS_RHK = 0.25, MASS_MIX = 0.01, FRONT_COLD = 48, FRONT_WARM = 360, P0 = 1013, PRESS_K = 2.5, TROUGH = 2,
+        FRONT_LIFT = 0.15, FRONT_SPAN = 3, FRONT_REACH = 160, STORM_UP = 120;
+  // ---- lightning. Every LSCAN ticks each coarse column's cloud is measured; a column more than STORM_N cells deep, with its base
+  //      STORM_CLEAR rows or more over the ground (fog is no storm), strikes the ground
+  //      with chance STRIKE_P × the square of the cells over that (the deep core of a shower cloud is where charge builds), but not
+  //      within STRIKE_GAP ticks of a strike within STRIKE_R columns (it spent the charge there). A front's squall also builds
+  //      charge over each column it lifts air in, CHARGE_K per row of updraft a visit (losing 1-CHARGE_KEEP of it every LSCAN
+  //      ticks), and strikes once that reaches 1 if there is cloud over it (STORM_MIN cells). The bolt goes for the highest point within
+  //      STRIKE_R columns (metal counts STRIKE_METAL rows higher: a lightning rod), and whatever it hits gets STRIKE_T° hot: sand
+  //      fuses to glass; grass and trees catch with chance STRIKE_CATCH in the wet season, rising to always at the height of the
+  //      dry season. A bolt shows for BOLT_T ticks. ----
+  const STORM_N = 20, STORM_CLEAR = 8, STORM_MIN = 6, CHARGE_K = 0.001, CHARGE_KEEP = 0.99, STRIKE_P = 0.0002, STRIKE_GAP = 180, STRIKE_CATCH = 0.15, LSCAN = 8, STRIKE_R = 24, STRIKE_METAL = 16, STRIKE_T = 1100, BOLT_T = 8;
 
   // ---- the grid --------------------------------------------------------------
   const CH = 16, G = 0.25, VMAX = 6;
@@ -370,6 +395,9 @@ const Sim = (() => {
     // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
     ['u',Float32Array,'wind'], ['v',Float32Array,'vface'], ['pres',Float32Array,'wind'], ['uc',Float32Array,'wind'], ['vc',Float32Array,'wind'], ['wsolid',Uint8Array,'wind'], ['wheat',Float32Array,'wind'],
     ['ambRow',Float32Array,'row'], ['precip',Uint32Array,'col'], ['sky',Int16Array,'aircol'],   // precip: drops of rain or snow released per column (a rain gauge)
+    // air masses: how much warmer the air mass over each coarse column is (at full depth) and the humidity it brings; mfade: how much of a mass's warmth each row has
+    ['massT',Float32Array,'aircol'], ['massH',Float32Array,'aircol'], ['mfade',Float32Array,'row'],
+    ['struck',Int32Array,'aircol'], ['charge',Float32Array,'aircol'],   // the tick lightning last struck near each coarse column, and the charge a front's storm has built over it
     ['made',Int32Array,'types'],   // cells each element has been turned into (set), counted for the game's reaction scoring
     ['ctl',Int32Array,'ctl'], ['gf',Float64Array,'gf'], ['jobs',Int32Array,'jobs'], ['deferred',Int32Array,'defer'],   // the job system's shared state
   ];
@@ -400,6 +428,7 @@ const Sim = (() => {
       this.CW=L.CW; this.CHh=L.CHh; this.SW=L.SW; this.SH=L.SH; this.AW=L.AW; this.AH=L.AH; this.TW=L.TW; this.TH=L.TH;
       this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;                    // the window the current tile may touch
       this.frame=0; this.wind=0.3; this.windHold=null;                   // windHold pins the prevailing wind (tests, the sandbox)
+      this.fronts=false; this.massX=0; this.lightning=false; this.strikes=0; this.bolts=[];   // fronts: air masses move over, lightning: storms strike (both on in generated and flat worlds); bolts: recent strikes, for drawing
       this.hold=false;                                                    // hold stops the clock: the time of day and the season stay put
       this.top=Math.max(0,H-LAND_H);                                   // rows of sky above the land's layout
       this.skyY=this.top+(((H-this.top)*0.4)|0);
@@ -411,6 +440,8 @@ const Sim = (() => {
       this.sun=0; this.light=0; this.climate=0; this.growth=0; this.foliage=0; this.seeding=false; this.dryness=0; this.yearPhase=0; this.dayPhase=0; this.seasonName='';
       if (opts.buffer) return;                                           // attached: the owner of the world has set it up
       this.temp.fill(AMB);
+      this.struck.fill(-STRIKE_GAP);
+      for (let y=0;y<H;y++){ const d=this.skyY-y; this.mfade[y]=Math.max(0,Math.min(1,(MASS_TOP-d)/(MASS_TOP-MASS_LOW))); }
       this.clock=START; this.updateClimate();
       this.resetTemp(); this.initAir();
     }
@@ -422,6 +453,7 @@ const Sim = (() => {
     ac(x,y){ return (y>>2)*this.AW+(x>>2); }                          // the coarse air cell holding (x,y)
     wc(x,y){ return (y>>4)*this.CW+(x>>4); }                          // the wind cell holding (x,y)
     windAt(x,y){ let w=this.wc(x,y); if (this.wsolid[w] && w>=this.CW) w-=this.CW; return this.uc[w]; }   // the sideways wind at (x,y): near the ground, that of the open cell above
+    airAt(x,y){ return this.ambRow[y]+this.massT[x>>2]*this.mfade[y]; }   // the air's usual temperature at (x,y), with the air mass over it
     rh(c){ return this.cap[c]>0 ? this.hum[c]/this.cap[c] : 1; }        // relative humidity
     airOver(x,y){ let a=this.ac(x,Math.max(0,y)); for (let q=0;q<2 && this.cap[a]<=0 && a>=this.AW;q++) a-=this.AW; return a; }   // the air over open ground at (x,y): a coarse cell its ground half fills holds no air, so the one above
     resetTemp(){ for (let y=0;y<this.H;y++){ const a=this.ambAt(y); this.temp.fill(a, y*this.W, (y+1)*this.W); } }
@@ -477,7 +509,7 @@ const Sim = (() => {
       if (SUPPORTS[T[b]] && !SUPPORTS[T[a]]) this.unsettle(ax,ay);   // something load-bearing moved away
     }
     clear(){   // empties the whole world, the parts streamed out of the window included; regions not yet visited come in empty too
-      this.type.fill(0); this.life.fill(0); this.resetTemp(); this.fuse.fill(0); this.vx.fill(0); this.vy.fill(0); this.swu.fill(0); this.swq.fill(0); this.swp.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll();
+      this.type.fill(0); this.life.fill(0); this.resetTemp(); this.fuse.fill(0); this.vx.fill(0); this.vy.fill(0); this.swu.fill(0); this.swq.fill(0); this.swp.fill(0); this.owner.fill(0); this.trees=[]; this.massT.fill(0); this.massH.fill(0); this.struck.fill(-STRIKE_GAP); this.charge.fill(0); this.bolts=[]; this.initAir(); this.wakeAll();
       this.store.clear(); this.storedTrees.clear(); this.pushing=[]; this.asked=[]; this.blank=true; this.epoch=(this.epoch||0)+1; this.job=null;
     }
     // density of the cell itself: muddy water, brine and acid get heavier with what they carry
@@ -1110,7 +1142,7 @@ const Sim = (() => {
       if (R()<Math.abs(wu)*2 && this.gasMove(i,t,x+(wu<0?-1:1),y)){ this.wake(x,y); return; }
       if (t===STEAM && this.stepSteam(x,y,i,wv)) return;
       // smoke rises while it is hotter than the air round it; cooled, it drifts and spreads out, and gathers under a ceiling
-      const buoy = t===SMOKE ? 0.1+0.5*Math.max(0,Math.min(1,(this.temp[i]-this.ambRow[y])/60)) : 0.5;
+      const buoy = t===SMOKE ? 0.1+0.5*Math.max(0,Math.min(1,(this.temp[i]-this.airAt(x,y))/60)) : 0.5;
       const up = R() < (t===FIRE?0.6:t===STEAM?0.75:t===SMOKE?buoy:0.45) - wv;
       if (up && this.gasMove(i,t,x,y-1)) return;
       const dir=R()<0.5?-1:1;
@@ -1373,6 +1405,7 @@ const Sim = (() => {
       const rec=this.store.get(key);
       if (rec){ this.store.delete(key); this.unpackRegion(inn,rec); }
       else if (!this.blank) generateColumns(this,inn,inn+REGION);
+      this.updateMasses(false); this.bolts=[];
       for (let k=0;k<AIRSLOW;k++) this.stepAir(k,true,inn/AC,(inn+REGION)/AC);
       if (rec) this.humIn(inn,rec.hum);
       this.wakeAll();
@@ -1451,7 +1484,7 @@ const Sim = (() => {
     openSky(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return true; const t=this.type[this.idx(x,y-k)]; if (t!==E && !isGas(t)) return false; } return true; }
     // precipitation leaves a cloud as snow where the cloud is below freezing and as rain where it isn't, at the air's
     // temperature there. Snow melts if the air it falls through is warm enough, and rain freezes if it is cold enough
-    fall(j,y){ const a=this.ambRow[y]; this.set(j, a<0 ? SNOW : WATER, a); }
+    fall(j,y){ const a=this.airAt(j%this.W,y); this.set(j, a<0 ? SNOW : WATER, a); }
     stepCloud(x,y,i){
       // a cloud cell is one water cell's worth of condensed vapour. It rides the wind, clumps, evaporates back into
       // air that isn't saturated, and rains from the underside when it is thick
@@ -1489,7 +1522,8 @@ const Sim = (() => {
         const hasN=(dx)=>x+dx>=0&&x+dx<W&&T[i+dx]===CLOUD;
         if (!hasN(dir) && hasN(-dir)){ /* stay with the cloud */ } else if (R()<0.5) move(x+dir,y); else if (R()<0.3) move(x,y+(R()<0.5?-1:1));
       }
-      this.wake(x,y);
+      if (this.life[i]===1 && T[i]===CLOUD) this.next[(y>>SC_SHIFT)*this.SW+(x>>SC_SHIFT)]=1;   // a front's storm cloud (life 1) keeps only its own block awake (moving, it wakes the others as it goes): the big ragged cloud kept half the sky awake
+      else this.wake(x,y);
     }
     nearTip(x,y){ for (let dy=-3;dy<=3;dy++) for (let dx=-3;dx<=3;dx++){ const nx=x+dx, ny=y+dy; if (this.inb(nx,ny)){ const t=this.type[this.idx(nx,ny)]; if (t===TIP||t===WOOD) return true; } } return false; }
     stepStatic(x,y,i,t){
@@ -1537,13 +1571,13 @@ const Sim = (() => {
     // ---- the soil pass: slow ecology that has to keep running in chunks that are asleep ----
     // Each tick visits every SLOW-th row, so every cell is seen once per SLOW ticks; the rates below are per visit.
     stepSoil(){
-      const {W,H,SW,type:T,temp,dirty}=this;
+      const {W,H,SW,type:T,temp,dirty,massT}=this;
       const dry=0.35*Math.max(0,(this.climate+6)/20)*(0.25+0.75*this.sun);   // exposed soil dries fastest on warm sunny afternoons
       const evap=0.1*(0.4+0.6*this.sun);   // open water evaporating into the air above it, sleeping lakes included
       for (let y=this.frame%SLOW;y<H;y+=SLOW){
-        const amb=this.ambRow[y], row=y*W, crow=(y>>SC_SHIFT)*SW;
+        const amb0=this.ambRow[y], mf=this.mfade[y], row=y*W, crow=(y>>SC_SHIFT)*SW;
         for (let x=0;x<W;x++){
-          const i=row+x, t=T[i];
+          const i=row+x, t=T[i], amb=amb0+massT[x>>2]*mf;   // (the air mass over it warms or chills it)
           const asleep=!dirty[crow+(x>>SC_SHIFT)];
           if (t===E){ if (asleep) temp[i]+=(amb-temp[i])*0.2; continue; }   // sleeping air still follows the weather
           if (asleep && y>0 && T[i-W]===E && (t===DIRT || t===SAND || t===STONE)) temp[i]+=(amb-temp[i])*0.1;   // and so does bare ground, so snow can lie on it in winter
@@ -1822,11 +1856,21 @@ const Sim = (() => {
               fl=Math.max(-hum[b]*0.5, Math.min(h*0.5, fl)); h-=fl; hum[b]+=fl;
             }
           }
+          // the air mass: the low air takes on the humidity the mass brings, and where a cold front runs into warm air it lifts it
+          if (this.fronts && y0<=sky[ax] && y0>sky[ax]-MASS_MIXH){
+            const ta=this.airAt(x0,y0);   // (at the air mass's own temperature: hot air over a fire takes up no more)
+            h+=(this.massH[ax]*(at-ta<3 && ta-at<3 ? cp : SAT(ta-ch)*f)-h)*MASS_MIX;
+            if (y0+AC>sky[ax] && ay>2){
+              const mt=this.massT, ml=mt[Math.max(0,ax-FRONT_SPAN)], mr=mt[Math.min(AW-1,ax+FRONT_SPAN)];
+              const ct=Math.min(1, 2*Math.abs(mr-ml)/MASS_T-1);   // how sharp the change is: only a cold front's is sharp enough
+              if (ct>0) this.squall(ax,y0,ct,Math.max(ml,mr));
+            }
+          }
           // thermals: on a sunny day air warmed at the ground rises until it cools to its dew point, and drops its vapour there.
           // Every patch with the same surface humidity lifts to the same height, which is what gives cumulus a flat base
           if (lift>0 && ay+1<AH && y0+AC>sky[ax] && y0<=sky[ax] && h>0.01 && ay>2){
             const dew=20+Math.log(h/f/S20)/0.065-2;   // a little past the dew point, so it condenses
-            const top=Math.max(AC*2, y0-THERMAL); let ty=y0-2*AC; while (ty>=top && this.ambRow[ty]>dew) ty-=AC;
+            const top=Math.max(AC*2, y0-THERMAL), mt=this.massT[ax]; let ty=y0-2*AC; while (ty>=top && this.ambRow[ty]+mt*this.mfade[ty]>dew) ty-=AC;
             if (ty>=top){ const tc=(ty>>2)*AW+ax, m=h*lift; if (airF[tc]>0){ hum[tc]+=m; h-=m; } }   // (air too dry to condense within a thermal's reach stays put: a clear blue day)
           }
           if (ay===0) h+=(BG_RH*cp-h)*0.01;   // the top of the world trades a little vapour with the sky beyond it
@@ -1846,6 +1890,99 @@ const Sim = (() => {
       }
     }
     initAir(){ this.chill.fill(0); this.hum.fill(0); for (let k=0;k<AIRSLOW;k++) this.stepAir(k,true); this.u.fill(0); this.v.fill(0); this.pres.fill(0); for (let k=0;k<6;k++) this.stepWind(); }
+
+    // ---- air masses and fronts (see MASS_L) ----
+    massEdge(k){ return k*MASS_L+((mix(k,this.worldSeed^0x3a55)>>>0)/4294967296-0.5)*MASS_JIT; }   // where band k starts
+    massOf(k){ return ((k&1)?1:-1)*(0.55+0.45*(mix(k,this.worldSeed^0x5e1f)>>>0)/4294967296); }      // odd bands warm and humid, even ones cold and dry
+    massAt(s){   // the air mass s cells east of where the bands started: -1 (cold, dry) to 1 (warm, humid), blended across a front
+      let b=Math.floor(s/MASS_L); if (s<this.massEdge(b)) b--; else if (s>=this.massEdge(b+1)) b++;
+      const v=this.massOf(b), lo=s-this.massEdge(b), hi=this.massEdge(b+1)-s, sm=t=>t*t*(3-2*t);
+      // the bands drift east, so at each edge it is the western air that advances: a cold front if that is the colder air
+      if (lo<hi){ const vw=this.massOf(b-1), w=vw<v?FRONT_COLD:FRONT_WARM; if (lo<w/2) return vw+(v-vw)*sm(0.5+lo/w); }
+      else { const ve=this.massOf(b+1), w=v<ve?FRONT_COLD:FRONT_WARM; if (hi<w/2) return ve+(v-ve)*sm(0.5+hi/w); }
+      return v;
+    }
+    updateMasses(drift){
+      if (!this.fronts) return;
+      if (drift) this.massX+=STEER+STEER_W*this.wind;
+      const {AW,massT,massH}=this;
+      for (let ax=0;ax<AW;ax++){ const v=this.massAt(this.ox+ax*AC+2-this.massX); massT[ax]=MASS_T*v; massH[ax]=MASS_RH+MASS_RHK*v; }
+    }
+    pressureAt(x){   // surface pressure (hPa): cold, dense air weighs more, and there is a trough along a front
+      const a=Math.max(0,Math.min(this.AW-1,x>>2)), m=this.massT, d=Math.abs(m[Math.min(this.AW-1,a+FRONT_SPAN)]-m[Math.max(0,a-FRONT_SPAN)]);
+      return P0-PRESS_K*m[a]-TROUGH*d;
+    }
+    sendFront(x){   // bring a cold front to window column x (the sandbox's button): cold air west of it, the warm sector east
+      let b=Math.round((this.ox+x-this.massX)/MASS_L); if (!(b&1)) b++;   // (the start of a warm band has cold air west of it)
+      this.fronts=true; this.massX=this.ox+x-this.massEdge(b); this.updateMasses(false);
+    }
+    // a cold front drives the warm air it runs into up over the cold air behind it. The air it lifts (MASS_MIXH rows of it, fed by
+    // the air mass, so at the band's humidity) rises to its cloud base and on up as a shower cloud, built from the base upward,
+    // up to STORM_UP rows tall when the warm sector is warm and the season too: FRONT_LIFT of that air's vapour a visit, times how sharp the front is
+    squall(ax,y0,ct,warmT){
+      const {W,type:T}=this, rh=this.massH[ax], at=this.airAt(ax*AC,y0), dew=at+Math.log(rh)/0.065-2, lo=Math.max(AC*2,y0-FRONT_REACH);
+      let ty=y0-AC; while (ty>=lo && this.airAt(ax*AC,ty)>dew) ty-=AC;
+      if (ty<lo) return;
+      const warm=Math.max(0,Math.min(1,warmT/MASS_T))*(0.3+0.7*this.growth), top=Math.max(AC*2, ty-((STORM_UP*warm)|0));
+      // the updraft is saturated air, all the way up: the cloud it carries doesn't dry out as it goes
+      for (let c=(ty>>2)*this.AW+ax; c>=0 && (c/this.AW|0)*AC>=top; c-=this.AW) if (this.hum[c]<this.cap[c]) this.hum[c]=this.cap[c];
+      this.charge[ax]+=CHARGE_K*(ty-top)*ct;   // the taller the updraft, the more charge it separates
+      let n=FRONT_LIFT*ct*rh*SAT(at)*(MASS_MIXH/AC)/CQ;   // cloud cells' worth (of the air mass's air: a fire's own heat doesn't count)
+      for (; n>0; n--){
+        if (n<1 && R()>=n) break;
+        const x=ax*AC+((R()*AC)|0); if (x>=W) continue;
+        let y=ty; while (y>=top && T[y*W+x]!==E) y--;
+        if (y>=top){ const j=y*W+x; this.set(j,CLOUD,this.airAt(x,y)); this.life[j]=1; this.wake(x,y); }   // (life 1: a storm cloud's, see stepCloud)
+      }
+    }
+    // ---- storms and lightning: the deeper a column of cloud, the more often it strikes (see STORM_N) ----
+    stepStorms(){
+      const {W,H,AW,type:T,charge}=this;
+      for (let ax=this.frame%LSCAN; ax<AW; ax+=LSCAN){
+        const x=Math.min(W-1,ax*AC+1); let n=0, base=-1, y=0;
+        for (;y<H;y++){ const t=T[y*W+x]; if (t===CLOUD){ n++; base=y; } else if (t!==E && KIND[t]!==3 && t!==WATER && t!==SNOW) break; }   // (down through rain to the ground)
+        const clear=y-base>=STORM_CLEAR, e=clear ? n-STORM_N : 0;   // (a fog bank lying on the ground is no storm, however deep)
+        charge[ax]*=CHARGE_KEEP;
+        if (!this.lightning || this.frame-this.struck[ax]<STRIKE_GAP) continue;
+        if ((e>0 && R()<Math.min(0.2,STRIKE_P*e*e)) || (charge[ax]>=1 && clear && n>=STORM_MIN)){
+          this.strike(x,base);
+          for (let k=-STRIKE_R/2;k<=STRIKE_R/2;k++) if (ax+k>=0 && ax+k<AW){ this.struck[ax+k]=this.frame; charge[ax+k]=0; }   // a strike spends the charge round it for a while
+        }
+      }
+    }
+    strike(x0,y0){
+      const {W,H,type:T}=this;
+      const pass=(x,y)=>{ const t=T[y*W+x]; return t===E || KIND[t]===3 || ((t===WATER || t===SNOW) && y+1<H && T[(y+1)*W+x]===E); };   // air, gas, cloud, or a falling drop
+      // it goes for the highest thing under the cloud within reach: a hilltop, a tall tree, and metal most of all
+      let tx=-1, ty=-1, best=-1e9;
+      for (let x=Math.max(0,x0-STRIKE_R); x<=Math.min(W-1,x0+STRIKE_R); x++){
+        let y=y0+1; while (y<H && pass(x,y)) y++;
+        if (y>=H) continue;
+        const sc=-y+(T[y*W+x]===METAL?STRIKE_METAL:0)-Math.abs(x-x0)*0.25;
+        if (sc>best){ best=sc; tx=x; ty=y; }
+      }
+      if (tx<0) return;
+      // a jagged channel down from the cloud base; whatever it runs into on the way is what it hits
+      const pts=[]; let x=x0;
+      for (let y=y0+1; y<ty; y++){
+        const left=ty-y, need=tx-x, r=R();
+        let dx=r<0.3 ? -1 : r<0.6 ? 1 : 0; if (Math.abs(need-dx)>left-1) dx=Math.sign(need);
+        x=Math.max(0,Math.min(W-1,x+dx));
+        if (!pass(x,y)){ tx=x; ty=y; break; }
+        pts.push(x,y);
+        const j=y*W+x; if (T[j]===GAS){ this.temp[j]=HIAT[GAS]+1; this.wake(x,y); }   // it sets off gas it passes through
+      }
+      // what it hits gets white hot: sand fuses to glass, water flashes to steam, metal carries the heat away. Wood and grass
+      // catch only some of the time (STRIKE_CATCH), far more often in the dry season than in the wet: otherwise it scorches them
+      const ht=T[ty*W+tx], fuel=!!FUEL[ht], burn=!fuel || R()<STRIKE_CATCH+(1-STRIKE_CATCH)*this.dryness;
+      for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){
+        const nx=tx+dx, ny=ty+dy; if (!this.inb(nx,ny)) continue; const j=ny*W+nx, t=T[j];
+        if (t===E){ if (fuel && burn && dy<0) this.set(j,FIRE); continue; }   // flames off whatever caught
+        if (KIND[t]===3 || (FUEL[t] && !burn)) continue;
+        this.temp[j]=Math.max(this.temp[j], dx&&dy ? STRIKE_T*0.6 : STRIKE_T); this.wake(nx,ny);
+      }
+      pts.push(tx,ty); this.bolts.push({pts, t:BOLT_T}); this.strikes++;
+    }
 
     // ---- the wind: a coarse incompressible flow on the chunk grid ----
     // The prevailing wind pushes along each row, warm cells push upward, and a pressure solve keeps the flow from piling
@@ -1949,7 +2086,7 @@ const Sim = (() => {
       return X1>X0 && Y1>Y0 ? [X0,X1,Y0,Y1] : null;
     }
     stepTile(tile){
-      const {W,H,SW,TW,type,done,dirty,ctl,ambRow}=this, temp=this.temp, W1=W-1, H1=H-1;
+      const {W,H,SW,TW,type,done,dirty,ctl,ambRow,massT,mfade}=this, temp=this.temp, W1=W-1, H1=H-1;
       const tx=tile%TW, ty=(tile/TW)|0, frame=ctl[C_FRAME];
       reseed(mix(ctl[C_SEED],tile));
       const [X0,X1,Y0,Y1]=this.tileRect(tx,ty);
@@ -1970,7 +2107,7 @@ const Sim = (() => {
             if (x<W1) d+=(temp[i+1]-v)*KHD[row+type[i+1]];
             if (y>0) d+=(temp[i-W]-v)*KHD[row+type[i-W]];
             if (y<H1) d+=(temp[i+W]-v)*KHD[row+type[i+W]];
-            if (th===E) d+=(ambRow[y]-v)*0.03;
+            if (th===E) d+=(ambRow[y]+massT[x>>2]*mfade[y]-v)*0.03;
             d/=CAPD[th]; v+=d; if (v<hf) v=hf;
             temp[i]=v; const q=d*CAPD[th]; if (q>WAKEQ[th] || q<-WAKEQ[th]) this.wake(x,y);   // heat still flowing in or out keeps it and its neighbours awake
             if ((SLOWHEAT[th] || v>HID[th] || v<LOD[th] || (th===OIL && this.life[i])) && this.phaseHeat(x,y,i,th,v)) continue;
@@ -2002,8 +2139,11 @@ const Sim = (() => {
       for (let k=np;k<nt;k++){ const i=list[k]; if (this.type[i]!==TIP) continue; const x=i%this.W, y=(i/this.W)|0; this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); }   // a sapling needs ground under it
       this.stepTrees();
       this.stepSoil();
+      this.updateMasses(true);
       this.stepAir(this.frame%AIRSLOW, false);
       if (this.frame%WINDSLOW===2) this.stepWind();
+      this.stepStorms();
+      if (this.bolts.length) this.bolts=this.bolts.filter(b=>--b.t>0);
       if (!this.hold) this.clock++;
       this.updateClimate();
       this.frame++; this.wind=this.windHold!==null ? this.windHold : 0.55*Math.sin(this.frame*0.0007)+0.15*Math.sin(this.frame*0.0031);
@@ -2012,7 +2152,7 @@ const Sim = (() => {
     // ---- serialisation: RLE of types | trees JSON | RLE of the life values that are state (soil moisture, rot) | clock
     //      | RLE of the liquids' life (sediment, salt, acid strength) | RLE of the vapour field in hundredths
     //      | JSON of the wider world: where the window sits, its width and seed, and the regions streamed out of the window
-    //      | RLE of sand moisture | RLE of plant life (grass sap and budget) ----
+    //      | RLE of sand moisture | RLE of plant life (grass sap and budget) | where the air masses have drifted to (empty: no fronts) ----
     // temps are restored from element defaults
     save(){
       const rle=(len,get,out)=>{ let run=get(0), n=0; for (let i=0;i<len;i++){ const v=get(i); if (v===run && n<65535) n++; else { out.push(run,n); run=v; n=1; } } if (len) out.push(run,n); return out; };
@@ -2020,10 +2160,10 @@ const Sim = (() => {
       const keep=[], fluid=[], sand=[], grass=[]; for (let i=0;i<this.type.length;i++){ const t=this.type[i]; if (KEEP_LIFE.has(t)) keep.push(this.life[i]); else if (FLUID_LIFE.has(t)) fluid.push(this.life[i]); else if (t===SAND) sand.push(this.life[i]); else if (t===PLANT) grass.push(this.life[i]); }
       const hum=this.hum;
       return pack(rle(this.type.length,i=>this.type[i],[this.W,this.H]))+'|'+this.treesSave()+'|'+pack(rle(keep.length,i=>keep[i],[]))+'|'+Math.round(this.clock)
-        +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]))+'|'+this.storeSave()+'|'+pack(rle(sand.length,i=>sand[i],[]))+'|'+pack(rle(grass.length,i=>grass[i],[]));
+        +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]))+'|'+this.storeSave()+'|'+pack(rle(sand.length,i=>sand[i],[]))+'|'+pack(rle(grass.length,i=>grass[i],[]))+'|'+(this.fronts ? this.massX.toFixed(2) : '');
     }
     load(str){
-      const [rle,treeJson='',soil='',clock='',fluids='',air='',stream='',sandy='',plants='']=str.split('|');
+      const [rle,treeJson='',soil='',clock='',fluids='',air='',stream='',sandy='',plants='',masses='']=str.split('|');
       const unpack=b64=>{ const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); return new Uint16Array(bytes.buffer); };
       const u=unpack(rle);
       // a save from a shorter grid of the same land (before the world had its extra sky) loads with sky added over the top;
@@ -2043,6 +2183,7 @@ const Sim = (() => {
       if (plants) unrle(plants,new Set([PLANT]));   // nor grass sap: grass loads green
       this.storeLoad(stream, dy);          // nor a wider world: it loads as a world the size of the window
       this.treesLoad(treeJson, dy);
+      if (masses!==''){ this.fronts=true; this.massX=+masses; this.updateMasses(false); }   // (where the air masses had drifted to; older saves keep the weather they had)
       const came=sw<this.W ? this.widen(sw) : [];
       this.initAir();
       if (air){ const s=unpack(air), aw=sw/AC; for (let p=0,c=0;p<s.length;p+=2) for (let k=0;k<s[p+1];k++,c++) this.hum[(dy/AC+((c/aw)|0))*this.AW+c%aw]=s[p]/100; }
@@ -2180,9 +2321,16 @@ const Sim = (() => {
     if (g.epoch!==epoch || g.store.has(key) || (gx0>=g.ox && gx0<g.ox+g.W)) return;   // the world changed under us, or the region got made another way
     g.store.set(key,rec); for (const t of rec.trees) g.storedTrees.set(t.id,key);
   }
+  // a new world's weather: air masses drifting over, and lightning. It opens in the middle of a warm sector, with the next cold
+  // front a thousand cells or so west of the window's middle (it arrives in about a minute)
+  function weatherOn(g){
+    g.fronts=true; g.lightning=true;
+    g.massX=g.ox+g.W/2-(g.massEdge(1)+g.massEdge(2))/2; g.updateMasses(false);
+  }
   // a new world: worldW wide (the grid's own width unless it streams), with the window starting at ox
   function generate(g, worldSeed, worldW=g.W, ox=0){
     g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=worldSeed; g.worldW=worldW; g.ox=ox; g.blank=false;
+    weatherOn(g);
     const surf=generateColumns(g,0,g.W);
     g.initAir();
     g.wakeAll();
@@ -2193,6 +2341,7 @@ const Sim = (() => {
   // stream). Returns the surface row.
   function flat(g){
     g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=0; g.worldW=g.W; g.ox=0; g.blank=false;
+    weatherOn(g);
     const top=g.H-140;
     for (let y=top;y<g.H;y++) for (let x=0;x<g.W;x++){ const i=g.idx(x,y); if (y<top+24){ g.set(i,DIRT,g.ambAt(y)); g.life[i]=(40<<8)|120; } else g.set(i,STONE,g.ambAt(y)); }
     for (let x=0;x<g.W;x++){ const h=1+(R()*2|0); for (let y=top-1;y>=top-h;y--){ const i=g.idx(x,y); g.set(i,PLANT,g.ambAt(y)); g.life[i]=(SAP0<<8)|1; } }
@@ -2369,7 +2518,10 @@ const Sim = (() => {
       g.wakeAll();
       return new Game(g, sc);
     }
-    static weather(g, sc){ g.windHold = sc.wind===undefined ? null : sc.wind; }   // a scenario may pin the prevailing wind
+    static weather(g, sc){   // a scenario may pin the prevailing wind; its air stays the one air mass, with no lightning
+      g.windHold = sc.wind===undefined ? null : sc.wind;
+      g.fronts=false; g.lightning=false; g.massT.fill(0); g.massH.fill(0); g.charge.fill(0); g.bolts=[];
+    }
     prep(c){ return Object.assign({}, c, {ids: c.count ? ids(c.count) : c.made ? ids(c.made) : c.open ? ids(c.open) : null, value:0}); }
     left(name){ const b=this.sc.budget[name]; return b===undefined ? 0 : b-(this.spent[name]||0); }
     inBox(x,y){ return x>=BOX.x && x<BOX.x+BOX.w && y>=BOX.y && y<BOX.y+BOX.h; }
@@ -2459,14 +2611,14 @@ const Sim = (() => {
   // is a piece of saved text a scenario (rather than a plain world)?
   const isScenario = text => /^\s*\{/.test(text);
 
-  return {WORLD,EL,N,CH,SC,AMB,DAY,YEAR,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,canShare,Grid,generate,flat,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS}};
+  return {WORLD,EL,N,CH,SC,AMB,DAY,YEAR,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,BOLT_T,MASS_L,canShare,Grid,generate,flat,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS}};
 })();
 
 // ============================================================================
 //  RENDER + INPUT — browser-specific; replaced wholesale in the engine port.
 // ============================================================================
 (() => {
-const {WORLD,EL,Grid,CH,SC,generate,ids,REGION,BOX,SCENARIOS,Game}=Sim;
+const {WORLD,EL,Grid,CH,SC,generate,ids,REGION,BOX,SCENARIOS,Game,BOLT_T}=Sim;
 const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS}=ids;
 const ERASE=255, PAN=254, CURED_SAP=Sim.CURED, MUD_DRY=190;
 const W=WORLD.W, H=WORLD.H, VW=320, VH=240, WORLD_W=WORLD.WIDE;   // the grid is a window that streams along a world ten times as wide
@@ -2565,19 +2717,30 @@ function moistColor(i){
 }
 let showChunks=false, heatView=false, moistView=false, windView=false;
 const tmp=[0,0,0];
+function airColor(i,y){   // Heat view's air: tinted by how much warmer or colder than usual it is, so air masses and fronts show
+  const a=Math.max(-1,Math.min(1,(g.temp[i]-g.ambRow[y])/8));
+  return C(10+70*Math.max(0,a), 10+12*Math.abs(a), 14+80*Math.max(0,-a));
+}
 function render(){
   if (!heatView && !moistView) computeLight();
   const dark=game ? 0.5 : 0.12;   // a puzzle stays readable through the night
+  const flash=g.bolts.some(b=>b.t>BOLT_T-3) ? 0.8 : 0;   // a fresh lightning strike lights up the whole scene
   for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
     const i=(camY+vy)*W+camX+vx, o=vy*VW+vx;
-    if (heatView){ px[o]=g.type[i]===E?C(10,10,14):heatColor(g.temp[i]); continue; }
+    if (heatView){ px[o]=g.type[i]===E?airColor(i,camY+vy):heatColor(g.temp[i]); continue; }
     if (moistView){ px[o]=moistColor(i); continue; }
     rgbOf(i,tmp);
     let gl=GLOW[g.type[i]];
     const hot=g.temp[i];
     if (hot>480 && !gl && g.type[i]!==E){ const a=Math.min(1,(hot-480)/700); tmp[0]+=(255-tmp[0])*a; tmp[1]+=(70+a*120-tmp[1])*a; tmp[2]+=(20-tmp[2])*a; gl=a; }   // red heat, then orange: hot rock and metal glow
-    const L=gl>0?Math.max(gl,dark+(1-dark)*Math.max(0,light[o])):dark+(1-dark)*Math.max(0,light[o]);
+    const L=Math.max(flash, gl>0?Math.max(gl,dark+(1-dark)*Math.max(0,light[o])):dark+(1-dark)*Math.max(0,light[o]));
     px[o]=C(tmp[0]*L,tmp[1]*L,tmp[2]*L);
+  }
+  for (const b of g.bolts){   // the lightning channel: white-hot, with a violet glow while it is fresh
+    const fresh=b.t>BOLT_T-3, p=b.pts;
+    for (let k=0;k<p.length;k+=2){ const vx=p[k]-camX, vy=p[k+1]-camY; if (vx<0||vx>=VW||vy<0||vy>=VH) continue;
+      px[vy*VW+vx]=fresh ? C(255,255,245) : C(190,180,255);
+      if (fresh){ if (vx>0) px[vy*VW+vx-1]=C(170,160,255); if (vx<VW-1) px[vy*VW+vx+1]=C(170,160,255); } }
   }
   if (windView){   // a streak per wind cell, from its centre along the flow (×24 for visibility)
     for (let cy=0;cy<g.CHh;cy++) for (let cx=0;cx<g.CW;cx++){
@@ -2732,6 +2895,7 @@ document.getElementById('flatworld').addEventListener('click',()=>whenIdle(()=>{
 document.getElementById('season').addEventListener('click',()=>whenIdle(()=>{ g.nextSeason(); msg(g.seasonName); }));
 holdEl.addEventListener('click',()=>setHold(!g.hold));
 windEl.addEventListener('click',()=>setWind((windK+1)%WINDS.length));
+document.getElementById('front').addEventListener('click',()=>whenIdle(()=>{ g.sendFront(Math.max(0,camX-120)); msg('A cold front is coming in from the west: watch the pressure'); }));
 document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ if (game) leaveScenario(true); g.clear(); msg('Cleared'); }));
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
 document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
@@ -2821,7 +2985,7 @@ function tick(){
   if (pool.n && g.workersReady()>=pool.n && g.awakeTiles){ g.startTiles(pool.n); busy=true; }
   else { g.runTiles(); g.endStep(); if (game) game.tick(); }
 }
-let fpsT=performance.now(), frames=0, stepMs=0, steps=0;
+let fpsT=performance.now(), frames=0, stepMs=0, steps=0; const baro=[];
 const fpsEl=document.getElementById('fps'), chunkEl=document.getElementById('chunks'), camEl=document.getElementById('cam'), thrEl=document.getElementById('threads');
 function loop(now){
   keyPan();
@@ -2842,7 +3006,9 @@ function loop(now){
     chunkEl.textContent=d+'/'+g.dirty.length+' chunks awake';
     camEl.textContent='x '+(g.ox+camX)+', y '+camY+' · '+g.store.size+' regions stored';
     thrEl.textContent=(pool.n ? pool.n+' worker threads' : '1 thread ('+pool.why+')')+(steps ? ', '+(stepMs/steps).toFixed(1)+' ms a tick on the main thread' : ''); stepMs=0; steps=0;
-    document.getElementById('wind').textContent='wind '+(g.wind<0?'←':'→')+' '+Math.abs(g.wind).toFixed(2);
+    const p=g.pressureAt(camX+VW/2); baro.push(p); if (baro.length>12) baro.shift();   // (six seconds of readings)
+    const dp=p-baro[0], trend=!g.fronts ? '' : dp<-0.2 ? ' falling' : dp>0.2 ? ' rising' : ' steady';
+    document.getElementById('wind').textContent='wind '+(g.wind<0?'←':'→')+' '+Math.abs(g.wind).toFixed(2)+', '+Math.round(p)+' hPa'+trend+(g.strikes ? ', '+g.strikes+' lightning strikes' : '');
     const hr=(g.dayPhase*24+6)%24;   // the day starts at sunrise, 06:00
     const deg=Math.round(g.climate);
     document.getElementById('clock').textContent=g.seasonName+(g.dryness>0.5?' (dry season)':'')+', day '+(((g.clock%Sim.YEAR)/Sim.DAY|0)+1)+', '+String(hr|0).padStart(2,'0')+':'+String((hr%1)*60|0).padStart(2,'0')+', '+(deg>0?'+':'')+deg+'°';

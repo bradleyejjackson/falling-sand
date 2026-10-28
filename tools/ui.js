@@ -40,7 +40,7 @@ function suite(threads) {
   check('view toggles render without errors', true);
 
   p.run(1); p.els.save.fire('click'); p.run(1); const saved = p.store['sandfall.world'];
-  check('save writes a 9-part world', saved && saved.split('|').length === 9, p.els.msg.textContent);
+  check('save writes a 10-part world', saved && saved.split('|').length === 10, p.els.msg.textContent);
   const trees = g.trees.length; p.run(1); g.clear(); p.els.load.fire('click'); p.run(1);
   check('load restores trees', g.trees.length === trees, `${g.trees.length}/${trees}; ${p.els.msg.textContent}`);
   p.els.export.fire('click'); p.run(1); const text = p.els.iotext.value;
@@ -61,7 +61,7 @@ function suite(threads) {
   let same = 0; for (let i = 0; i < here.length; i++) if (here[i] === g.type[i]) same++;
   check('panning back brings the first land back', g.ox === ox0 && same / here.length > 0.95, `${(100 * same / here.length).toFixed(1)}% of cells the same type`);
   p.run(1); p.els.save.fire('click'); p.run(1); const big = p.store['sandfall.world'];
-  check('a streamed world saves', big && big.split('|').length === 9, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
+  check('a streamed world saves', big && big.split('|').length === 10, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
 
   // scenarios: the Play row, a budgeted rack, winning through the brush, unlocks, and saving a scenario in progress
   const scn = n => p.created.find(e => e.className === 'el scn' && e.innerHTML.includes(n));
@@ -135,8 +135,15 @@ function suite(threads) {
   p.els.hold.fire('click'); p.run(5); check('and releasing it starts it again', g.clock > c0);
   p.els.windset.fire('click'); p.run(5);
   check('the wind button holds the wind', g.wind === 0 && /calm/.test(p.els.windset.textContent), `${g.wind} ${p.els.windset.textContent}`);
+  p.els.front.fire('click'); p.run(30);
+  const frontAt = (() => { for (let ax = 1; ax < g.AW; ax++) if (g.massT[ax - 1] < 0 && g.massT[ax] > 0) return ax * 4; return -1; })();
+  check('Send a cold front brings one in at the west of the screen', g.fronts && frontAt >= 0 && /cold front/.test(p.els.msg.textContent) && /hPa/.test(p.els.wind.textContent), `front at x ${frontAt}, ${p.els.wind.textContent}`);
+  const s1 = g.strikes; g.strike(g.W >> 1, 40); p.run(3);
+  check('a lightning strike draws and is counted', g.strikes === s1 + 1);
+  p.els.heatview.fire('click'); p.run(2); p.els.heatview.fire('click');
   scn('Irrigation').fire('click'); p.run(2);
   check('a scenario puts the wind and clock back to natural', g.windHold === null && !g.hold && /natural/.test(p.els.windset.textContent));
+  check('and has one air mass and no lightning', !g.fronts && !g.lightning && g.massT.every(v => v === 0));
   p.els.leave.fire('click'); p.run(2);
   p.close();
 }

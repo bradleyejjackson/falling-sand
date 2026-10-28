@@ -14,7 +14,8 @@ arrays (or one native allocation) and share them with worker threads unchanged. 
 | chunk  | (W/SC)×(H/SC), SC = 4         | `dirty` (awake this tick), `next` (woken for the next)                 |
 | air    | (W/AC)×(H/AC), AC = 4         | vapour `hum`, capacity `cap`, open fraction `airF`, `airT`, `chill`    |
 | wind   | (W/CH)×(H/CH), CH = 16        | MAC grid: `u` on vertical faces, `v` (vface scope) on horizontal ones, `pres`, cell-centred `uc`/`vc` |
-| row/col| H / W                        | `ambRow` (ambient temperature by row), `precip` (rain gauge); waves: `swu` (flow speed through each column's right face), `swq` (part of a cell carried so far), `swr` (surface row they belong to), `swp` (current from pressure moves) |
+| aircol | W/AC                         | `sky` (first ground row), air masses: `massT` (how much warmer than usual), `massH` (the humidity it brings), lightning: `charge`, `struck` (frame of the last strike) |
+| row/col| H / W                        | `ambRow` (ambient temperature by row), `mfade` (how much of an air mass's warmth each row has), `precip` (rain gauge); waves: `swu` (flow speed through each column's right face), `swq` (part of a cell carried so far), `swr` (surface row they belong to), `swp` (current from pressure moves) |
 | types  | 64                           | `made`: cells turned into each element (game scoring, `Atomics.add`)   |
 
 Per-element constants are flat tables indexed by type id (`KIND`, `CAPT`, `HOLDT`, `HIAT`, `LOAT`, `KH` N×N conductance,
@@ -29,7 +30,8 @@ those and the double-width copies (`KHD`, `CAPD`, ...), never the `EL` objects, 
    tiles in one phase can run on any number of threads. Each tile seeds the random stream from the frame seed and its index
    (`reseed(mix(seed, tile))`), so the result doesn't depend on thread count or tile order.
 3. `endStep`, on one thread: deferred work (every `PRESS_EVERY` (4) ticks, the pressure search; the wave pass; saplings become trees), trees, the soil pass (every 8th row, `SLOW`), the air pass
-   (every 4th coarse row, `AIRSLOW`), the wind solve (every 4th tick), the clock and climate.
+   (every 4th coarse row, `AIRSLOW`; the air masses are worked out just before it, `updateMasses`), the wind solve (every 4th
+   tick), storms and lightning (`stepStorms`), the clock and climate.
 
 ### The cell pass
 
@@ -79,13 +81,43 @@ Pressure moves only outlets at least `PRESS_GAP` (4) rows below the asking colum
 Each pressure move adds to `swp` along every column it passed, so floating things ride a river even where pressure carries
 most of its water.
 
+### Air masses, fronts and lightning
+
+The air comes in bands `MASS_L` (2000) cells across, give or take `MASS_JIT`, warm and humid (odd bands) and cold and dry (even
+ones) in turn, at 55-100% of `MASS_T` (4°). Their pattern hangs off world columns (`massEdge`, `massOf`, hashed from the world
+seed), shifted by one number, `massX`, which grows by `STEER` (0.25) + `STEER_W` × the prevailing wind a tick: the weather drifts
+east. `updateMasses` fills `massT`/`massH` per coarse column from it every tick, so streaming and saves need only `massX` (the
+last field of a save; a world without it keeps the weather it had). At each band edge the western air is the one advancing: a
+cold front if it is the colder, blended over `FRONT_COLD` (48) columns; a warm front over `FRONT_WARM` (360).
+
+- Temperature: the air's usual temperature at (x,y) is `ambRow[y] + massT[x>>2] × mfade[y]` (`airAt`): all of a mass's warmth
+  up to `MASS_LOW` rows over `skyY`, none above `MASS_TOP`. Air in the cell pass and sleeping air and ground in the soil pass
+  relax toward it, and rain or snow is chosen by it. The wind feels it through `wheat` (buoyancy), so cold air undercuts warm.
+- Humidity: the air within `MASS_MIXH` rows of the ground drifts toward the mass's humidity (`MASS_MIX` a visit), at the mass's
+  own temperature (air heated by a fire takes up no more: that was a runaway that filled the sky).
+- Pressure: `pressureAt(x)` = `P0` − `PRESS_K` × `massT` − `TROUGH` × the change across `FRONT_SPAN` columns (display only).
+- Squall: where the change across `FRONT_SPAN` coarse columns is more than half a band's (only a cold front is that sharp), the
+  ground cell's air pass calls `squall`: the air the front lifts rises to its cloud base (its dew point, from the band's
+  humidity) and builds cloud cells upward from there, up to `STORM_UP` × warmth × season rows tall, and saturates the air of
+  the tower it passes through. The water comes from the air mass, not the cell's own vapour.
+- Lightning (`stepStorms`, every `LSCAN`-th coarse column a tick): a column with more than `STORM_N` cloud cells strikes with
+  chance `STRIKE_P` × (cells over)², or once its `charge` reaches 1 with at least `STORM_MIN` cells: `squall` adds `CHARGE_K` ×
+  the rows of updraft × the front's sharpness to `charge` each visit, and `stepStorms` keeps `CHARGE_KEEP` of it a scan (a
+  front's cloud tower is only ~10 cells deep over hills, too shallow for the depth rule alone). `strike` picks the highest point within `STRIKE_R` columns (metal counts `STRIKE_METAL`
+  higher), runs a jagged channel to it (hitting whatever it meets first), and heats the hit and its neighbours to `STRIKE_T`;
+  fuel catches with chance `STRIKE_CATCH` + the rest × the season's dryness, or is left alone. `bolts` (cells of each channel,
+  `BOLT_T` ticks) are for drawing only. A strike zeroes `charge` and sets `struck` (its frame) within `STRIKE_R` columns, which then can't strike for `STRIKE_GAP` ticks, and
+  cloud whose base is under `STORM_CLEAR` rows off the ground (fog) doesn't count. Generated and flat worlds have fronts and
+  lightning (`weatherOn`); a bare `Grid` has neither, and scenarios run with one air mass and no lightning (`Game.weather`).
+
 ### Sleeping
 
 A cell is only stepped if its 4×4 block was woken during the last tick. `wake(x,y)` marks every block within 2 cells of (x,y).
 What keeps a cell awake is that something calls `wake` near it: moving (`swap`, `set`), heat still flowing (step 1), a life
 counter running down, a reaction that could happen next tick (`stepReactions`, salt next to water it can dissolve into, acid
 next to what it eats), clouds, lazy liquids that could still slump. A process that waits on chance must wake itself, or it
-stops when its block sleeps. The soil pass and the air pass run on sleeping ground too.
+stops when its block sleeps. The soil pass and the air pass run on sleeping ground too. A front's storm cloud cells (cloud with life 1) keep only
+their own block awake, not the blocks round it (they wake those as they move): a ragged storm cloud kept half the sky awake.
 
 ## Determinism and checks
 
