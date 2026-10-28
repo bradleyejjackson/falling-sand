@@ -325,10 +325,10 @@ const Sim = (() => {
   const CH = 16, G = 0.25, VMAX = 6;
   // ---- momentum in liquids. A drop or a thin sheet of running water keeps its sideways speed (vx, cells a tick) from tick to tick,
   //      losing KEEP of it a tick; it gains SLIDE every step it runs down a slope and PUSH every step it spreads out along the surface.
-  //      Water let out sideways from under a head of water shoots out at JET*sqrt(head) (Torricelli). Water moving at WEBER or faster is
+  //      Water let out sideways through a hole from under a head of water shoots out at JET*sqrt(head) (Torricelli). Water moving at WEBER or faster is
   //      past holding together: surface tension no longer holds it back. Blocked by a wall, a fast drop runs up its face (RUNUP of its
   //      speed turned upward) or bounces back; a fast drop landing on liquid splashes back up. Things floating on water ride its current.
-  const KEEP = 0.92, SLIDE = 0.35, PUSH = 0.2, CLIMB = 2, RUNUP = 0.8, BOUNCE = 0.4, SPLASH_V = 3, SPLASH_K = 0.5, RIDE = 0.5, JET = 0.7, HEADMAX = 32, WEBER = 1, SPLASH_UP = 3, RUB = 0.75;
+  const KEEP = 0.92, SLIDE = 0.35, PUSH = 0.2, CLIMB = 2, RUNUP = 0.8, BOUNCE = 0.4, SPLASH_V = 3, SPLASH_K = 0.5, RIDE = 0.5, JET = 0.7, HEADMAX = 32, WEBER = 1, SPLASH_UP = 3, RUB = 0.75, JET_OPEN = 12;
   // ---- waves: a body of liquid (SW_MIN or more deep) moves by the shallow-water equations, one cell at a time. The top cell of each
   //      column keeps the flow through the face to its right: swu, its speed in cells a tick, swq, the part of a cell it has carried
   //      so far, and swr, the row of the surface they belong to (a column with two bodies in it, a pool in a cave under a lake, keeps
@@ -656,6 +656,10 @@ const Sim = (() => {
       if (el.lazy && R()<el.lazy){ if (t!==MUD || this.canSlump(i,x,y)) this.wake(x,y); return; }   // (mud at rest lets its chunk sleep)
       const VX=this.vx, VY=this.vy, W=this.W, T=this.type, d=liquid ? this.dens(i,t) : el.density;
       if (t===BRINE && R()<0.25) this.mixSalt(i);
+      // inside a body of liquid at rest (its own kind all round, nothing lighter under it) a cell can't go anywhere: it only asks to be pushed
+      // (the bulk of every awake lake; short-cut)
+      if (liquid && VY[i]<1 && x>this.wx0 && x+1<this.wx1 && y>this.wy0 && y+1<this.wy1 && T[i-W]===t && T[i-1]===t && T[i+1]===t && T[i+W]===t && (t===WATER ? (this.life[i]&255)-(this.life[i+W]&255)<8 : !this.canSink(d,i+W))){   // (muddier water sinks through clearer)
+        if (R()<0.01 && y>=3) this.defer(-1-i); return; }
       // horizontal momentum first
       let ci=i,cx=x,cy=y,k;
       // afloat: a light grain or a film of oil lying on a liquid is carried along at the liquid's speed
@@ -714,7 +718,8 @@ const Sim = (() => {
       // (a cell in the side of a body that stands over open space, a dam face, still pours out of it cell by cell)
       // (so does shallow water that the flow is still carrying: a surge runs on out over dry ground)
       const fu=this.flowAt(cx,cy);
-      if (liquid && flow>=1 && impact<SPLASH_V && (fu>SW_STILL || fu<-SW_STILL || this.depth(cx,cy,t)>=SW_MIN)){
+      if (liquid && flow>=1 && impact<SPLASH_V && (fu>SW_STILL || fu<-SW_STILL || (cy+SW_MIN<=this.wy1 && T[ci+W]===t && T[ci+2*W]===t && T[ci+3*W]===t))){   // (SW_MIN deep)
+        if (cy>this.wy0 && T[ci-W]===t && cx>this.wx0 && cx+1<this.wx1 && T[ci-1]===t && T[ci+1]===t){ if (R()<0.01 && cy>=3) this.defer(-1-ci); return; }   // (inside the body: the common case, short-cut)
         const op=q=>T[q]===E || KIND[T[q]]===3, top = cy>this.wy0 && op(ci-W);
         // (a lone cell standing on the surface, open on both sides, just slides off: the flow only works on whole cells, and a speck
         // like that could rock back and forth on its own for ever)
@@ -748,10 +753,10 @@ const Sim = (() => {
         if (impact>=SPLASH_V && cy+1<this.H && KIND[T[ci+W]]===2 && this.depth(cx,cy+1,T[ci+W])>=3 && cy>this.wy0+1 && (T[ci-W]===E || KIND[T[ci-W]]===3) && (T[ci-2*W]===E || KIND[T[ci-2*W]]===3) && R()<0.6){ VY[ci]=-impact*(0.2+R()*0.3); VX[ci]=dir*impact*(0.2+R()*0.5); return; }
         // the middle of a falling mass can't bounce back through what follows it: it shoves the water it lands in out sideways and up
         // instead, a crown round where it hits
-        if (impact>=SPLASH_V && cy+1<this.H && KIND[T[ci+W]]===2 && R()<0.6 && this.depth(cx,cy+1,T[ci+W])>=3){
-          for (const s of [-1,1]) for (let a=1;a<=3;a++){ const nx=cx+s*a; if (nx<this.wx0 || nx>=this.wx1 || cy<=this.wy0+1) break; const j=ci+W+s*a;
+        if (impact>=SPLASH_V && cy+1<this.H && KIND[T[ci+W]]===2 && this.depth(cx,cy+1,T[ci+W])>=3){
+          for (const s of [-1,1]) for (let a=1;a<=5;a++){ const nx=cx+s*a; if (nx<this.wx0 || nx>=this.wx1 || cy<=this.wy0+1) break; const j=ci+W+s*a;
             if (KIND[T[j]]!==2) break;
-            if ((T[j-W]===E || KIND[T[j-W]]===3) && (T[j-2*W]===E || KIND[T[j-2*W]]===3)){ VY[j]=-impact*(0.3+R()*0.4); VX[j]=s*impact*(0.3+R()*0.5); this.wake(nx,cy+1); break; } }
+            if ((T[j-W]===E || KIND[T[j-W]]===3) && (T[j-2*W]===E || KIND[T[j-2*W]]===3)){ VY[j]=-impact*(0.4+R()*0.5); VX[j]=s*impact*(0.3+R()*0.5); this.wake(nx,cy+1); break; } }
         }
         VX[ci]=dir*impact*(0.4+R()*0.4); return;
       }
@@ -770,7 +775,11 @@ const Sim = (() => {
               const near=ci+dd; if (near!==last && cy>0 && T[ci-W]===t && this.cohesion(near,ci)>=2){ this.swap(ci,near); return; }   // but water pressed on from above still advances a step at a time
               continue;
             }
-            let h=0; if (flow>=1) while (h<HEADMAX && cy-h>0 && T[ci-(h+1)*W]===t) h++;   // the head of water pressing it out
+            // the head of water pressing it out: through a hole (under rock or a wall where it comes out, not a tree), or from the foot of
+            // a deep body giving way (a dam: JET_OPEN rows or more). A bucketful slumping on open ground isn't a jet: it threw its edges far
+            // out, and a dropped bucket ran straight past a fire
+            let h=0; if (flow>=1) while (h<HEADMAX && cy-h>0 && T[ci-(h+1)*W]===t) h++;
+            if (h<JET_OPEN && !(cy>0 && T[ci+dd-W]!==E && KIND[T[ci+dd-W]]===0 && !this.owner[ci+dd-W])) h=0;
             this.swap(ci,last); if (flow>=1) VX[last]=dd*Math.min(VMAX, (dd===vs?av*KEEP:0)+PUSH+JET*Math.sqrt(h)); return;
           }
         }
@@ -827,7 +836,14 @@ const Sim = (() => {
       // the faces: right and left of each asking column, each once
       // (a column can ask more than once: a drop resting on the body, the floor of a bubble inside it. The body's own surface is the
       // one with the most liquid under it)
-      const best=new Int32Array(W).fill(-1), bd=new Uint8Array(W), seen=new Uint8Array(W), faces=[];
+      if (!this.swc || this.swc.st.length!==W) this.swc={ st:new Int32Array(W), now:0, y:new Int16Array(W), t:new Uint8Array(W), v:new Int16Array(W), o:new Int16Array(W), dp:new Int8Array(W),
+        best:new Int32Array(W), bd:new Uint8Array(W), seen:new Uint8Array(W), faces:[], plan:[] };
+      const C=this.swc, best=C.best.fill(-1), bd=C.bd, seen=C.seen.fill(0), faces=C.faces; faces.length=0;
+      // (each column's surface, found once a step: neighbouring faces and the slopes ask for the same ones again and again)
+      const surf=(x,y,t)=>{ if (x<0 || x>=W){ this.sv=-1; this.so=-1; return; }
+        if (C.st[x]===C.now && C.t[x]===t && C.y[x]-y<=SW_BODY && y-C.y[x]<=SW_BODY){ this.sv=C.v[x]; this.so=C.o[x]; return; }
+        this.surface(x,y,t); C.st[x]=C.now; C.y[x]=y; C.t[x]=t; C.v[x]=this.sv; C.o[x]=this.so; C.dp[x]=-1; };
+      const dep=(x,v,t)=>{ if (v<0) return 0; if (C.st[x]===C.now && C.v[x]===v && C.t[x]===t){ if (C.dp[x]<0) C.dp[x]=this.depth(x,v,t); return C.dp[x]; } return this.depth(x,v,t); };
       for (const i of tops){
         const t=T[i]; if (KIND[t]!==2) continue;
         const x=i%W, y=(i/W)|0, d=this.depth(x,y,t);
@@ -835,15 +851,16 @@ const Sim = (() => {
       }
       for (let x=0;x<W;x++){ const i=best[x]; if (i<0) continue; const y=(i/W)|0, t=T[i];
         for (const cl of [x-1,x]) if (cl>=0 && cl+1<W && !seen[cl]){ seen[cl]=1; faces.push(cl,y,t); } }
-      const keep=Math.pow(SW_KEEP,1/SW_SUB), dt=1/SW_SUB, plan=[];
+      const keep=Math.pow(SW_KEEP,1/SW_SUB), dt=1/SW_SUB, plan=C.plan;
       for (let sub=0;sub<SW_SUB;sub++){
+        C.now++;
         // work out each face's new speed and flow from the same state (the virtual surfaces count the parts of cells still owed)
         plan.length=0;
         for (let k=0;k<faces.length;k+=3){
           const cl=faces[k], y=faces[k+1], t=faces[k+2], cr=cl+1;
-          this.surface(cl,y,t); const lv=this.sv, lo=this.so; if (lo===-1 && lv===-1) continue;
-          this.surface(cr,y,t); const rv=this.sv, ro=this.so; if (ro===-1 && rv===-1) continue;
-          const dl = lv>=0 ? this.depth(cl,lv,t) : 0, dr = rv>=0 ? this.depth(cr,rv,t) : 0;
+          surf(cl,y,t); const lv=this.sv, lo=this.so; if (lo===-1 && lv===-1) continue;
+          surf(cr,y,t); const rv=this.sv, ro=this.so; if (ro===-1 && rv===-1) continue;
+          const dl=dep(cl,lv,t), dr=dep(cr,rv,t);
           let u = mine(cl,lv) ? U[cl] : 0, q0 = mine(cl,lv) ? Q[cl] : 0;
           if (dl<SW_MIN && dr<SW_MIN && !(u>SW_SHEET || u<-SW_SHEET)){ if (mine(cl,lv)){ U[cl]=0; Q[cl]=0; } continue; }   // (a puddle or a trickle moves cell by cell in the cell pass, where surface tension holds it; only a sheet still running fast is the flow's)
           const hl = lo===-2 ? -H : -lo, hr = ro===-2 ? -H : -ro;  // surface heights (a column that falls away counts as far down)
@@ -855,8 +872,8 @@ const Sim = (() => {
           if (lo>=0 && ro>=0){   // the slope over SW_WIDE columns each side, not just these two: a churned surface is rough a row or
             // two from column to column, and the flow would follow that noise instead of the lie of the whole body
             let sl=hl, nl=1, sr=hr, nr=1;
-            for (let k=1;k<SW_WIDE;k++){ this.surface(cl-k,lo,t); if (this.so<0) break; sl-=this.so; nl++; }
-            for (let k=1;k<SW_WIDE;k++){ this.surface(cr+k,ro,t); if (this.so<0) break; sr-=this.so; nr++; }
+            for (let k=1;k<SW_WIDE;k++){ surf(cl-k,lo,t); if (this.so<0) break; sl-=this.so; nl++; }
+            for (let k=1;k<SW_WIDE;k++){ surf(cr+k,ro,t); if (this.so<0) break; sr-=this.so; nr++; }
             slope=(sl/nl-sr/nr)*2/(nl+nr);
           }
           let dh=slope+ql+qr-2*q0;

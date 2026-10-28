@@ -14,7 +14,7 @@ arrays (or one native allocation) and share them with worker threads unchanged. 
 | chunk  | (W/SC)×(H/SC), SC = 4         | `dirty` (awake this tick), `next` (woken for the next)                 |
 | air    | (W/AC)×(H/AC), AC = 4         | vapour `hum`, capacity `cap`, open fraction `airF`, `airT`, `chill`    |
 | wind   | (W/CH)×(H/CH), CH = 16        | MAC grid: `u` on vertical faces, `v` (vface scope) on horizontal ones, `pres`, cell-centred `uc`/`vc` |
-| row/col| H / W                        | `ambRow` (ambient temperature by row), `precip` (rain gauge)           |
+| row/col| H / W                        | `ambRow` (ambient temperature by row), `precip` (rain gauge); waves: `swu` (flow speed through each column's right face), `swq` (part of a cell carried so far), `swr` (surface row they belong to), `swp` (current from pressure moves) |
 | types  | 64                           | `made`: cells turned into each element (game scoring, `Atomics.add`)   |
 
 Per-element constants are flat tables indexed by type id (`KIND`, `CAPT`, `HOLDT`, `HIAT`, `LOAT`, `KH` N×N conductance,
@@ -28,7 +28,7 @@ those and the double-width copies (`KHD`, `CAPD`, ...), never the `EL` objects, 
 2. The cell pass (`stepTile` for every listed tile, phase by phase). A tile only touches cells within `REACH` (32) of itself, so
    tiles in one phase can run on any number of threads. Each tile seeds the random stream from the frame seed and its index
    (`reseed(mix(seed, tile))`), so the result doesn't depend on thread count or tile order.
-3. `endStep`, on one thread: deferred work (saplings become trees; every `PRESS_EVERY` (4) ticks, the pressure search), trees, the soil pass (every 8th row, `SLOW`), the air pass
+3. `endStep`, on one thread: deferred work (every `PRESS_EVERY` (4) ticks, the pressure search; the wave pass; saplings become trees), trees, the soil pass (every 8th row, `SLOW`), the air pass
    (every 4th coarse row, `AIRSLOW`), the wind solve (every 4th tick), the clock and climate.
 
 ### The cell pass
@@ -51,9 +51,33 @@ Inside a tile, rows bottom to top; within a row, sleep blocks left to right on e
 A liquid cell at rest that can't move asks, at 1% a tick, to be pushed (`defer(-1-cell)`), so the search can cross tiles. Every
 `PRESS_EVERY` ticks `pressure()` takes the cells that asked, sorted, and for each searches its whole body (breadth-first, no cap,
 one search per body shared by every cell of it that asked) for free surface cells that water would lie in (empty, not under the
-liquid, over something solid or liquid). The highest one lower than the top of the asking cell's column (by at least a row) gets
-the cell. A cell that pushed asks again next time (up to `PUSHING`, 64), so an out-of-level body keeps levelling itself, asleep
+liquid, over something solid or liquid). The highest one lower than the top of the asking cell's column (by at least
+`PRESS_GAP` rows) gets the cell (a random one of that row's free cells). A cell that pushed asks again next time (up to `PUSHING`, 64), so an out-of-level body keeps levelling itself, asleep
 or not, and stops when it is level. The search costs ~0.05 ms a tick in the generated world.
+
+### Waves
+
+Deep liquid (`SW_MIN`, 4, or more) and fast sheets move by the shallow-water equations, not by single cells sliding. In the cell
+pass the top cell of such a column only registers (`defer(W*H+cell)`); cells under it wait. Specks, a dam face over open space,
+and slow surface cells still use the cell rules. `waves()` then runs in `endStep`, once per tick, in `SW_SUB` (3) substeps:
+
+1. Faces: the right and left face of each registered column (per column, the top with the most liquid under it).
+2. Plan (Jacobi, all faces from the same state): speed `u` gains `SW_G` × slope, where the slope is the surface over `SW_WIDE`
+   (4) columns each side plus the parts of cells still owed by the neighbouring faces; keeps `SW_KEEP`, loses bed drag
+   `SW_BED/depth²`, and a little viscosity `SW_NU` toward its neighbours. `q += u × depth` is the part of a cell owed.
+   Slow (`SW_SLOW`) flow on a level (`SW_LEVEL`) surface stops; thin water (under `SW_MIN`) slower than `SW_SHEET` is left to the
+   cell rules, where surface tension holds puddles.
+3. Move whole cells (faces in index order, then reversed on alternate substeps): from the top of the upstream column onto the
+   top of the downstream one, at most `SW_CLIMB` (1) over where it came from and only when running faster than `SW_RUN`; over a
+   drop of more than `SW_DROP` it leaves level, to fall. Floaters on the moved cell go with it.
+
+A gap of up to `SW_GAP` (2) cells of air inside a column doesn't split the body (`surface`, `depth`), so churned water still
+reads as one surface. Faces that moved or still slope wake their columns. Gauss-Seidel order or integer moves without the owed
+parts are unstable; so is letting water climb more than a cell (it builds spikes and froth).
+
+Pressure moves only outlets at least `PRESS_GAP` (4) rows below the asking column's top: smaller tilts are the waves' to level.
+Each pressure move adds to `swp` along every column it passed, so floating things ride a river even where pressure carries
+most of its water.
 
 ### Sleeping
 
