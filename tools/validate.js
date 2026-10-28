@@ -1081,6 +1081,91 @@ const scenarios = {
     check('an oil fire is smoky', dryPan.smoke >= 30);
     check('water on burning oil throws it up into the air', wet.out >= 50 && dryPan.out === 0, `${wet.out} vs ${dryPan.out}`);
   },
+  dambreak() {
+    // a dam gives way at one end of a long tank: the surge runs the length of it, rides up the far wall well over the level the
+    // water ends at, and sloshes back before it settles (water keeps its momentum); in the end it still lies flat
+    const W = 360, H = 120, rest = (H - 4) - Math.round(70 * 60 / (W - 8));   // the row the surface settles at
+    const one = seed => {
+      Sim.reseed(seed); const g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (y >= H - 4 || x < 4 || x >= W - 4) g.set(g.idx(x, y), STONE, g.ambAt(y));
+      for (let y = H - 4 - 70; y < H - 4; y++) for (let x = 4; x < 64; x++) g.set(g.idx(x, y), WATER, g.ambAt(y));
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c]; g.wakeAll();
+      let reach = -1, runup = H, peak = -1, over = 0, back = 0;
+      const top = x => { for (let y = 0; y < H - 4; y++) if (g.type[g.idx(x, y)] === WATER) return y; return H - 4; };
+      const com = () => { let s = 0, n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER) { s += i % W; n++; } return s / n - W / 2; };
+      run(g, 30 * 60, 1, f => {
+        if (f > 20 * 60) return;
+        let far = H; for (let x = W - 12; x < W - 4; x++) far = Math.min(far, top(x));
+        if (reach < 0 && far < H - 4) reach = f;
+        if (far < runup) { runup = far; peak = f; }
+        // sloshing: the water's middle overshoots the middle of the tank toward the far end, then swings back past it
+        if (f % 6 === 0) { const c = com(); if (c > over) over = c; if (over >= 5 && -c > back) back = -c; }
+      });
+      const hs = []; for (let x = 4; x < W - 4; x++) hs.push(H - 4 - top(x));
+      return { reach, over: rest - runup, swing: over, back, flat: Math.max(...hs) - Math.min(...hs) };
+    };
+    const rs = [1, 2, 3, 4].map(one);
+    console.log(`  surge reaches the far wall at ${rs.map(r => (r.reach / 60).toFixed(1) + 's').join(' ')}; rides up it ${rs.map(r => r.over).join(' ')} rows over the final level; middle of the water swings ${rs.map(r => r.swing.toFixed(0) + '/' + r.back.toFixed(0)).join(' ')} cols past the tank's middle and back; final depth spread ${rs.map(r => r.flat).join(' ')}`);
+    check('a dam-break surge crosses a 350-wide tank within 4 s', rs.every(r => r.reach > 0 && r.reach <= 240));
+    check('it runs up the far wall 10+ rows over the final level', rs.every(r => r.over >= 10));
+    check('and sloshes: the water\'s middle swings 5+ cols past the tank\'s middle and 3+ back', rs.every(r => r.swing >= 5 && r.back >= 3));
+    check('the water still settles flat', rs.every(r => r.flat <= 3));
+  },
+  splash() {
+    // a block of water dropped into a deep pool splashes: drops are thrown up well clear of the surface; a block of sand too
+    const one = (t, seed) => {
+      Sim.reseed(seed); const W = 200, H = 160, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (y >= H - 4 || x < 4 || x >= W - 4) g.set(g.idx(x, y), STONE, g.ambAt(y)); else if (y >= 110) g.set(g.idx(x, y), WATER, g.ambAt(y));
+      for (let y = 30; y < 40; y++) for (let x = 95; x < 105; x++) g.set(g.idx(x, y), t, g.ambAt(y));
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c]; g.wakeAll();
+      let hi = 0, wide = 0;
+      run(g, 240, 1, f => { for (let y = 0; y < 106; y++) for (let x = 4; x < W - 4; x++) { const i = g.idx(x, y); if (g.type[i] === WATER && g.vy[i] < 0) { hi = Math.max(hi, 110 - y); if (Math.abs(x - 100) > 20) wide++; } } });   // (drops on their way up)
+      return { hi, wide };
+    };
+    const w = [1, 2, 3, 4].map(s => one(WATER, s)), s = [1, 2, 3, 4].map(s => one(SAND, s));
+    console.log(`  water dropped 70 rows into a pool throws drops up to ${w.map(r => r.hi).join(' ')} rows over it (drops rising 20+ cols out, summed ${w.map(r => r.wide).join(' ')}); sand: ${s.map(r => r.hi).join(' ')} rows (${s.map(r => r.wide).join(' ')})`);
+    check('water falling into a pool splashes drops 10+ rows up', w.every(r => r.hi >= 10));
+    check('the splash throws drops 20+ columns out', w.every(r => r.wide >= 20));
+    check('sand falling into a pool splashes too', s.every(r => r.hi >= 8));
+  },
+  carry() {
+    // floating ash and seeds dropped on a running stream ride off downstream; on a still pond they stay about where they fell
+    const one = (flow, seed) => {
+      Sim.reseed(seed); const W = 400, H = 100, g = new Sim.Grid(W, H); g.windHold = 0; g.hold = true;
+      const bed = x => 60 + Math.round(x / 40);
+      for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (y >= (flow ? bed(x) : 70) || x < 3 || (!flow && x >= W - 3)) g.set(g.idx(x, y), STONE, g.ambAt(y)); else if (y >= (flow ? bed(x) - 6 : 62)) g.set(g.idx(x, y), WATER, g.ambAt(y));
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c]; g.wakeAll();
+      let gone = 0; const feed = () => { if (!flow) return; for (let y = 48; y < 54; y++) for (let x = 4; x < 7; x++) { const i = g.idx(x, y); if (g.type[i] === E) g.set(i, WATER); } for (let y = 0; y < H; y++) for (let x = W - 4; x < W; x++) { const i = g.idx(x, y), t = g.type[i]; if (t === ASH || t === SEED) gone++; if (t !== STONE) g.set(i, E); } };
+      run(g, 600, 1, feed);   // the stream gets going
+      const put = []; for (let k = 0; k < 12; k++) { const x = 60 + k * 4; let y = 0; while (g.type[g.idx(x, y + 1)] === E) y++; g.set(g.idx(x, y), k % 2 ? ASH : SEED); put.push(x); }
+      const x0 = put.reduce((a, b) => a + b, 0) / put.length;
+      run(g, 300, 1, feed);
+      let s = 0, n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === ASH || g.type[i] === SEED) { s += i % W; n++; }
+      return (s + gone * W) / (n + gone) - x0;   // (those carried off the end count as reaching it)
+    };
+    const run_ = [1, 2, 3, 4].map(s => one(true, s)), still = [1, 2, 3, 4].map(s => one(false, s));
+    console.log(`  12 floaters, mean drift in 5 s: on a stream ${run_.map(d => d.toFixed(0)).join(' ')} cols, on a still pond ${still.map(d => d.toFixed(0)).join(' ')}`);
+    check('a stream carries floating things 60+ cols downstream in 5 s', run_.every(d => d >= 60));
+    check('on a still pond they stay within 15 cols', still.every(d => Math.abs(d) <= 15));
+  },
+  waterfall() {
+    // a fast stream running off a ledge shoots out clear of the cliff before it falls, rather than pouring straight down its face
+    const one = seed => {
+      Sim.reseed(seed); const W = 300, H = 140, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (y >= H - 4 || x < 3 || (x < 150 && y >= 40 + Math.round(x / 6))) g.set(g.idx(x, y), STONE, g.ambAt(y));
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c]; g.wakeAll();
+      let far = 0, n = 0; const hist = [];
+      run(g, 900, 1, f => {
+        for (let y = 20; y < 30; y++) for (let x = 4; x < 8; x++) { const i = g.idx(x, y); if (g.type[i] === E) g.set(i, WATER); }
+        for (let y = 0; y < H; y++) for (let x = 3; x < W; x++) { const i = g.idx(x, y); if (y >= 110 && g.type[i] === WATER) g.set(i, E); }   // drain the plunge pool
+        if (f > 300) for (let x = 150; x < W; x++) if (g.type[g.idx(x, 100)] === WATER) { far = Math.max(far, x - 150); hist.push(x - 150); }
+      });
+      hist.sort((a, b) => a - b); return { far, med: hist.length ? hist[hist.length >> 1] : 0 };
+    };
+    const rs = [1, 2, 3, 4].map(one);
+    console.log(`  water leaving the ledge crosses row 100 (75 rows down) at a median ${rs.map(r => r.med).join(' ')} cols out from the cliff (farthest ${rs.map(r => r.far).join(' ')})`);
+    check('a waterfall throws clear of its cliff (median 6+ cols out)', rs.every(r => r.med >= 6));
+  },
   smoke() {
     const { SMOKE } = Sim.ids;
     // hot smoke climbs; smoke already at air temperature hangs about where it was let go

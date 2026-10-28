@@ -323,6 +323,23 @@ const Sim = (() => {
 
   // ---- the grid --------------------------------------------------------------
   const CH = 16, G = 0.25, VMAX = 6;
+  // ---- momentum in liquids. A drop or a thin sheet of running water keeps its sideways speed (vx, cells a tick) from tick to tick,
+  //      losing KEEP of it a tick; it gains SLIDE every step it runs down a slope and PUSH every step it spreads out along the surface.
+  //      Water let out sideways from under a head of water shoots out at JET*sqrt(head) (Torricelli). Water moving at WEBER or faster is
+  //      past holding together: surface tension no longer holds it back. Blocked by a wall, a fast drop runs up its face (RUNUP of its
+  //      speed turned upward) or bounces back; a fast drop landing on liquid splashes back up. Things floating on water ride its current.
+  const KEEP = 0.92, SLIDE = 0.35, PUSH = 0.2, CLIMB = 2, RUNUP = 0.8, BOUNCE = 0.4, SPLASH_V = 3, SPLASH_K = 0.5, RIDE = 0.5, JET = 0.7, HEADMAX = 32, WEBER = 1, SPLASH_UP = 3;
+  // ---- waves: a body of liquid (SW_MIN or more deep) moves by the shallow-water equations, one cell at a time. The top cell of each
+  //      column holds the flow through the face to its right: fu, its speed in cells a tick, and fq, the part of a cell it has carried
+  //      so far. The speed gains SW_G (gravity) per row the surface on the left stands over the one on the right and keeps SW_KEEP of
+  //      itself a tick; speed*depth cells a tick go over the face, from the top of one column onto the top of the other. Because the
+  //      flow carries on after the surfaces level, water overshoots: a dam-break surge runs up the far side and sloshes back, and a
+  //      bump spreads out as waves that bounce off the walls at sqrt(SW_G*depth) cells a tick (depth counted to SW_DEEP). That is up
+  //      to 2 cells a tick, so the flow is worked in SW_SUB steps a tick, each under one cell. Every face is worked from the same
+  //      state, after the cell pass (Grid.waves): worked one at a time in the pass, each face saw what the ones before it had just
+  //      moved, and that blew up whatever the constants were. ----
+  const SW_MIN = 4, SW_DEEP = 16, SW_G = 0.25, SW_SUB = 3, SW_KEEP = 0.995, SW_UMAX = 4, SW_MAXM = 6, SW_STILL = 0.03, SW_LEVEL = 0.6,
+        SW_REACH = 12, SW_IN = 0.3, SW_CLIMB = 2, SW_DROP = 3, SW_SLOW = 0.1, SW_SMOOTH = 0.5;
   // sleeping: the cell pass skips 4×4 blocks of cells nobody woke last tick. (They were the wind's 16×16 cells: a lone moving
   // grain kept up to four of those, 1024 cells, awake; now it keeps 64.) wake() divides by SC with shifts
   const SC = 4, SC_SHIFT = 2;
@@ -337,7 +354,7 @@ const Sim = (() => {
   // room for the weather to build and rain out over the hills (a 480-row grid has none and generates as it always did).
   // the page's grid: a window W×H onto a world WIDE cells across (it streams along it a REGION at a time)
   const WORLD = {W:1280, H:640, WIDE:12800}, LAND_H = 480;
-  const TILE = 64, TILE_H = TILE, REACH = TILE/2, PHASES = 4, DEFER_MAX = 4096, PUSHING = 64, PRESS_EVERY = 4;
+  const TILE = 64, TILE_H = TILE, REACH = TILE/2, PHASES = 4, DEFER_MAX = 32768, PUSHING = 64, PRESS_EVERY = 4, PRESS_GAP = 6;
   // Streaming: the grid is a window onto a wider world and moves REGION columns at a time (a multiple of the tile, chunk and air cell)
   const REGION = 320;
   // Every field is a flat typed array (structure of arrays), carved out of one buffer so worker threads can share it.
@@ -345,6 +362,7 @@ const Sim = (() => {
   const FIELDS = [
     ['type',Uint8Array,'cell'], ['life',Uint16Array,'cell'], ['shade',Uint8Array,'cell'], ['done',Uint8Array,'cell'],
     ['temp',Float32Array,'cell'], ['fuse',Float32Array,'cell'], ['vx',Float32Array,'cell'], ['vy',Float32Array,'cell'], ['owner',Uint16Array,'cell'],   // owner: which tree a cell belongs to
+    ['fu',Float32Array,'cell'], ['fq',Float32Array,'cell'],   // in the top cell of a column of a body of liquid: fu the speed of the flow through its right face (waves), fq the part of a cell it has carried over so far
     ['dirty',Uint8Array,'chunk'], ['next',Uint8Array,'chunk'],
     ['hum',Float32Array,'air'], ['cap',Float32Array,'air'], ['airF',Float32Array,'air'], ['airT',Float32Array,'air'], ['chill',Float32Array,'air'],
     // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
@@ -422,7 +440,7 @@ const Sim = (() => {
       const el=EL[t], was=this.type[i];
       if (t!==was) Atomics.add(this.made,t,1);
       if (SUPPORTS[was] && !SUPPORTS[t]) this.unsettle(i%this.W,(i/this.W)|0);
-      this.type[i]=t; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0; this.fuse[i]=0;
+      this.type[i]=t; this.shade[i]=(R()*64)|0; this.vx[i]=0; this.vy[i]=0; this.fu[i]=0; this.fq[i]=0; this.fuse[i]=0;
       this.life[i] = el.life ? el.life[0]+((R()*(el.life[1]-el.life[0]))|0) : el.soil;
       this.temp[i] = temp===undefined ? el.t0 : temp;
       this.wake(i%this.W,(i/this.W)|0);
@@ -448,16 +466,16 @@ const Sim = (() => {
       this.wake(x,y); return false;
     }
     swap(a,b){
-      const T=this.type,L=this.life,S=this.shade,X=this.vx,Y=this.vy,H=this.temp,F=this.fuse;
+      const T=this.type,L=this.life,S=this.shade,X=this.vx,Y=this.vy,H=this.temp,F=this.fuse,U=this.fu,Q=this.fq;
       let t=T[a];T[a]=T[b];T[b]=t; t=L[a];L[a]=L[b];L[b]=t; t=S[a];S[a]=S[b];S[b]=t;
-      t=X[a];X[a]=X[b];X[b]=t; t=Y[a];Y[a]=Y[b];Y[b]=t; t=H[a];H[a]=H[b];H[b]=t; t=F[a];F[a]=F[b];F[b]=t;
+      t=X[a];X[a]=X[b];X[b]=t; t=Y[a];Y[a]=Y[b];Y[b]=t; t=H[a];H[a]=H[b];H[b]=t; t=F[a];F[a]=F[b];F[b]=t; t=U[a];U[a]=U[b];U[b]=t; t=Q[a];Q[a]=Q[b];Q[b]=t;
       this.done[a]=1; this.done[b]=1;
       const W=this.W, ay=(a/W)|0, ax=a-ay*W, by=(b/W)|0;
       this.wake(ax,ay); this.wake(b-by*W,by);
       if (SUPPORTS[T[b]] && !SUPPORTS[T[a]]) this.unsettle(ax,ay);   // something load-bearing moved away
     }
     clear(){   // empties the whole world, the parts streamed out of the window included; regions not yet visited come in empty too
-      this.type.fill(0); this.life.fill(0); this.resetTemp(); this.fuse.fill(0); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll();
+      this.type.fill(0); this.life.fill(0); this.resetTemp(); this.fuse.fill(0); this.vx.fill(0); this.vy.fill(0); this.fu.fill(0); this.fq.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll();
       this.store.clear(); this.storedTrees.clear(); this.pushing=[]; this.asked=[]; this.blank=true; this.epoch=(this.epoch||0)+1; this.job=null;
     }
     // density of the cell itself: muddy water, brine and acid get heavier with what they carry
@@ -623,7 +641,10 @@ const Sim = (() => {
         const j=ny*W+nx;
         const ok = dy>0 ? this.canSink(d,j) : (T[j]===E || KIND[T[j]]===3);
         if (!ok) break;
-        this.swap(ci,j); ci=j; cx=nx; cy=ny;
+        const plunge = dy>0 && n>=3 && KIND[T[j]]===2 && ci>=W && (T[ci-W]===E || KIND[T[ci-W]]===3);   // a fast fall into a liquid's surface
+        this.swap(ci,j);
+        if (plunge){ this.vy[ci]=-n*SPLASH_K*(0.5+R()*0.5); this.vx[ci]=(R()<0.5?-1:1)*n*0.4*R(); }   // throws the liquid it hits back up
+        ci=j; cx=nx; cy=ny;
       }
       this.tci=ci; this.tcx=cx; this.tcy=cy;
       return k;
@@ -635,25 +656,42 @@ const Sim = (() => {
       if (t===BRINE && R()<0.25) this.mixSalt(i);
       // horizontal momentum first
       let ci=i,cx=x,cy=y,k;
-      if (Math.abs(VX[ci])>=0.5){
-        const ax=Math.abs(VX[ci]), n=(ax|0)+(R()<ax%1?1:0), sx=Math.sign(VX[ci]);
+      // afloat: a light grain or a film of oil lying on a liquid is carried along at the liquid's speed
+      if (y+1<this.H && KIND[T[i+W]]===2 && T[i+W]!==t){ const w=this.current(i+W,x,y+1); VX[i]+=(w-VX[i])*RIDE; }
+      if (Math.abs(VX[ci])>=0.5 && !(liquid && y+1<this.H && T[i+W]===t)){   // (water lying on water: its vx is the flow of the body, not its own)
+        const v=VX[ci], ax=Math.abs(v), n=(ax|0)+(R()<ax%1?1:0), sx=v<0?-1:1;
         k=this.travel(ci,cx,cy,sx,0,n,d); ci=this.tci; cx=this.tcx; cy=this.tcy;
-        VX[ci] = k<n ? 0 : VX[ci]*(liquid?0.9:0.7);
+        if (k===n) VX[ci]=v*(liquid?KEEP:0.7);
+        else if (!liquid) VX[ci]=0;
+        else {   // running water meets something
+          this.wake(cx,cy);
+          const nx=cx+sx, j=cy*W+nx, open=q=>q>=W && (T[q]===E || KIND[T[q]]===3) && (T[q-W]===E || KIND[T[q-W]]===3);   // clear sky over it (not a bubble in the water)
+          if (nx<this.wx0 || nx>=this.wx1) VX[ci]=-v*BOUNCE;
+          else if (KIND[T[j]]===2){ VX[j]+=v*0.5; VX[ci]=v*0.5; this.wake(nx,cy); }   // it pushes on the water it runs into
+          else if (ax>=CLIMB && cy>this.wy0+1 && open(ci-W)){ VY[ci]=-Math.min(SPLASH_UP, ax*RUNUP); VX[ci]=-v*0.25; }   // runs up the face of the wall
+          else VX[ci]=-v*BOUNCE;
+        }
       }
       // gravity (snowflakes flutter down at a cell every tick or two instead of dropping like stones, so there is time
       // for warm air under a cloud to melt them into rain)
       VY[ci]=Math.min(t===SNOW ? 1 : VMAX, VY[ci]+G);
+      // a liquid pressed down by more of itself fills a hole under it at once: a void inside water can't hang open (without this a
+      // collapsing body of water turned to foam, every hole creeping up through it a fraction of a row a tick)
+      if (liquid && VY[ci]<1 && !el.lazy && cy>0 && cy+1<this.H && KIND[T[ci-W]]===2 && this.canSink(d,ci+W)) VY[ci]=1;
       const vy=VY[ci], n=(Math.abs(vy)|0)+(R()<Math.abs(vy)%1?1:0), sy=vy<0?-1:1;
       k=this.travel(ci,cx,cy,0,sy,n,d); ci=this.tci; cx=this.tcx; cy=this.tcy;
       if (k===n && n>0) return;                                    // free fall
-      if (vy<0){ VY[ci]=0; return; }                                 // hit a ceiling
+      if (vy<0){ VY[ci]=0; this.wake(cx,cy); return; }               // hit a ceiling (or the edge of the tile's reach: it falls next tick, so stay awake)
       // damp sand or clay still gathering speed in mid-air (no whole step this tick, nothing under it) is falling, not resting:
       // without this it lost its speed every tick, and sticky clay, which won't slide off diagonally, hung in the air
-      if (k===0 && cy+1<this.H && (t===SAND || t===CLAY) && this.canSink(d,ci+W) && this.sticky(ci,cy,t)) return;
+      // (so is a drop of liquid: without this it hung in the air, sliding off sideways a cell at a time, or, carried by a body's flow,
+      // stood in mid-air waiting for it)
+      if (k===0 && cy+1<this.H && this.canSink(d,ci+W) && (((t===SAND || t===CLAY) && this.sticky(ci,cy,t)) || (liquid && !el.lazy))){ this.wake(cx,cy); return; }
       if (liquid && cy+1<this.H && T[ci+W]===ASH && R()<0.5){ VY[ci]=0; this.swap(ci,ci+W); return; }   // ash floats: a liquid soaks down through a heap of it
       // blocked below: slide diagonally, or splash sideways
       const impact=VY[ci]; VY[ci]=0;
-      const dir=R()<0.5?-1:1;
+      const v0=VX[ci], av=Math.abs(v0), vs=v0<0?-1:1;
+      const dir = liquid && av>0.1 && R()<0.5+av ? vs : R()<0.5?-1:1;   // running water carries on the way it was going
       // viscosity: lava is thick, and stiffens as it cools; it only slumps where it is piled up, so it heaps into mounds before it sets
       // (mud is always that thick; molten glass is runnier while it is hot, and stiff near the point where it sets)
       const flow = t===LAVA ? Math.max(0.02, Math.min(0.3, (this.temp[ci]-500)/3000)) : t===MUD ? MUD_FLOW : t===MGLASS ? Math.max(0.02, Math.min(0.3, (this.temp[ci]-700)/1500)) : 1;
@@ -662,18 +700,30 @@ const Sim = (() => {
       if (t===WATER && !muddy && impact>1.5 && cy+1<this.H){ const b=ci+W; if (ERODE[T[b]] && R()<0.03*impact*ERODE[T[b]]) this.erode(b); }
       // a wetting liquid sitting on its own kind won't run off the edge of its puddle as a lone drop (surface tension)
       // only a thin puddle edge or a drop is held: water standing deeper than that is a body, and slumps flat like one
-      const thin = el.tension && this.thin(ci,cy), held = thin && cy+1<this.H && TENS[T[ci+W]];
+      const thin = el.tension && av<WEBER && this.thin(ci,cy), held = thin && cy+1<this.H && TENS[T[ci+W]];
       // damp sand holds together: it stands in walls instead of slumping (under water it slides again)
       const clump = this.sticky(ci,cy,t);
       // damp dirt is firm: it stands at twice the slope of dry dirt (it only slides off a step two deep), and soaked dirt slumps again
       const firm = t===DIRT && this.firm(ci);
+      // a body of liquid (SW_MIN deep or more) moves by its flow (waves), not by the sliding and spreading of single cells: the top
+      // cell of each column works the flow, and the cells under it wait (a cell boxed in still asks whether the body can push it out)
+      // (a cell in the side of a body that stands over open space, a dam face, still pours out of it cell by cell)
+      // (so does shallow water that the flow is still carrying: a surge runs on out over dry ground)
+      if (liquid && flow>=1 && impact<SPLASH_V && (this.fu[ci]>SW_STILL || this.fu[ci]<-SW_STILL || this.depth(cx,cy,t)>=SW_MIN)){
+        const op=q=>T[q]===E || KIND[T[q]]===3, top = cy>this.wy0 && op(ci-W);
+        // (a lone cell standing on the surface, open on both sides, just slides off: the flow only works on whole cells, and a speck
+        // like that could rock back and forth on its own for ever)
+        const speck = top && ((cx>this.wx0 && cx+1<this.wx1 && op(ci-1) && op(ci+1)) || (this.fu[ci]<SW_SLOW && this.fu[ci]>-SW_SLOW && R()<SW_SMOOTH));
+        if (top && !speck) this.defer(this.W*this.H+ci);   // the flow is worked after the cell pass
+        if (!speck && (top || !this.face(ci,cx,cy))){ if (!top && R()<0.01 && cy>=3) this.defer(-1-ci); return; }
+      }
       if (cy+1<this.H && !clump && (flow>=1 || R()<Math.max(flow,0.3))){
         for (let q=0;q<2;q++){
           const dx=q?-dir:dir, nx=cx+dx; if(nx<this.wx0||nx>=this.wx1) continue;
           const j=(cy+1)*W+nx;
           if (!this.done[j] && this.canSink(d,j) && (liquid || T[cy*W+nx]!==STONE) && !(firm && (cy+2>=this.H || !this.canSink(d,j+W)))){
             if (held && R()<el.tension && this.cohesion(j,ci)<2) continue;
-            this.swap(ci,j); if (liquid && impact>1.5 && flow>=1) VX[j]=dx*impact*0.6;
+            this.swap(ci,j); if (liquid && flow>=1) VX[j]=dx*Math.max(impact*0.6, (dx===vs?av*KEEP:0)+SLIDE);   // gathering speed down the slope
             if (t===WATER && !muddy){ const lip=ci+W; if (ERODE[T[lip]] && R()<0.02*ERODE[T[lip]]) this.erode(lip); }   // the water cuts the lip it ran over
             return;
           }
@@ -686,7 +736,11 @@ const Sim = (() => {
           const j=cy*W+nx; if ((T[j]===E || KIND[T[j]]===3) && this.canSink(d,(cy+1)*W+nx2)){ this.swap(ci,j); return; } }
       }
       // liquid: spread sideways
-      if (impact>1.5 && flow>=1){ VX[ci]=dir*impact*(0.4+R()*0.4); return; }   // splash (thick lava just lands)
+      if (impact>1.5 && flow>=1){   // splash (thick lava just lands)
+        // a fast drop landing on liquid throws spray back up off the surface
+        if (impact>=SPLASH_V && cy+1<this.H && KIND[T[ci+W]]===2 && cy>this.wy0+1 && (T[ci-W]===E || KIND[T[ci-W]]===3) && (T[ci-2*W]===E || KIND[T[ci-2*W]]===3) && R()<0.6){ VY[ci]=-impact*(0.2+R()*0.3); VX[ci]=dir*impact*(0.2+R()*0.5); return; }
+        VX[ci]=dir*impact*(0.4+R()*0.4); return;
+      }
       if (flow>=1 || (R()<flow && this.head(ci,cy,t, t===MUD ? 2 : t===MGLASS ? 2+((1000-this.temp[ci])/100|0) : 3+((1300-this.temp[ci])/120|0)))){
         // oil spreads into a thin film over water
         const below = cy+1<this.H ? T[ci+W] : STONE, disp = (t===OIL && (below===WATER || below===BRINE)) ? 10 : el.disperse;
@@ -702,7 +756,8 @@ const Sim = (() => {
               const near=ci+dd; if (near!==last && cy>0 && T[ci-W]===t && this.cohesion(near,ci)>=2){ this.swap(ci,near); return; }   // but water pressed on from above still advances a step at a time
               continue;
             }
-            this.swap(ci,last); return;
+            let h=0; if (flow>=1) while (h<HEADMAX && cy-h>0 && T[ci-(h+1)*W]===t) h++;   // the head of water pressing it out
+            this.swap(ci,last); if (flow>=1) VX[last]=dd*Math.min(VMAX, (dd===vs?av*KEEP:0)+PUSH+JET*Math.sqrt(h)); return;
           }
         }
       }
@@ -718,7 +773,104 @@ const Sim = (() => {
         if (b!==E && KIND[b]!==2 && KIND[b]!==3 && R()<0.02){ this.deposit(ci); return; }
         this.wake(cx,cy);
       }
+      if (liquid && av>0){ VX[ci]=av<0.05 ? 0 : v0*KEEP; if (VX[ci]) this.wake(cx,cy); }   // held still, it slows (and stays awake while it does)
       if (flow>=1 && R()<0.01 && cy>=3) this.defer(-1-ci);   // boxed in: look for somewhere to surface under pressure (lava is too thick to level itself)
+    }
+    // ---- waves (see SW_ above). depth: how much of liquid t stands from row y down in column x (to SW_DEEP)
+    depth(x,y,t){ const W=this.W, T=this.type; let d=0; while (d<SW_DEEP && y+d<this.wy1 && T[(y+d)*W+x]===t) d++; return d; }
+    // the surface in column x near row y: the row of its top cell of liquid t (sv), and the open cell over it (so). A dry column gives its
+    // floor (sv=-1, so = the lowest open cell); one that falls away further than SW_REACH gives so=-2; a wall or a covered column so=-1
+    surface(x,y,t){
+      const W=this.W, T=this.type, y0=this.wy0, y1=this.wy1;
+      this.sv=-1; this.so=-1;
+      if (x<this.wx0 || x>=this.wx1) return;
+      const op=r=>{ const q=T[r*W+x]; return q===E || KIND[q]===3; };
+      if (T[y*W+x]===t){ let r=y, k=0; while (r>y0 && T[(r-1)*W+x]===t){ if (++k>SW_REACH*2) return; r--; } if (r>y0 && op(r-1)){ this.sv=r; this.so=r-1; } return; }
+      if (!op(y)) return;
+      let r=y, k=0; while (r+1<y1 && op(r+1)){ if (++k>SW_REACH){ this.so=-2; return; } r++; }
+      this.so=r; if (r+1<y1 && T[(r+1)*W+x]===t) this.sv=r+1;
+    }
+    // the flow of the bodies of liquid whose top cells asked this tick (see SW_ above): every face beside one of them is worked out from
+    // the state the cell pass left, then the cells go over them
+    waves(tops){
+      const W=this.W, H=this.H, T=this.type, FU=this.fu, FQ=this.fq, VX=this.vx;
+      this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;   // (the search may look anywhere: it runs on its own, after the tiles)
+      // a column's top cell, taking over the flow its old top held if something has landed on it since (rain, a drop, water pouring
+      // off a face) - without that, everything that landed stopped the flow dead
+      const lift=i=>{ if (FU[i]===0 && FQ[i]===0) for (let k=1;k<=3;k++){ const j=i+k*W; if (j>=T.length || T[j]!==T[i]) break; if (FU[j]!==0 || FQ[j]!==0){ FU[i]=FU[j]; FQ[i]=FQ[j]; FU[j]=0; FQ[j]=0; break; } } return i; };
+      const top=(x,y,t)=>{ this.surface(x,y,t); return this.sv>=0 ? lift(this.sv*W+x) : -1; };
+      // the faces: right and left of each asking column, each once (keyed by the cell under the left column's surface)
+      const seen=new Set(), faces=[];
+      for (const i of tops){
+        const t=T[i]; if (KIND[t]!==2) continue;
+        const x=i%W, y=(i/W)|0;
+        for (const cl of [x-1,x]){
+          if (cl<0 || cl+1>=W) continue;
+          this.surface(cl,y,t); const key = this.sv>=0 ? this.sv*W+cl : this.so>=0 ? -1-(this.so*W+cl) : null; if (key===null || seen.has(key)) continue;
+          seen.add(key); faces.push(cl,y,t);
+        }
+      }
+      const keep=Math.pow(SW_KEEP,1/SW_SUB), dt=1/SW_SUB, plan=[];
+      for (let sub=0;sub<SW_SUB;sub++){
+        // work out each face's new speed and flow from the same state (the virtual surfaces count the parts of cells still owed)
+        plan.length=0;
+        for (let k=0;k<faces.length;k+=3){
+          const cl=faces[k], y=faces[k+1], t=faces[k+2], cr=cl+1;
+          this.surface(cl,y,t); const lv=this.sv, lo=this.so; if (lo===-1 && lv===-1) continue;
+          this.surface(cr,y,t); const rv=this.sv, ro=this.so; if (ro===-1 && rv===-1) continue;
+          const li = lv>=0 ? lift(lv*W+cl) : -1, ri = rv>=0 ? lift(rv*W+cr) : -1;
+          const dl = li>=0 ? this.depth(cl,lv,t) : 0, dr = ri>=0 ? this.depth(cr,rv,t) : 0;
+          if (dl<SW_MIN && dr<SW_MIN && !(li>=0 && (FU[li]>SW_STILL || FU[li]<-SW_STILL))) continue;   // (a puddle or a trickle at rest moves cell by cell in the cell pass)
+          const hl = lo===-2 ? -H : -lo, hr = ro===-2 ? -H : -ro;  // surface heights (a column that falls away counts as far down)
+          const ql = cl>0 ? (k=>k>=0 ? FQ[k] : 0)(top(cl-1,lv>=0?lv:y,t)) : 0, qr = ri>=0 ? FQ[ri] : 0, q0 = li>=0 ? FQ[li] : 0;
+          let u = li>=0 ? FU[li] : 0;
+          if (li>=0 && VX[li]){ u+=VX[li]*SW_IN; VX[li]=0; }       // a drop landing on the body, or water running into it, pushes it on
+          if (ri>=0 && VX[ri]){ u+=VX[ri]*SW_IN; VX[ri]=0; }
+          let dh=(hl-q0+ql)-(hr+q0-qr); if (dh>SW_REACH) dh=SW_REACH; else if (dh<-SW_REACH) dh=-SW_REACH;
+          u = u*keep + SW_G*dh*dt;
+          if (u>SW_UMAX) u=SW_UMAX; else if (u<-SW_UMAX) u=-SW_UMAX;
+          let q=q0;
+          if (dh<=SW_LEVEL && dh>=-SW_LEVEL && u<SW_STILL && u>-SW_STILL){ u=0; q=0; }   // level and still
+          else { q += u*Math.min(SW_DEEP, u>0 ? dl : dr)*dt; if (q>SW_MAXM) q=SW_MAXM; else if (q<-SW_MAXM) q=-SW_MAXM; }
+          plan.push(cl,y,t,u,q);
+        }
+        // then carry the whole cells over, each from the top of the upstream column onto the top of the downstream one
+        // (in index order on one step and backwards on the next: always forwards, and the faces worked first had first pick, which
+        // drifted water one way)
+        const back=(this.frame*SW_SUB+sub)&1;
+        for (let kk=0;kk<plan.length;kk+=5){
+          const k = back ? plan.length-5-kk : kk, cl=plan[k], y=plan[k+1], t=plan[k+2], u=plan[k+3], cr=cl+1; let q=plan[k+4];
+          const ri0=top(cr,y,t), keepU = ri0>=0 ? FU[ri0] : 0, keepQ = ri0>=0 ? FQ[ri0] : 0;   // the right column keeps its own right face's
+          const from = q>0 ? cl : cr, to = q>0 ? cr : cl;
+          while (q>=1 || q<=-1){
+            this.surface(from,y,t); const fv=this.sv; if (fv<0){ q=0; break; }
+            this.surface(to,fv,t); const tso=this.so; if (tso===-1 && this.sv===-1){ q=0; break; }
+            // onto the other column's surface (no more than SW_CLIMB over the top it came from); or, where that lies more than SW_DROP
+            // lower, out level with where it was, to fall from there (over a drop deeper than SW_REACH, with the flow's speed: a river
+            // spilling over a cliff shoots out over it)
+            if (tso>=0 && tso<fv-SW_CLIMB) break;   // (still owed: it goes over when the other side has come down)
+            const lip = tso===-2 || tso>fv+SW_DROP, a=fv*W+from, b = lip ? fv*W+to : tso*W+to;
+            if (!(T[b]===E || KIND[T[b]]===3)){ q=0; break; }
+            this.swap(a,b); VX[b] = tso===-2 ? u : 0; this.vy[b]=0;
+            const c=b+W; if (!lip && c<T.length && T[c]===t){ FU[b]=FU[c]; FQ[b]=FQ[c]; FU[c]=0; FQ[c]=0; } else { FU[b]=0; FQ[b]=0; }   // (it is the top of that column now)
+            q -= q>0 ? 1 : -1;
+          }
+          const li=top(cl,y,t); if (li>=0){ FU[li]=u; FQ[li]=q; }
+          const ri=top(cr,y,t); if (ri>=0){ FU[ri]=keepU; FQ[ri]=keepQ; }
+          if (sub===SW_SUB-1 && (u>SW_STILL || u<-SW_STILL)){ this.wake(cl,y); this.wake(cr,y); }
+        }
+      }
+    }
+    face(i,x,y){   // does cell i stand at the side of its body over open space (open beside it, and open under that)?
+      const W=this.W, T=this.type, op=q=>T[q]===E || KIND[T[q]]===3;
+      if (y+1>=this.wy1) return false;
+      return (x-1>=this.wx0 && op(i-1) && op(i-1+W)) || (x+1<this.wx1 && op(i+1) && op(i+1+W));
+    }
+    current(j,x,y){   // the speed of the liquid at j (x,y) along the row: the flow of its body, its own momentum, or else the pull of a sloping surface
+      const f=this.fu[j]; if (f>0.1 || f<-0.1) return f;
+      const v=this.vx[j]; if (v>0.3 || v<-0.3) return v;
+      if (this.type[j]!==WATER && this.type[j]!==BRINE) return 0;
+      const tau=this.drag(x,y); return tau>TAU_C ? Math.min(2,tau*4) : tau<-TAU_C ? Math.max(-2,tau*4) : 0;
     }
     firm(i){ const m=this.life[i]&255; return m>=FIRM && m<SATM; }
     sticky(i,y,t){   // damp sand and damp clay hold together: no sliding off diagonally (damp sand slides again under water; wet clay sticks, under water too)
@@ -857,8 +1009,15 @@ const Sim = (() => {
         }
         // the highest free surface of the body lower than the top of this column takes a cell from it: the column goes down by one
         // and the water comes up (or runs on) there
-        const limit=(y-head+2)*W; let lo=0, hi=body.length; while (lo<hi){ const m=(lo+hi)>>1; if (body[m]<limit) lo=m+1; else hi=m; }
-        for (let k=lo;k<body.length;k++){ const j=body[k]; if (T[j]===E){ this.swap(i,j); if (pushed.length<PUSHING) pushed.push(i); break; } }
+        // (PRESS_GAP rows lower at least: an open surface out of level by less is a wave, and the flow (wave) levels it. Of the free
+        // cells in that highest row, a random one: the first in index order is the leftmost, and with waves that drifted water left)
+        const limit=(y-head+PRESS_GAP)*W; let lo=0, hi=body.length; while (lo<hi){ const m=(lo+hi)>>1; if (body[m]<limit) lo=m+1; else hi=m; }
+        for (let k=lo;k<body.length;k++){
+          if (T[body[k]]!==E) continue;
+          const row=(body[k]/W)|0; let e=k; while (e+1<body.length && ((body[e+1]/W)|0)===row) e++;
+          const n=e-k+1, o=(R()*n)|0; let j=-1; for (let q=0;q<n;q++){ const c=body[k+(o+q)%n]; if (T[c]===E){ j=c; break; } }
+          this.swap(i,j); if (pushed.length<PUSHING) pushed.push(i); break;
+        }
       }
       this.pushing=pushed;
     }
@@ -1176,7 +1335,7 @@ const Sim = (() => {
     }
     blankColumns(x0,x1){
       const {W,H}=this;
-      for (let y=0;y<H;y++){ const a=y*W+x0, b=y*W+x1, amb=this.ambRow[y]; this.type.fill(0,a,b); this.life.fill(0,a,b); this.shade.fill(0,a,b); this.temp.fill(amb,a,b); this.fuse.fill(0,a,b); this.vx.fill(0,a,b); this.vy.fill(0,a,b); this.owner.fill(0,a,b); this.done.fill(0,a,b); }
+      for (let y=0;y<H;y++){ const a=y*W+x0, b=y*W+x1, amb=this.ambRow[y]; this.type.fill(0,a,b); this.life.fill(0,a,b); this.shade.fill(0,a,b); this.temp.fill(amb,a,b); this.fuse.fill(0,a,b); this.vx.fill(0,a,b); this.vy.fill(0,a,b); this.fu.fill(0,a,b); this.fq.fill(0,a,b); this.owner.fill(0,a,b); this.done.fill(0,a,b); }
       for (let ay=0;ay<this.AH;ay++){ const a=ay*this.AW+x0/AC, b=ay*this.AW+x1/AC; this.hum.fill(0,a,b); this.chill.fill(0,a,b); }
     }
     packRegion(x0){
@@ -1772,14 +1931,16 @@ const Sim = (() => {
       this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;
     }
     defer(i){   // work the cell pass can't do inside a tile (planting a tree touches the shared tree list): the main thread does it after
-      const k=Atomics.add(this.ctl,C_DEFER,1); if (k<DEFER_MAX) this.deferred[k]=i; else if (i>=0) this.wake(i%this.W,(i/this.W)|0);   // (i<0: a pressure request, -1-cell)
+      const k=Atomics.add(this.ctl,C_DEFER,1), n=this.W*this.H; if (k<DEFER_MAX) this.deferred[k]=i; else if (i>=0){ const c=i%n; this.wake(c%this.W,(c/this.W)|0); }   // (i<0: a pressure request, -1-cell; i>=W*H: a body's top cell, W*H+cell)
     }
     endStep(){
       const n=Math.min(DEFER_MAX,this.ctl[C_DEFER]), list=Array.from(this.deferred.subarray(0,n)).sort((a,b)=>a-b);
       let np=0; while (np<list.length && list[np]<0) np++;   // pressure requests come first, as -1-cell
       for (let k=0;k<np;k++) this.asked.push(-1-list[k]);
       if (this.frame%PRESS_EVERY===0 && (this.asked.length || this.pushing.length)){ this.pressure(this.asked); this.asked=[]; }
-      for (let k=np;k<list.length;k++){ const i=list[k]; if (this.type[i]!==TIP) continue; const x=i%this.W, y=(i/this.W)|0; this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); }   // a sapling needs ground under it
+      let nt=list.length; while (nt>np && list[nt-1]>=this.W*this.H) nt--;   // and the tops of bodies of liquid last, as W*H+cell
+      if (nt<list.length) this.waves(list.slice(nt).map(c=>c-this.W*this.H));
+      for (let k=np;k<nt;k++){ const i=list[k]; if (this.type[i]!==TIP) continue; const x=i%this.W, y=(i/this.W)|0; this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); }   // a sapling needs ground under it
       this.stepTrees();
       this.stepSoil();
       this.stepAir(this.frame%AIRSLOW, false);
