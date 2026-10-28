@@ -363,8 +363,8 @@ const Sim = (() => {
   const FIELDS = [
     ['type',Uint8Array,'cell'], ['life',Uint16Array,'cell'], ['shade',Uint8Array,'cell'], ['done',Uint8Array,'cell'],
     ['temp',Float32Array,'cell'], ['fuse',Float32Array,'cell'], ['vx',Float32Array,'cell'], ['vy',Float32Array,'cell'], ['owner',Uint16Array,'cell'],   // owner: which tree a cell belongs to
-    ['swu',Float32Array,'col'], ['swq',Float32Array,'col'], ['swr',Int16Array,'col'],
-    ['swp',Float32Array,'col'],   // the cells a tick that pressure carries on past each column (a river let down its slope by pressure, not by its flow)   // the flow of a body of liquid through the right face of each column (waves; see SW_)
+    ['swu',Float32Array,'col'], ['swq',Float32Array,'col'], ['swr',Int16Array,'col'],   // the flow of a body of liquid through the right face of each column (waves; see SW_)
+    ['swp',Float32Array,'col'],   // the cells a tick that pressure carries on past each column (a river let down its slope by pressure, not by its flow)
     ['dirty',Uint8Array,'chunk'], ['next',Uint8Array,'chunk'],
     ['hum',Float32Array,'air'], ['cap',Float32Array,'air'], ['airF',Float32Array,'air'], ['airT',Float32Array,'air'], ['chill',Float32Array,'air'],
     // wind: u on the vertical faces between chunk cells (wrapping round in x), v on the horizontal faces (closed at top and bottom); + is right/down, in cells per tick
