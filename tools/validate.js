@@ -686,6 +686,7 @@ const scenarios = {
     const { METAL, ICE } = Sim.ids, g = new Sim.Grid(160, 60);
     for (let y = 50; y < 60; y++) for (let x = 0; x < 160; x++) g.set(g.idx(x, y), STONE, 20);
     for (const [row, t] of [[20, METAL], [35, STONE]]) for (let x = 20; x < 80; x++) g.set(g.idx(x, row), t, 20);
+    for (const x of [30, 50, 70]) for (let y = 21; y < 50; y++) g.set(g.idx(x, y), STONE, 20);   // (posts under the metal bar: on its own in the air it falls now)
     const at = (x, row) => g.temp[g.idx(x, row)];
     for (let f = 1; f <= 600; f++) { g.temp[g.idx(20, 20)] = 600; g.temp[g.idx(20, 35)] = 600; g.step(); }
     console.log(`  after 10 s: metal ${at(25, 20).toFixed(0)}° 5 cells along, ${at(35, 20).toFixed(0)}° at 15, ${at(50, 20).toFixed(0)}° at 30; stone ${at(25, 35).toFixed(0)}° at 5, ${at(35, 35).toFixed(0)}° at 15`);

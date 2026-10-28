@@ -297,7 +297,7 @@ const Sim = (() => {
   // nearly all of it by 800°), so a fire under a steel span brings it down in a long sag until it tears.
   // A span that bears on nothing at either end falls as one piece. Wood floats: water under it bears it.
   const SPAN = new Uint8Array(N), STR = new Float32Array(N), WT = new Float32Array(N), BRK = new Float32Array(N), CAT = new Float32Array(N);
-  for (const [t,s,w,b,c] of [[STONE,26,2.6,1,0],[BRICK,15,1.9,1,0],[GLASS,40,2.5,1,0],[ICE,3.6,0.9,1,0],[CHAR,1,0.4,1,0],[WOOD,120,0.6,2.5,0.3],[METAL,1000,7.8,0,1]]){ SPAN[t]=1; STR[t]=s; WT[t]=w; BRK[t]=b; CAT[t]=c; }
+  for (const [t,s,w,b,c] of [[STONE,26,2.6,1,0],[BRICK,20,1.9,1,0],[GLASS,40,2.5,1,0],[ICE,3.6,0.9,1,0],[CHAR,1,0.4,1,0],[WOOD,120,0.6,2.5,0.3],[METAL,1000,7.8,0,1]]){ SPAN[t]=1; STR[t]=s; WT[t]=w; BRK[t]=b; CAT[t]=c; }
   for (const e of EL) if (!WT[e.id] && e.id!==E && e.kind!=='gas') WT[e.id]=e.density||0.5;   // what anything else weighs lying on a beam
   // The ground itself keeps the rule it always had: the hills' rock (stone the world was made with, or lava set hard), ice and
   // charcoal are held if something solid is under them, straight or diagonally, or a solid run leads within OLDSPAN cells to
