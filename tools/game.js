@@ -26,12 +26,13 @@ function play(id, moves = {}, max) {
 const summary = game => `${game.state}${game.why ? ' (' + game.why + ')' : ''} at ${(game.t / 60).toFixed(1)} s; ` +
   game.goals.concat(game.fails).map(c => `${c.label} ${c.value}`).join(', ') + `; score ${game.score}, reaction points ${game.points | 0}`;
 
-// Volcano: every half second, a water blob dropped just above the first lava cell open to the air, the way a player chases it
+// Volcano: every half second, a water blob dropped just above the first lava cell open to the air (as the goal counts it), the way a player chases it
 function quench(game) {
   const g = game.g;
   for (let y = 1; y < BOX.h; y++) for (let x = 0; x < BOX.w; x++) {
     const i = g.idx(BOX.x + x, BOX.y + y); if (g.type[i] !== LAVA) continue;
     const a = g.type[i - g.W]; if (a !== E && Sim.EL[a].kind !== 'gas') continue;
+    if (game.sealed(i - g.W)) continue;   // (a bubble sealed in the crust doesn't count as open: chase the next one)
     paintRect(game, x - 4, y - 12, x + 4, y - 8, WATER); return;
   }
 }
