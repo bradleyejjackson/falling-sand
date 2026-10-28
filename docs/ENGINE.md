@@ -29,7 +29,7 @@ those and the double-width copies (`KHD`, `CAPD`, ...), never the `EL` objects, 
 2. The cell pass (`stepTile` for every listed tile, phase by phase). A tile only touches cells within `REACH` (32) of itself, so
    tiles in one phase can run on any number of threads. Each tile seeds the random stream from the frame seed and its index
    (`reseed(mix(seed, tile))`), so the result doesn't depend on thread count or tile order.
-3. `endStep`, on one thread: deferred work (every `PRESS_EVERY` (4) ticks, the pressure search; the wave pass; saplings become trees), trees, the soil pass (every 8th row, `SLOW`), the air pass
+3. `endStep`, on one thread: deferred work (every `PRESS_EVERY` (4) ticks, the pressure search; the wave pass; spans of building material are judged (`beam`); saplings become trees), trees, the soil pass (every 8th row, `SLOW`), the air pass
    (every 4th coarse row, `AIRSLOW`; the air masses are worked out just before it, `updateMasses`), the wind solve (every 4th
    tick), storms and lightning (`stepStorms`), the clock and climate.
 
@@ -42,7 +42,8 @@ Inside a tile, rows bottom to top; within a row, sleep blocks left to right on e
    (`HOLDT`: burning things stay hot). If the heat gained or lost (degrees × capacity) is over `WAKEQ` (0.3; metal 0.05), wake.
 2. Phase change (`phaseHeat`) only for types that can (`SLOWHEAT`, or past `HIAT`/`LOAT`, or burning oil): latent-heat melting
    and freezing, boiling, ignition, explosions. A cell that changed is done for this tick.
-3. `INERT` statics (stone, metal, brick, glass, wood, ...) stop here, after a support check if they have a `SPAN`.
+3. `INERT` statics (stone, metal, brick, glass, wood, ...) stop here, after a support check if they have a `SPAN` (`stepSupport`: the
+   ground's own rock settles or crumbles by its local rule; a building material with nothing bearing under it defers itself to `beam`).
 4. Empty air: hot air under cooler air swaps up (convection).
 5. Everything else: reactions (`RXA`, fire lighting fuel, salt dissolving, acid), then by kind: powders and liquids move
    (`stepMobile`), gases (`stepGas`, `stepCloud`, `stepSteam`), statics with a life counter (`stepLife`) or behaviour
@@ -109,6 +110,29 @@ cold front if it is the colder, blended over `FRONT_COLD` (48) columns; a warm f
   `BOLT_T` ticks) are for drawing only. A strike zeroes `charge` and sets `struck` (its frame) within `STRIKE_R` columns, which then can't strike for `STRIKE_GAP` ticks, and
   cloud whose base is under `STORM_CLEAR` rows off the ground (fog) doesn't count. Generated and flat worlds have fronts and
   lightning (`weatherOn`); a bare `Grid` has neither, and scenarios run with one air mass and no lightning (`Game.weather`).
+
+### Structural strength (R5)
+
+Building materials (`SPAN`: laid stone, brick, glass, wood, metal) are beams. The cell pass only settles what bears straight down
+(`bears`: through a heap of powder to what it lies on, onto a liquid denser than it, never through powder onto another span); a
+cell with nothing bearing under it defers its index, and `endStep` runs `beam(x, y)` on it, which reads up to `BEAM_MAX` (96)
+columns either way (further than a tile's `REACH`, hence on the main thread):
+
+1. Columns (`bcolumn`): the vertical run of building material through the cell (down up to `BEAM_DOWN`, up to `BEAM_UP`), its
+   weight plus the load lying on it (`WT`, up to `BEAM_LOAD` cells), and whether it bears on something. A run of `BEAM_DEEP` (8)
+   or more is solid. A run containing the ground's own rock is held.
+2. Walk left and right through overlapping runs to the first held column (or an abutment: solid beside the run that is itself
+   borne up, or the window edge) or a free end. Held at neither end: every column drops a row (it falls in one piece).
+3. Moments by statics (simply supported, or a cantilever from its held end); an arch's thrust (`H` from the crown, if it rises a
+   tenth of its span or more) takes moment back and adds `H × depth / 2` to what the ring takes. Capacity `STR × depth²`, less
+   for hot metal and glass.
+4. Brittle (`BRK` 1): the worst column's bottom cell cracks to `FALLS_AS` (chance `BEAM_BREAK`). Tough: the span sags a row
+   deeper along a parabola (chance `SAG_K` × overload), relieved by `CAT`; wood snaps past `BRK` or `SAGMAX` of its length, metal
+   tears where it is worst once it has sagged a quarter of its span.
+
+Every column of the judged span is marked for the tick (`beamSeen`), so one span is judged once. Held spans set the settled bit
+(life bit 0); the soil pass re-opens settled spans now and then (`audit`, `BEAM_AUDIT`), so a load piled on later is felt. Stone
+the brush lays carries `LAID` (life bit 15; stone's cracking is bits 8-14) and is a building material; generated rock is not.
 
 ### Sleeping
 
