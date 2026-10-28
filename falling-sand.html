@@ -318,10 +318,10 @@ const Sim = (() => {
   // frost weathering: rock open to the weather takes water into its cracks (from rain or a pool lying on it, snow or ice melting on
   // it: CRACK_IN a visit; from fog or saturated air: 1 a visit with chance CRACK_FOG), up to 63, and dries out slowly (CRACK_DRY of
   // the rate soil does). Each time it freezes below FROST_T with CRACK_MIN or more in it, the ice wedges the cracks wider by CRACK_K
-  // per unit of water; it must thaw (above 0) before it can do so again. Rock cracked to 255 breaks off as rubble: it falls from a
+  // per unit of water; it must thaw (above 0) before it can do so again. Dry rock where the air is FROST_NEAR° or warmer is left alone. Rock cracked to 255 breaks off as rubble: it falls from a
   // cliff face into scree at its foot, and the scree buries the rock under it (buried rock stops weathering).
   // A stone cell's life: bit 0 settled (stepSupport), bits 1-6 the water in its cracks, bit 7 frozen, bits 8-15 how cracked it is
-  const CRACK_IN = 8, CRACK_FOG = 0.25, CRACK_DRY = 0.3, FROST_T = -2, CRACK_MIN = 8, CRACK_K = 1.4;
+  const CRACK_IN = 8, CRACK_FOG = 0.25, CRACK_DRY = 0.3, FROST_NEAR = 8, FROST_T = -2, CRACK_MIN = 8, CRACK_K = 1.4;
   // rust: metal touching water flakes to rust at RUST_W a soil visit (brine RUST_B, damp soil half of RUST_W, saturated air RUST_AIR);
   // hot metal stays dry and frozen metal barely corrodes, so neither rusts
   const RUST_W = 0.0008, RUST_B = 0.005, RUST_AIR = 0.0001;
@@ -1779,9 +1779,11 @@ const Sim = (() => {
       const ou=up===E || KIND[up]===3, ol=lf===E || KIND[lf]===3, or=rt===E || KIND[rt]===3;
       const wu=up===WATER || up===BRINE || up===SNOW || up===ICE, wl=lf===WATER || lf===BRINE || lf===SNOW || lf===ICE, wr=rt===WATER || rt===BRINE || rt===SNOW || rt===ICE;
       if (!(ou || ol || or || wu || wl || wr)) return;   // (buried rock: nearly all of it)
+      const v=L[i];
+      if (amb>=FROST_NEAR && v<=1) return;   // (dry rock where the air is nowhere near freezing: the weather can't crack it, so it is left be)
       const tp=this.temp;
-      if (asleep && !ou && (ol || or)) tp[i]+=(amb-tp[i])*0.1;   // a cliff face follows the weather too (bare ground with sky over it already did)
-      const v=L[i]; let w=(v>>1)&63, f=v&128, c=v>>8; const T0=tp[i];
+      if (asleep && !ou && (ol || or) && tp[i]-amb<30 && amb-tp[i]<30) tp[i]+=(amb-tp[i])*0.1;   // a cliff face follows the weather too (bare ground with sky over it already did; rock heated by lava or fire is left to cool by conduction)
+      let w=(v>>1)&63, f=v&128, c=v>>8; const T0=tp[i];
       if (wu || wl || wr){
         const melt=(up===WATER || up===BRINE || lf===WATER || lf===BRINE || rt===WATER || rt===BRINE) || T0>0;   // (snow and ice give water only as they melt)
         if (melt) w=Math.min(63,w+CRACK_IN);
