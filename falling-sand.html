@@ -147,7 +147,8 @@ const Sim = (() => {
   // SPREAD_M sends runners up to 3 cells sideways onto bare damp dirt; drought (no sap) and shade kill it to litter. In the dry season
   // (late summer) it needs up to DRY_NEED more soil moisture to keep drinking, so it cures on the hills and stays green by the water.
   const SAP0 = 200, CURED = 70, GRASS_DRINK = 40, SIP = 3, SAP_GAIN = 24, TRANSP = 8, SPREAD_M = 50, SPREAD_SAP = 150, SPREAD_P = 0.04, SPREAD_COST = 12,
-        DROUGHT_DIE = 0.001, DRY_NEED = 100, GREEN_K = 3, SHADE_DIE = 0.006, CURED_P = 0.3, SEED_IN_GRASS = 0.25;
+        DROUGHT_DIE = 0.001, DRY_NEED = 100, GREEN_K = 3, SHADE_DIE = 0.006, CURED_P = 0.3, SEED_IN_GRASS = 0.25,
+        SOW_P = 0.002, SOW_REACH = 16, SOW_M = 55;   // grass seed: the chance a base blade sows a visit (times growth), how far, how damp the root zone must be
   const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,tension:0,k:0.2,cap:1,t0:20,hold:null,life:0,soil:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
 
   const E     = def('Empty',    {kind:'static', k:0.05, rgb:[8,8,10], opaque:false});
@@ -302,7 +303,7 @@ const Sim = (() => {
   const PERM = new Float32Array(N); PERM[DIRT]=1; PERM[SAND]=2; PERM[MUD]=0.1; PERM[CLAY]=0.02;
   const HOLDM = new Float32Array(N); HOLDM[DIRT]=HOLD; HOLDM[SAND]=50; HOLDM[MUD]=MOIST; HOLDM[CLAY]=150;
   const CLUMP = 30, SPRING = 245, SATM = 230, SPRING_P = 0.1;
-  const MUD_AT = 200, MUD_P = 0.05, MUD_DRY = 190, MUD_FLOW = 0.15, CLAY_WET = 40;
+  const MUD_AT = 200, MUD_P = 0.05, MUD_DRY = 190, MUD_FLOW = 0.15, CLAY_WET = 40, FIRM = 30;   // damp dirt (FIRM to SATM) holds a steep face
   // rust: metal touching water flakes to rust at RUST_W a soil visit (brine RUST_B, damp soil half of RUST_W, saturated air RUST_AIR);
   // hot metal stays dry and frozen metal barely corrodes, so neither rusts
   const RUST_W = 0.0008, RUST_B = 0.005, RUST_AIR = 0.0001;
@@ -335,7 +336,7 @@ const Sim = (() => {
   // room for the weather to build and rain out over the hills (a 480-row grid has none and generates as it always did).
   // the page's grid: a window W×H onto a world WIDE cells across (it streams along it a REGION at a time)
   const WORLD = {W:1280, H:640, WIDE:12800}, LAND_H = 480;
-  const TILE = 64, TILE_H = TILE, REACH = TILE/2, PHASES = 4, DEFER_MAX = 4096;
+  const TILE = 64, TILE_H = TILE, REACH = TILE/2, PHASES = 4, DEFER_MAX = 4096, PUSHING = 64, PRESS_EVERY = 4;
   // Streaming: the grid is a window onto a wider world and moves REGION columns at a time (a multiple of the tile, chunk and air cell)
   const REGION = 320;
   // Every field is a flat typed array (structure of arrays), carved out of one buffer so worker threads can share it.
@@ -382,7 +383,7 @@ const Sim = (() => {
       this.top=Math.max(0,H-LAND_H);                                   // rows of sky above the land's layout
       this.skyY=this.top+(((H-this.top)*0.4)|0);
       this.trees=[]; this.treeId=1; this.springs=0; this.droughtKills=0;                       // tree entities; and a count of the water springs have let out
-      this.bfsQ=new Int32Array(1300); this.bfsMark=new Int32Array(W*H); this.bfsStamp=0;   // per-thread scratch
+      this.bfsQ=new Int32Array(0); this.bfsMark=new Int32Array(W*H); this.bfsStamp=0; this.pushing=[]; this.asked=[];   // the pressure search's scratch, and the cells still pushing (main thread)
       this.ox=0; this.worldW=W; this.worldSeed=0; this.store=new Map(); this.storedTrees=new Map();   // streaming: where the window sits in a wider world
       // every property the passes use, set up front so a grid keeps one shape (V8 deoptimises the cell pass when it changes)
       this.tci=0; this.tcx=0; this.tcy=0; this.awakeTiles=0; this.job=null; this.blank=false; this.epoch=0; this.sketch=false; this.noise=null; this.scratch=null;
@@ -401,6 +402,7 @@ const Sim = (() => {
     wc(x,y){ return (y>>4)*this.CW+(x>>4); }                          // the wind cell holding (x,y)
     windAt(x,y){ let w=this.wc(x,y); if (this.wsolid[w] && w>=this.CW) w-=this.CW; return this.uc[w]; }   // the sideways wind at (x,y): near the ground, that of the open cell above
     rh(c){ return this.cap[c]>0 ? this.hum[c]/this.cap[c] : 1; }        // relative humidity
+    airOver(x,y){ let a=this.ac(x,Math.max(0,y)); for (let q=0;q<2 && this.cap[a]<=0 && a>=this.AW;q++) a-=this.AW; return a; }   // the air over open ground at (x,y): a coarse cell its ground half fills holds no air, so the one above
     resetTemp(){ for (let y=0;y<this.H;y++){ const a=this.ambAt(y); this.temp.fill(a, y*this.W, (y+1)*this.W); } }
     idx(x,y){ return y*this.W+x; }
     inb(x,y){ return x>=0&&x<this.W&&y>=0&&y<this.H; }
@@ -455,7 +457,7 @@ const Sim = (() => {
     }
     clear(){   // empties the whole world, the parts streamed out of the window included; regions not yet visited come in empty too
       this.type.fill(0); this.life.fill(0); this.resetTemp(); this.fuse.fill(0); this.vx.fill(0); this.vy.fill(0); this.owner.fill(0); this.trees=[]; this.initAir(); this.wakeAll();
-      this.store.clear(); this.storedTrees.clear(); this.blank=true; this.epoch=(this.epoch||0)+1; this.job=null;
+      this.store.clear(); this.storedTrees.clear(); this.pushing=[]; this.asked=[]; this.blank=true; this.epoch=(this.epoch||0)+1; this.job=null;
     }
     // density of the cell itself: muddy water, brine and acid get heavier with what they carry
     dens(i,t){ return t===WATER ? 1+(this.life[i]&255)*0.002 : t===BRINE ? 1+this.life[i]*0.001 : t===ACID ? 1+this.life[i]*0.0004 : EL[t].density; }
@@ -662,11 +664,13 @@ const Sim = (() => {
       const thin = el.tension && this.thin(ci,cy), held = thin && cy+1<this.H && TENS[T[ci+W]];
       // damp sand holds together: it stands in walls instead of slumping (under water it slides again)
       const clump = this.sticky(ci,cy,t);
+      // damp dirt is firm: it stands at twice the slope of dry dirt (it only slides off a step two deep), and soaked dirt slumps again
+      const firm = t===DIRT && this.firm(ci);
       if (cy+1<this.H && !clump && (flow>=1 || R()<Math.max(flow,0.3))){
         for (let q=0;q<2;q++){
           const dx=q?-dir:dir, nx=cx+dx; if(nx<this.wx0||nx>=this.wx1) continue;
           const j=(cy+1)*W+nx;
-          if (!this.done[j] && this.canSink(d,j) && (liquid || T[cy*W+nx]!==STONE)){
+          if (!this.done[j] && this.canSink(d,j) && (liquid || T[cy*W+nx]!==STONE) && !(firm && (cy+2>=this.H || !this.canSink(d,j+W)))){
             if (held && R()<el.tension && this.cohesion(j,ci)<2) continue;
             this.swap(ci,j); if (liquid && impact>1.5 && flow>=1) VX[j]=dx*impact*0.6;
             if (t===WATER && !muddy){ const lip=ci+W; if (ERODE[T[lip]] && R()<0.02*ERODE[T[lip]]) this.erode(lip); }   // the water cuts the lip it ran over
@@ -674,7 +678,7 @@ const Sim = (() => {
           }
         }
       }
-      if (!liquid){ if (impact>2.5) VX[ci]=dir*impact*0.3*R(); return; }
+      if (!liquid){ if (impact>2.5 && !firm) VX[ci]=dir*impact*0.3*R(); return; }   // (damp clods land without scattering)
       // mud creeps off the edge of a slope steeper than 1 in 2, so a heap slumps out low and wide
       if (t===MUD && R()<MUD_FLOW && cy+1<this.H){
         for (let q=0;q<2;q++){ const dd=q?-dir:dir, nx=cx+dd, nx2=cx+2*dd; if (nx2<this.wx0 || nx2>=this.wx1) continue;
@@ -713,8 +717,9 @@ const Sim = (() => {
         if (b!==E && KIND[b]!==2 && KIND[b]!==3 && R()<0.02){ this.deposit(ci); return; }
         this.wake(cx,cy);
       }
-      if (flow>=1 && R()<0.01) this.pressureFlow(ci,cx,cy,t);   // boxed in: look for somewhere to surface under pressure (lava is too thick to level itself)
+      if (flow>=1 && R()<0.01 && cy>=3) this.defer(-1-ci);   // boxed in: look for somewhere to surface under pressure (lava is too thick to level itself)
     }
+    firm(i){ const m=this.life[i]&255; return m>=FIRM && m<SATM; }
     sticky(i,y,t){   // damp sand and damp clay hold together: no sliding off diagonally (damp sand slides again under water; wet clay sticks, under water too)
       return (t===SAND && (this.life[i]&255)>=CLUMP && !(y>0 && KIND[this.type[i-this.W]]===2)) || (t===CLAY && (this.life[i]&255)>=CLAY_WET);
     }
@@ -817,25 +822,44 @@ const Sim = (() => {
       }
       return false;
     }
-    pressureFlow(i,x,y,t){
-      // head: how much of the same liquid sits directly on top of this cell
-      const W=this.W, T=this.type, {wx0,wx1,wy0,wy1}=this;
-      let head=0, gap=0; for (let k=1;k<=40;k++){ if (y-k<wy0) break; const a=T[i-k*W]; if (a===t){ head=k; gap=0; } else if (a===E && ++gap<=3) continue; else break; }   // bubbles don't break the column
-      if (head<3) return false;
-      // breadth-first through the body for an air cell that is lower than the surface of this column
-      const limit=y-head+1, mark=this.bfsMark, q=this.bfsQ, stamp=++this.bfsStamp; let qs=0, qe=0;
-      q[qe++]=i; mark[i]=stamp; let best=-1, bestY=0;
-      while (qs<qe && qe<1200){
-        const c=q[qs++], cx=c%W, cy=(c/W)|0;
-        for (let k=0;k<4;k++){
-          const nx=cx+DX4[k], ny=cy+DY4[k]; if (nx<wx0||nx>=wx1||ny<wy0||ny>=wy1) continue; const j=ny*W+nx; if (mark[j]===stamp) continue;
-          const tj=T[j];
-          if (tj===E && ny<y && ny>=limit && (ny===0 || T[j-W]!==t) && (best<0 || ny<bestY)){ best=j; bestY=ny; }   // highest free surface of the body (not a bubble), below the head
-          if (tj===t){ mark[j]=stamp; q[qe++]=j; if (qe>=1200) break; }
+    // Pressure. A boxed-in liquid cell asks (deferred to the end of the tick, so the search can cross tiles) whether its body has a
+    // free surface lower than the top of its own column somewhere; if so the body pushes a cell up and out there. The whole body
+    // is searched, however big (one search per body each time, shared by every cell of it that asked), so a big lake still fills
+    // a pipe on its far side.
+    // The search runs every PRESS_EVERY ticks on the cells that asked since. A cell that pushed asks again (up to PUSHING of them), so a body keeps levelling itself while it is out of level,
+    // asleep or not, and stops when it is level.
+    pressure(list){
+      const W=this.W, H=this.H, T=this.type, mark=this.bfsMark, pushed=[];
+      for (const i of this.pushing) list.push(i);
+      list=Array.from(new Set(list)).sort((a,b)=>a-b);
+      if (this.bfsQ.length<W*H) this.bfsQ=new Int32Array(W*H);
+      const q=this.bfsQ, first=this.bfsStamp+1, outs=[];
+      for (const i of list){
+        const t=T[i]; if (KIND[t]!==2 || t===LAVA || t===MUD || t===MGLASS) continue;   // (thick liquids never ask)
+        const x=i%W, y=(i/W)|0;
+        let head=0, gap=0; for (let k=1;y-k>=0;k++){ const a=T[i-k*W]; if (a===t){ head=k; gap=0; } else if (a===E && ++gap<=3) continue; else break; }   // bubbles don't break the column
+        if (head<3) continue;
+        let body;
+        if (mark[i]>=first) body=outs[mark[i]-first];
+        else {   // breadth-first through the body, listing the free surface cells round it, highest first
+          const stamp=++this.bfsStamp, list=[]; let qs=0, qe=0; q[qe++]=i; mark[i]=stamp;
+          while (qs<qe){
+            const c=q[qs++], cx=c%W, cy=(c/W)|0;
+            for (let k=0;k<4;k++){
+              const nx=cx+DX4[k], ny=cy+DY4[k]; if (nx<0||nx>=W||ny<0||ny>=H) continue; const j=ny*W+nx; if (mark[j]===stamp) continue;
+              const tj=T[j];
+              if (tj===t){ mark[j]=stamp; q[qe++]=j; }
+              else if (tj===E && (ny===0 || T[j-W]!==t) && ny+1<H && T[j+W]!==E && KIND[T[j+W]]!==3){ mark[j]=stamp; list.push(j); }   // (where water would lie: not a bubble, not over a drop)
+            }
+          }
+          body=Int32Array.from(list).sort(); outs.push(body);   // (index order is row order: highest first)
         }
+        // the highest free surface of the body lower than the top of this column takes a cell from it: the column goes down by one
+        // and the water comes up (or runs on) there
+        const limit=(y-head+2)*W; let lo=0, hi=body.length; while (lo<hi){ const m=(lo+hi)>>1; if (body[m]<limit) lo=m+1; else hi=m; }
+        for (let k=lo;k<body.length;k++){ const j=body[k]; if (T[j]===E){ this.swap(i,j); if (pushed.length<PUSHING) pushed.push(i); break; } }
       }
-      if (best<0) return false;
-      this.swap(i,best); return true;
+      this.pushing=pushed;
     }
     nearFuel(x,y){
       for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ if (this.inb(x+dx,y+dy) && FUEL[this.type[this.idx(x+dx,y+dy)]]) return true; }
@@ -1112,6 +1136,7 @@ const Sim = (() => {
     canShift(dir){ return this.W%REGION===0 && (dir>0 ? this.ox+this.W+REGION<=this.worldW : this.ox-REGION>=0); }
     shift(dir){ const keep=seedNow(), ok=this.shiftWindow(dir); reseed(keep); return ok; }
     shiftWindow(dir){
+      this.pushing=[]; this.asked=[];   // (the cells moved)
       if (!this.canShift(dir)) return false;
       const {W,H}=this, out = dir>0 ? 0 : W-REGION, inn = dir>0 ? W-REGION : 0, d=dir*REGION;
       this.store.set((this.ox+out)/REGION, this.packRegion(out));
@@ -1320,7 +1345,7 @@ const Sim = (() => {
                 if (amb<0 && t===WATER){ temp[i]+=(amb-temp[i])*0.2; if (temp[i]<0) this.wake(x,y); }   // a still surface chills in freezing air, then freezes over as it sheds its latent heat
                 else {
                   // evaporation: faster from warm water into dry air; salt holds water back
-                  const a=this.ac(x,y-1), cp=this.cap[a], deficit=cp>0 ? 1-this.hum[a]/cp : 0;
+                  const a=this.airOver(x,y-1), cp=this.cap[a], deficit=cp>0 ? 1-this.hum[a]/cp : 0;
                   if (deficit>0 && R()<evap*deficit*Math.min(3, SAT(temp[i])/SAT(15))*(t===BRINE?1-this.life[i]/400:1) && this.openSky(x,y)) this.evaporate(i,a);
                 }
               }
@@ -1379,7 +1404,7 @@ const Sim = (() => {
       if (SOAKS[up]){ const a=L[i-W], ma=a&255, f=((m-ma)/8)|0; if (f>0){ m-=f; L[i-W]=a+f; } }   // wicking up is slower than draining down
       // open to the air: dry out into it (100 moisture is one water cell of vapour), or gather dew when it is saturated
       else if (up===E || isGas(up)){
-        const a=this.ac(x,y-1), rh=this.rh(a);
+        const a=this.airOver(x,y-1), rh=this.rh(a);
         if (rh<1){ if (m>0 && R()<dry*(1-rh)){ m--; this.hum[a]+=0.01; } }
         else if (m<25 && this.hum[a]>0.02 && R()<0.25){ m++; this.hum[a]-=0.01; }   // dew dampens dry ground, but never soaks it
       }
@@ -1405,6 +1430,7 @@ const Sim = (() => {
       L[i]=rich|m;
       if (t===SAND && (was>=CLUMP)!==(m>=CLUMP)) this.wake(x,y);   // damp sand stands, dry sand slumps: wake it when it crosses the line
       if (t===CLAY && (was>=CLAY_WET)!==(m>=CLAY_WET)) this.wake(x,y);   // and so does clay
+      if (t===DIRT && (was>=FIRM && was<SATM)!==(m>=FIRM && m<SATM)) this.wake(x,y);   // and dirt that firms up or softens
       // a puddle standing on soaked dirt churns it to mud; mud that dries out (in the sun, or draining into drier ground) is dirt again
       if (t===DIRT && m>=MUD_AT && y>0 && T[i-W]===WATER && !(L[i-W]&255) && !(y>=4 && T[i-2*W]===WATER && T[i-3*W]===WATER && T[i-4*W]===WATER) && R()<MUD_P){
         this.set(i-W,E); this.set(i,MUD,this.temp[i]); L[i]=rich|MOIST; }   // (it takes the water in: mud is dirt with a cell of water stirred into it)
@@ -1433,7 +1459,7 @@ const Sim = (() => {
       if (top && soil>=0 && y>0 && T[i-W]===WATER && (L[soil]&255)<=MOIST-100 && R()<0.5){ const j=i-W; if (L[j]&255) this.deposit(j); else this.set(j,E); L[soil]+=100; }
       // transpiration: the leaves lose sap to the air as fast as the air would dry open ground, and the soil makes it good while it can
       let up=y-1; while (up>0 && y-up<=3 && T[up*W+x]===PLANT && this.owner[up*W+x]===0) up--;   // the air over the top of the stand
-      let a=this.ac(x,Math.max(0,up)); for (let q=0;q<2 && this.cap[a]<=0 && a>=this.AW;q++) a-=this.AW;   // (a coarse cell half full of grass and dirt holds no air: use the one above)
+      const a=this.airOver(x,up);
       const rh=this.rh(a), loss=TRANSP*dry/0.35*Math.max(0,1-rh), lost=(loss|0)+(R()<loss%1?1:0);
       if (lost){ const l=Math.min(sap,lost); sap-=l; this.hum[a]+=l/800; }   // (800 sap is a water cell: 8 sap to a point of soil moisture)
       if (soil>=0 && this.growth>0 && sap<230 && (L[soil]&255)>=GRASS_DRINK+DRY_NEED*this.dryness){ L[soil]-=SIP; sap=Math.min(255,sap+SAP_GAIN); }   // in the dry season only well-watered grass stays green
@@ -1449,6 +1475,19 @@ const Sim = (() => {
             if (T[c]!==E || T[d]!==DIRT || (L[d]&255)<GRASS_DRINK) continue;
             if (this.shaded(nx,ny)) break;   // not into the shade
             this.set(c,PLANT,this.temp[c]); L[c]=(SAP0<<8)|1; L[soil]-=SPREAD_COST; break;
+          }
+        }
+        // seed: a green stand sows bare ground further off (up to SOW_REACH columns), where the soil a few cells down is damp enough
+        // for a seedling to root, so a meadow takes back ground that a fire or a dead tree has cleared
+        if (base && this.growth>0.3 && R()<SOW_P*this.growth){
+          const nx=x+(R()<0.5?-1:1)*(4+((R()*(SOW_REACH-3))|0));
+          if (nx>=0 && nx<W) for (let dy=-6;dy<=6;dy++){
+            const ny=y+dy; if (ny<1 || ny+3>=H) continue;
+            const c=ny*W+nx, d=c+W;
+            if (T[c]!==E || T[d]!==DIRT) continue;
+            let damp=0; for (let q=0;q<3;q++){ const e=d+q*W; if (T[e]!==DIRT) break; damp=Math.max(damp,L[e]&255); }
+            if (damp>=SOW_M && !this.shaded(nx,ny)){ this.set(c,PLANT,this.temp[c]); L[c]=(SAP0<<8)|1; }
+            break;
           }
         }
       } else if (sap===0 && this.growth>0 && this.dryness<0.2 && R()<DROUGHT_DIE){ this.set(i,LITTER); return; }   // straw lies dormant through the dry season, but a drought in the growing season kills it
@@ -1732,11 +1771,14 @@ const Sim = (() => {
       this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;
     }
     defer(i){   // work the cell pass can't do inside a tile (planting a tree touches the shared tree list): the main thread does it after
-      const k=Atomics.add(this.ctl,C_DEFER,1); if (k<DEFER_MAX) this.deferred[k]=i; else this.wake(i%this.W,(i/this.W)|0);
+      const k=Atomics.add(this.ctl,C_DEFER,1); if (k<DEFER_MAX) this.deferred[k]=i; else if (i>=0) this.wake(i%this.W,(i/this.W)|0);   // (i<0: a pressure request, -1-cell)
     }
     endStep(){
       const n=Math.min(DEFER_MAX,this.ctl[C_DEFER]), list=Array.from(this.deferred.subarray(0,n)).sort((a,b)=>a-b);
-      for (const i of list){ if (this.type[i]!==TIP) continue; const x=i%this.W, y=(i/this.W)|0; this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); }   // a sapling needs ground under it
+      let np=0; while (np<list.length && list[np]<0) np++;   // pressure requests come first, as -1-cell
+      for (let k=0;k<np;k++) this.asked.push(-1-list[k]);
+      if (this.frame%PRESS_EVERY===0 && (this.asked.length || this.pushing.length)){ this.pressure(this.asked); this.asked=[]; }
+      for (let k=np;k<list.length;k++){ const i=list[k]; if (this.type[i]!==TIP) continue; const x=i%this.W, y=(i/this.W)|0; this.set(i,E); if (!this.plantTree(x,y)) this.set(i,SEED); }   // a sapling needs ground under it
       this.stepTrees();
       this.stepSoil();
       this.stepAir(this.frame%AIRSLOW, false);
@@ -1944,12 +1986,13 @@ const Sim = (() => {
   //   {count:'Water' | ['Fire','Ember'], rect:[x0,y0,x1,y1]}   cells of those elements in the rectangle
   //   {trees:true, rect, tall:n}                                living trees rooted in the rectangle with a trunk at least n cells
   //   {made:'Steam'}                                            cells of that element made by reactions since the start
-  //   {open:'Lava', rect}                                       cells of it in the rectangle open to the air (empty or gas above)
+  //   {open:'Lava', rect}                                       cells of it in the rectangle open to the air (empty or gas above, not a sealed bubble)
   // The scenario is won when every goal has held for HOLD_GOAL ticks (or its own hold), and lost when any fail's range is reached or time runs out.
   // A survive scenario (survive:true) is won instead by reaching the end of the clock with every goal met and no fail reached.
   // sources: [{el:'Lava', rect, from, to, rate, temp}]: from tick `from` until `to`, up to `rate` cells a tick of that element appear in
   // empty cells of the rectangle (a river in flood, a volcano's vent): fill or wall off the rectangle and it stops.
   const BOX = {x:320, y:WORLD.H-200, w:320, h:200};
+  const SEALED = 24;   // the biggest bubble a goal counting cells "open to the air" treats as shut in
   const byName = n => { const e=EL.find(e=>e.name===n); if (!e) throw new Error('no element '+n); return e.id; };
   const ids = v => (Array.isArray(v) ? v : [v]).map(byName);
   // what a reaction product is worth. Weather (cloud, rain, snow, melt) and movement score nothing.
@@ -2124,8 +2167,21 @@ const Sim = (() => {
       if (c.trees){ let n=0; for (const t of g.trees) if (!t.dead && !t.falling && t.segs[0].alive && t.x>=X0 && t.x<X1 && t.y>=Y0 && t.y<Y1 && t.segs[0].len>=(c.tall||0)) n++; return n; }
       const want=new Uint8Array(64); for (const id of c.ids) want[id]=1;
       let n=0;
-      if (c.open){ for (let y=Math.max(1,Y0);y<Y1;y++){ const r=y*g.W; for (let x=X0;x<X1;x++) if (want[g.type[r+x]]){ const a=g.type[r-g.W+x]; if (a===E || EL[a].kind==='gas') n++; } } return n; }
+      if (c.open){ for (let y=Math.max(1,Y0);y<Y1;y++){ const r=y*g.W; for (let x=X0;x<X1;x++) if (want[g.type[r+x]]){ const a=g.type[r-g.W+x]; if ((a===E || EL[a].kind==='gas') && !this.sealed(r-g.W+x)) n++; } } return n; }
       for (let y=Y0;y<Y1;y++){ const r=y*g.W; for (let x=X0;x<X1;x++) n+=want[g.type[r+x]]; } return n;
+    }
+    sealed(i){   // a pocket of air or steam of at most SEALED cells shut in on every side (a bubble in the crust) is not open to the air
+      const g=this.g, T=g.type, seen=new Set([i]), q=[i];
+      for (let k=0;k<q.length;k++){
+        const c=q[k], x=c%g.W;
+        for (const j of [c-g.W, c+g.W, x>0 ? c-1 : -1, x+1<g.W ? c+1 : -1]){
+          if (j<0 || j>=T.length || seen.has(j)) continue; const t=T[j];
+          if (t!==E && EL[t].kind!=='gas') continue;
+          if (seen.size>=SEALED) return false;
+          seen.add(j); q.push(j);
+        }
+      }
+      return true;
     }
     met(c){ return (c.min===undefined || c.value>=c.min) && (c.max===undefined || c.value<=c.max); }
     evaluate(){ for (const c of this.goals) c.value=this.measure(c); for (const c of this.fails) c.value=this.measure(c); }
