@@ -223,6 +223,7 @@ const scenarios = {
     // the generated world through an autumn: clouds form aloft with a level base, and it snows on the hills in winter.
     // The base is measured on the cloud in the land's own sky; the extra sky over it (rows above g.top) gets higher, night-time layers
     const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345); g.clock = Sim.YEAR * 0.55; g.updateClimate();
+    g.fronts = false; g.lightning = false; g.massT.fill(0); g.massH.fill(0);   // (one air mass and no lightning: a front's squall line has its own base, and a warm sector rains in winter)
     // A level base is a level base at one time: the base rises and falls with the air mass from one day to the next, so the
     // spread is taken on each snapshot with enough cloud to measure, and the typical (median) snapshot has to be level
     const bases = [], spreads = [], W = g.W; let snow = 0, cloud = 0, high = 0;
@@ -275,6 +276,7 @@ const scenarios = {
     // instead of filling the screen (before the fix: 6.7 cloud cells per water cell at the peak, still 1.2 three minutes on)
     const { STEAM } = Sim.ids;
     Sim.reseed(6); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), surf = Sim.generate(g, 12345, 7680, 3200), W = g.W;
+    g.fronts = false; g.lightning = false; g.massT.fill(0); g.massH.fill(0);   // (one air mass, and no lightning setting the woods alight: this is the boiled lake's storm)
     const cx = 480; let top = g.H; for (let x = cx - 30; x < cx + 30; x++) top = Math.min(top, surf[x]);
     for (let y = top - 10; y < top + 40; y++) for (let x = cx - 30; x < cx + 30; x++) g.set(g.idx(x, y), x < cx - 27 || x >= cx + 27 || y >= top + 37 ? STONE : y >= top + 25 ? LAVA : E);
     g.wakeAll();
@@ -1212,6 +1214,79 @@ const scenarios = {
     let up = 0, low = 0; run(g, 900, 30, () => { for (let i = 0; i < g.type.length; i++) if (g.type[i] === SMOKE) { const y = (i / W) | 0; if (y < 15) up++; else if (y >= 30) low++; } });
     console.log(`  a woodpile burning in a closed room, 15 s: smoke in the top quarter ${up}, in the bottom half ${low} (summed)`);
     check('smoke gathers under the ceiling', up > 2 * low);
+  },
+  fronts() {
+    // R3: a cold front sent across a flat world. The air behind it is colder and the barometer higher, with a trough along the
+    // front; the front moves east and builds a line of tall shower cloud that rains on the ground under it, far more cloud and
+    // rain than the same world gets under one air mass
+    const { W, H } = Sim.WORLD, X0 = 160, T = 40 * 60;
+    const go = on => {
+      Sim.reseed(3); const g = new Sim.Grid(W, H), top = Sim.flat(g); g.lightning = false; g.windHold = 0.2;
+      g.clock = Sim.YEAR * 0.3 + Sim.DAY * 0.2; g.updateClimate();   // early summer, mid-morning
+      if (on) g.sendFront(X0); else { g.fronts = false; g.massT.fill(0); g.massH.fill(0); }
+      const r = { deep: 0, near: 0, far: 0, rain: 0, rainFar: 0, xs: [], dT: 0, dP: 0, trough: 0, n: 0 };
+      const frontX = () => { for (let ax = 1; ax < g.AW; ax++) if (g.massT[ax - 1] < 0 && g.massT[ax] > 0) return ax * 4; return -1; };
+      for (let f = 1; f <= T; f++) {
+        const xf = on ? frontX() : X0 + 0.3 * f | 0;   // (off: the same strip the front would have crossed)
+        const p0 = Array.from(g.precip);
+        g.step();
+        for (let x = 0; x < W; x++) { const d = g.precip[x] - p0[x]; if (Math.abs(x - xf) < 120) r.rain += d; else r.rainFar += d; }
+        if (f % 120 || xf < 300 || xf > W - 300) continue;
+        r.xs.push(xf); r.n++;
+        for (let x = 0; x < W; x += 2) { let c = 0; for (let y = 0; y < top; y++) if (g.type[y * W + x] === CLOUD) c++; if (Math.abs(x - xf) < 120) { r.near += c; r.deep = Math.max(r.deep, c); } else r.far += c; }
+        const air = x0 => { let s = 0, n = 0; for (let x = x0; x < x0 + 60; x++) for (let y = top - 30; y < top - 5; y++) { const i = y * W + x; if (g.type[i] === E) { s += g.temp[i]; n++; } } return s / n; };
+        r.dT += air(xf + 150) - air(xf - 210); r.dP += g.pressureAt(xf - 180) - g.pressureAt(xf + 180);
+        r.trough += Math.min(g.pressureAt(xf - 180), g.pressureAt(xf + 180)) - g.pressureAt(xf);
+      }
+      r.nearC = r.near / r.n / 120; r.farC = r.far / r.n / (W / 2 - 120);   // cloud cells per column sampled
+      return r;
+    };
+    const on = go(true), off = go(false);
+    const speed = (on.xs[on.xs.length - 1] - on.xs[0]) / ((on.xs.length - 1) * 120);
+    console.log(`  front moved east at ${speed.toFixed(2)} cells/tick; warm side ${(on.dT / on.n).toFixed(1)}° warmer near the ground, cold side ${(on.dP / on.n).toFixed(1)} hPa higher, ${(on.trough / on.n).toFixed(1)} hPa trough at the front`);
+    console.log(`  cloud per column: at the front ${on.nearC.toFixed(1)} (deepest ${on.deep}), elsewhere ${on.farC.toFixed(1)}; one air mass: ${off.nearC.toFixed(1)} (deepest ${off.deep}); rain under the front ${on.rain} drops (one air mass ${off.rain}), elsewhere ${on.rainFar} (${off.rainFar})`);
+    check('the front drifts east', speed > 0.15 && speed < 0.45, speed.toFixed(2));
+    check('the air behind a cold front is colder', on.dT / on.n > 3, (on.dT / on.n).toFixed(1) + '°');
+    check('the barometer stands higher in the cold air, with a trough along the front', on.dP / on.n > 8 && on.trough / on.n > 1, `${(on.dP / on.n).toFixed(1)} hPa, trough ${(on.trough / on.n).toFixed(1)}`);
+    check('the front builds tall cloud: 3+ times the cloud of elsewhere, deep enough to throw lightning (over 20 cells)', on.nearC > 3 * on.farC && on.nearC > 3 * off.nearC && on.deep > 20, `${on.nearC.toFixed(1)} vs ${on.farC.toFixed(1)} and ${off.nearC.toFixed(1)}, deepest ${on.deep}`);
+    check('and rains under it: 3+ times as much as one air mass does', on.rain > 3 * Math.max(10, off.rain), `${on.rain} vs ${off.rain}`);
+    // the bands hang off world columns, so a window anywhere sees the same air; a save keeps where they had drifted to
+    const a = new Sim.Grid(W, 320), b = new Sim.Grid(W, 320); a.worldSeed = b.worldSeed = 77; a.fronts = b.fronts = true; a.massX = b.massX = 1234; a.ox = 3200; b.ox = 3200 + Sim.REGION;
+    a.updateMasses(false); b.updateMasses(false);
+    let same = true; for (let ax = Sim.REGION / 4; ax < a.AW; ax++) if (a.massT[ax] !== b.massT[ax - Sim.REGION / 4]) same = false;
+    const c = new Sim.Grid(W, 320); a.massX = 2468.5; c.load(a.save());
+    check('the air masses are the same wherever the window is, and a save keeps them', same && c.fronts && c.massX === 2468.5);
+  },
+  lightning() {
+    // R3: a deep storm cloud strikes; the bolt goes for the highest thing within reach and for metal most of all; it lights dry
+    // grass in the dry season far more often than in the wet, and it fuses sand
+    const { METAL, GLASS, MGLASS, EMBER } = Sim.ids;
+    const field = (ground, clock) => {
+      Sim.reseed(9); const W = 200, H = 200, g = new Sim.Grid(W, H); g.windHold = 0; g.lightning = true; g.clock = clock; g.updateClimate();
+      for (let y = H - 30; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 4) g.set(i, STONE); else { g.set(i, ground === SAND ? SAND : DIRT); g.life[i] = (40 << 8) | 40; } }
+      if (ground === PLANT) for (let x = 0; x < W; x++) for (let y = H - 33; y < H - 30; y++) { const i = g.idx(x, y); g.set(i, PLANT); g.life[i] = (40 << 8) | 1; }   // dry grass (low sap)
+      g.initAir(); return g;
+    };
+    // a 40-deep cloud over the field strikes within a few seconds
+    { const g = field(DIRT, Sim.YEAR * 0.5); for (let y = 40; y < 80; y++) for (let x = 60; x < 140; x++) g.set(g.idx(x, y), CLOUD); g.wakeAll();
+      let at = -1; run(g, 600, 1, f => { if (at < 0 && g.strikes) at = f; });
+      check('a deep storm cloud throws lightning', at > 0, at > 0 ? (at / 60).toFixed(1) + ' s' : 'never'); }
+    { const g = field(DIRT, Sim.YEAR * 0.5); let flat = 0;   // with nothing standing up, it hits ground under the cloud
+      for (let k = 0; k < 20; k++) { g.strike(100, 60); const p = g.bolts[g.bolts.length - 1].pts; if (Math.abs(p[p.length - 2] - 100) <= 24) flat++; }
+      for (let y = 140; y < 170; y++) g.set(g.idx(118, y), METAL);   // a mast 30 tall, 18 columns off
+      let rod = 0; for (let k = 0; k < 20; k++) { g.strike(100, 60); const p = g.bolts[g.bolts.length - 1].pts; if (g.type[g.idx(p[p.length - 2], p[p.length - 1])] === METAL) rod++; }
+      console.log(`  strikes under the cloud: ${flat}/20 on open ground within reach; with a metal mast 18 columns off, ${rod}/20 hit the mast`);
+      check('a lightning rod takes the strikes', flat === 20 && rod >= 18, `${rod}/20`); }
+    const fires = clock => { let lit = 0;   // a fresh field for each strike: lit if the grass round where it hit has burned
+      for (let k = 0; k < 20; k++) { const g = field(PLANT, clock), grass = () => { let n = 0; for (let y = 160; y < 172; y++) for (let x = 80; x < 120; x++) if (g.type[g.idx(x, y)] === PLANT) n++; return n; };
+        Sim.reseed(100 + k); const n0 = grass(); g.strike(100, 60); run(g, 60); if (grass() < n0 - 6) lit++; }
+      return lit; };
+    const dry = fires(Sim.YEAR * 0.5), wet = fires(Sim.YEAR * 0.1);
+    console.log(`  strikes on grass that set it alight: ${dry}/20 at the height of the dry season, ${wet}/20 in spring`);
+    check('lightning starts fires in the dry season, seldom in the wet', dry >= 16 && wet <= 8, `${dry} vs ${wet}`);
+    { const g = field(SAND, Sim.YEAR * 0.5); for (let k = 0; k < 5; k++) g.strike(40 + k * 30, 60); run(g, 120);
+      const glass = census(g, Sim.EL).Glass || 0, molten = census(g, Sim.EL)['Molten glass'] || 0;
+      check('it fuses sand to glass', glass + molten > 0, `${glass} glass, ${molten} molten`); }
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
