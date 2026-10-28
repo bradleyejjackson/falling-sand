@@ -1288,6 +1288,50 @@ const scenarios = {
       const glass = census(g, Sim.EL).Glass || 0, molten = census(g, Sim.EL)['Molten glass'] || 0;
       check('it fuses sand to glass', glass + molten > 0, `${glass} glass, ${molten} molten`); }
   },
+  landslide() {
+    // R4: a hillside of soil on a slope of rock rising 3 in 2. Damp, it stands; soaked toward the rock, it slides off as a slab, baring the rock
+    // and running out past the foot; tree roots through it hold it
+    const hill = (wet, roots) => {
+      Sim.reseed(7); const W = 320, H = 180, g = new Sim.Grid(W, H), floor = H - 10;
+      for (let x = 0; x < W; x++) {
+        const rock = x < 60 ? floor - 100 : x < 127 ? Math.round(floor - 100 + (x - 60) * 1.5) : floor;
+        for (let y = rock; y < H; y++) g.set(g.idx(x, y), STONE);
+        for (let k = 1; k <= 8; k++) { const i = g.idx(x, rock - k); g.set(i, roots && x >= 60 && x < 127 && x % 6 === 0 ? ROOT : DIRT); g.life[i] = (40 << 8) | (wet ? (k <= 7 ? 240 : 150) : 60); }
+      }
+      g.initAir();
+      let peak = 0;
+      run(g, 1800, 4, () => { let n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === DIRT && g.vy[i] >= Sim.SLIP_TAG) n++; peak = Math.max(peak, n); });
+      let bare = 0, reach = 0;
+      for (let x = 60; x < 127; x++) for (let y = 0; y < H; y++) { const t = g.type[g.idx(x, y)]; if (t === E || t === WATER) continue; if (t === STONE) bare++; break; }
+      for (let x = 127; x < W; x++) if (g.type[g.idx(x, floor - 9)] === DIRT) reach = x - 127;
+      return { slides: g.slides, bare, reach, peak };
+    };
+    const damp = hill(false), soaked = hill(true), rooted = hill(true, true);
+    const fmt = r => `${r.slides} slides, ${r.bare}/67 columns of bare rock, toe ${r.reach} cells past the foot, ${r.peak} cells moving at once at most`;
+    console.log(`  damp: ${fmt(damp)}\n  soaked toward the rock: ${fmt(soaked)}\n  soaked, with roots through it: ${fmt(rooted)}`);
+    check('a damp hillside stands', damp.slides === 0 && damp.bare === 0, fmt(damp));
+    check('a soaked one slides off as a slab: 20+ columns of rock bared, 100+ cells moving together, the toe 12+ cells out', soaked.bare >= 20 && soaked.peak >= 100 && soaked.reach >= 12, fmt(soaked));
+    check('roots hold it: a third of the bare rock or less', rooted.bare <= soaked.bare / 3, `${rooted.bare} vs ${soaked.bare}`);
+  },
+  frost() {
+    // R4: a cliff high on a hill (90 rows over the hills' base). Through an autumn and winter its face cracks in the freezes and sheds
+    // rubble to its foot; the same rock under soil doesn't crack, and in summer nothing does
+    const { RUBBLE } = Sim.ids;
+    const cliff = (p0, days) => {
+      Sim.reseed(5); const W = 200, H = 640, g = new Sim.Grid(W, H), top = g.skyY - 90;
+      g.clock = Sim.YEAR * p0; g.updateClimate(); g.resetTemp();
+      for (let y = top; y < H; y++) for (let x = 0; x < W; x++) if (!(x >= 140 && y < top + 60)) g.set(g.idx(x, y), STONE, g.ambAt(y));
+      for (let x = 80; x <= 120; x++) for (let y = top - 6; y < top; y++) { const i = g.idx(x, y); g.set(i, DIRT, g.ambAt(y)); g.life[i] = (40 << 8) | 150; }
+      g.initAir(); run(g, Math.round(days * Sim.DAY));
+      const crack = (x0, x1, y0, y1) => { let s = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = g.idx(x, y); if (g.type[i] === STONE) { s += g.life[i] >> 8; n++; } } return n ? s / n : 0; };
+      let scree = 0; for (let y = top + 40; y < top + 60; y++) for (let x = 140; x < 160; x++) if (g.type[g.idx(x, y)] === RUBBLE) scree++;
+      return { face: crack(139, 140, top, top + 60), soil: crack(81, 120, top, top + 1), broke: g.frostBroke, scree };
+    };
+    const winter = cliff(0.62, 4), summer = cliff(0.2, 2);
+    console.log(`  autumn to spring: face cracked ${winter.face.toFixed(0)}/255 on average, ${winter.broke} cells broke off, ${winter.scree} lie at the foot; rock under soil ${winter.soil.toFixed(0)}; summer: face ${summer.face.toFixed(0)}, ${summer.broke} broke`);
+    check('a cold-country cliff face cracks and sheds rubble to its foot over a winter', winter.face > 40 && winter.broke >= 5 && winter.scree >= 3, `${winter.face.toFixed(0)}, ${winter.broke} broke, ${winter.scree} at the foot`);
+    check('rock under soil stays sound, and nothing cracks in summer', winter.soil < 5 && summer.face === 0 && summer.broke === 0, `${winter.soil.toFixed(1)}, ${summer.face.toFixed(1)}`);
+  },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
 
