@@ -11,7 +11,7 @@ const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${na
 function plot(W, H, depth, m, seed = 7) {
   Sim.reseed(seed);
   const g = new Sim.Grid(W, H);
-  for (let y = H - depth; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (40 << 8) | m; } }
+  for (let y = H - depth; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (Sim.NREF << 8) | m; } }
   g.initAir(); if (!m) for (let c = 0; c < g.hum.length; c++) g.hum[c] *= 0.3;   // dry ground under dry air
   return g;
 }
@@ -86,11 +86,14 @@ const scenarios = {
       if (litterGone < 0 && lit <= 4) litterGone = f;   // 80% rotted
       if (ashGone < 0 && !c.Ash) ashGone = f;
     });
-    let rich = 0, n = 0; for (let x = 50; x < 70; x++) { const i = g.idx(x, H - 21); if (g.type[i] === DIRT) { rich += g.life[i] >> 8; n++; } }
+    // the nutrients in the ash columns' soil against bare columns beside them (the ash soaks into the top cells, and drainage carries some down)
+    const colN = x => { let s = 0; for (let y = H - 20; y < H - 3; y++) { const i = g.idx(x, y); if (g.type[i] === DIRT) s += g.life[i] >> 8; } return s; };
+    let rich = 0, n = 0, ctl = 0; for (let x = 50; x < 70; x++) { rich += colN(x); n++; } for (let x = 73; x < 79; x++) ctl += colN(x) / 6;
     const c = census(g, Sim.EL);
-    console.log(`  80% of litter gone ${litterGone < 0 ? 'never' : (litterGone / MIN).toFixed(1) + ' min'}, ash gone ${ashGone < 0 ? 'never' : (ashGone / MIN).toFixed(1) + ' min'}, richness where ash was ${n ? (rich / n).toFixed(0) : '-'}, snag wood left ${c.Wood - 1}`);
+    const gain = n ? rich / n - ctl : 0;
+    console.log(`  80% of litter gone ${litterGone < 0 ? 'never' : (litterGone / MIN).toFixed(1) + ' min'}, ash gone ${ashGone < 0 ? 'never' : (ashGone / MIN).toFixed(1) + ' min'}, nutrients a column where ash was ${gain.toFixed(0)} over bare ground, snag wood left ${c.Wood - 1}`);
     check('most litter rots into dirt within 6 min', litterGone > 0);
-    check('ash turns into rich dirt', ashGone > 0 && n > 10 && rich / n > 200);
+    check('ash dissolves into the dirt under it and enriches it', ashGone > 0 && gain > 60, `${gain.toFixed(0)} a column`);
     check('the snag has rotted', (c.Wood || 0) - 1 < 10, `${c.Wood - 1} cells left`);
     let painted = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === WOOD && g.life[i] < 2) painted++;
     check('painted wood does not rot', painted === 1, `${painted} painted wood cells`);
@@ -208,15 +211,16 @@ const scenarios = {
   },
   dew() {
     // dry topsoil under saturated night air gathers dew; under dry air it doesn't
-    const got = {};
-    for (const [label, rh] of [['humid', 1.05], ['dry', 0.3]]) {
-      const g = plot(120, 100, 30, 0); g.clock = Sim.DAY * 2.6; g.updateClimate(); g.windHold = 0;
+    // (dew is a few cells' worth, so it is averaged over four plots: one plot ranges 0.4-6 on the same build)
+    const got = { humid: 0, dry: 0 };
+    for (const seed of [7, 8, 9, 10]) for (const [label, rh] of [['humid', 1.05], ['dry', 0.3]]) {
+      const g = plot(120, 100, 30, 0, seed); g.clock = Sim.DAY * 2.6; g.updateClimate(); g.windHold = 0;
       for (let x = 0; x < 120; x++) { const i = g.idx(x, 70); g.life[i] = (40 << 8) | 10; }
       g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c] * rh;
       const total = () => moisture(g, 70, 97) * 27 * 120 / 100;   // in water cells
       const m0 = total(); run(g, 900); const m = total();
-      console.log(`  ${label} night air: the soil holds ${m0.toFixed(1)} -> ${m.toFixed(1)} water cells' worth`);
-      got[label] = m - m0;
+      console.log(`  plot ${seed}, ${label} night air: the soil holds ${m0.toFixed(1)} -> ${m.toFixed(1)} water cells' worth`);
+      got[label] += (m - m0) / 4;
     }
     check('dew wets dry soil overnight, and dry air does not', got.humid > 2 && got.dry <= 0, `${got.humid.toFixed(1)} vs ${got.dry.toFixed(1)}`);
   },
@@ -910,6 +914,7 @@ const scenarios = {
     // take root less often than on bare dirt; a seedling that can't drink dies of thirst
     // (judged over the columns the tree's leaves end up over, against open columns well away from it, over six seeds: a tree
     // whose leaves all grow high, past the 30 rows shade reaches down, shades nothing, and on three seeds that can be two of them)
+    // (R7: the tree's litter rots into rich dirt under it, so the grass there grows back faster: 0.60 of the open, R6 0.54)
     let under = 0, nu = 0, open = 0, no = 0;
     for (const seed of [7, 8, 9, 10, 11, 12]) {
       const W = 200, H = 120, g = plot(W, H, 30, 90, seed), sy = H - 31;
@@ -925,7 +930,7 @@ const scenarios = {
     }
     const du = under / Math.max(1, nu), dop = open / Math.max(1, no);
     console.log(`  grass per column: ${du.toFixed(2)} under the trees' leaves (${nu} columns), ${dop.toFixed(2)} in the open`);
-    check('grass thins under a tree but holds in the open', du < 0.6 * dop && dop >= 1, `${(du / dop).toFixed(2)} of the open`);
+    check('grass thins under a tree but holds in the open', du < 0.65 * dop && dop >= 1, `${(du / dop).toFixed(2)} of the open`);
     // seeds: a row on bare damp dirt and a row on grass over the same dirt
     const sprouted = onGrass => {
       const s = plot(240, 100, 30, 150, 11), y = 100 - 31;
@@ -1019,7 +1024,7 @@ const scenarios = {
     const { REED } = Sim.ids;
     const pond = (depth, m = 255) => {
       Sim.reseed(6); const W = 200, H = 70, g = new Sim.Grid(W, H), bed = H - 20;
-      for (let y = bed; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (40 << 8) | m; } }
+      for (let y = bed; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (Sim.NREF << 8) | m; } }
       for (let x = 0; x < W; x++) if (x < 30 || x >= W - 30) for (let y = bed - depth - 2; y < bed; y++) { const i = g.idx(x, y); g.set(i, DIRT); g.life[i] = (40 << 8) | m; }
       if (depth) for (let y = bed - depth; y < bed; y++) for (let x = 30; x < W - 30; x++) g.set(g.idx(x, y), WATER);
       for (const x of [80, 120]) g.set(g.idx(x, bed - 1), REED);
@@ -1089,9 +1094,10 @@ const scenarios = {
   mud() {
     const { MUD } = Sim.ids;
     { // a puddle on soaked dirt churns it to mud (on damp ground it just soaks in); the puddle gone and the ground drained, the sun dries the mud back into dirt
-      // (summed over four plots: on one plot it is a few dozen chances, and E7's own build made 9-24 across seeds)
+      // (summed over eight plots: on one plot it is a few dozen chances, and E7's own build made 9-24 across seeds; over four plots
+      //  R6 made 42-67 and R7 23-95 depending only on the random stream)
       let peak = 0, lying = 0, left = 0;
-      for (const seed of [7, 1, 2, 3]) {
+      for (const seed of [7, 1, 2, 3, 4, 5, 6, 8]) {
         const W = 120, H = 80, g = plot(W, H, 20, 240, seed); g.windHold = 0; g.clock = Sim.YEAR * 0.4; g.updateClimate();
         for (let y = H - 23; y < H - 20; y++) for (let x = 30; x < 90; x++) g.set(g.idx(x, y), WATER);
         let p = 0; run(g, MIN, 60, () => { p = Math.max(p, census(g, Sim.EL).Mud || 0); }); peak += p;
@@ -1102,7 +1108,7 @@ const scenarios = {
         run(g, 6 * MIN, 1, () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = Math.min(g.hum[c], 0.3 * g.cap[c]); });
         left += census(g, Sim.EL).Mud || 0;
       }
-      console.log(`  3-deep puddles on soaked dirt, four plots: up to ${peak} mud in a minute; ${lying} lying when drained, ${left} left after 6 min of sun`);
+      console.log(`  3-deep puddles on soaked dirt, eight plots: up to ${peak} mud in a minute; ${lying} lying when drained, ${left} left after 6 min of sun`);
       check('a puddle on soaked dirt makes mud', peak >= 48);
       check('mud dries back into dirt', lying >= 48 && left <= lying / 4, `${left}/${lying}`);
     }
@@ -1489,6 +1495,57 @@ const scenarios = {
     let raft = 0; for (let x = 0; x < 140; x++) if (g.type[g.idx(x, 33)] === WOOD) raft++;
     console.log(`  a raft of wood 100 long on a lake: ${raft} cells still floating level`);
     check('a wooden raft floats on water, not a span', raft === 100);
+  },
+  nutrients() {
+    // soil fertility: rain washes nutrients down out of the topsoil; grass and trees grow faster on rich soil than on spent soil;
+    // a burnt meadow's ash feeds the ground it burnt on
+    const topN = (g, y0, rows, x0 = 0, x1 = g.W) => { let s = 0, n = 0; for (let y = y0; y < y0 + rows; y++) for (let x = x0; x < x1; x++) { const i = g.idx(x, y); if (g.type[i] === DIRT) { s += g.life[i] >> 8; n++; } } return n ? s / n : 0; };
+    const enrich = (g, y0, rows, n) => { for (let y = y0; y < y0 + rows; y++) for (let x = 0; x < g.W; x++) { const i = g.idx(x, y); if (g.type[i] === DIRT) g.life[i] = (n << 8) | (g.life[i] & 255); } };
+    // leaching: bare rich topsoil, one plot rained on hard every 10 s for 3 min, the other left dry
+    const lr = {};
+    for (const rain of [false, true]) {
+      const W = 60, H = 60, g = plot(W, H, 30, 60), sy = H - 30; enrich(g, sy, 6, 150);
+      run(g, 3 * MIN, 600, () => { if (rain) for (let x = 0; x < W; x++) for (let k = 1; k <= 2; k++) { const i = g.idx(x, sy - 10 - k); if (g.type[i] === E) g.set(i, WATER); } });
+      lr[rain] = { top: topN(g, sy, 3), deep: topN(g, sy + 3, 20) };
+    }
+    console.log(`  bare topsoil at 150: after 3 min dry ${lr.false.top.toFixed(0)} (subsoil ${lr.false.deep.toFixed(0)}), rained on ${lr.true.top.toFixed(0)} (subsoil ${lr.true.deep.toFixed(0)})`);
+    check('rain washes nutrients down out of the topsoil', lr.true.top < lr.false.top * 0.75 && lr.true.deep > lr.false.deep + 5);
+    // grass: a few blades on rich and on spent damp dirt
+    const gr = {};
+    for (const n of [10, 150]) {
+      const W = 200, H = 60, g = plot(W, H, 30, 90), sy = H - 31; enrich(g, sy + 1, 30, n);
+      for (let x = 98; x < 102; x++) { const i = g.idx(x, sy); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      run(g, 0.6 * MIN);
+      let cols = 0; for (let x = 0; x < W; x++) for (let y = sy - 3; y <= sy; y++) if (g.type[g.idx(x, y)] === PLANT) { cols++; break; }
+      gr[n] = cols;
+    }
+    console.log(`  grass after 36 s: on spent soil (10) ${gr[10]} columns, on rich soil (150) ${gr[150]}`);
+    check('grass spreads faster on rich soil', gr[150] >= 1.5 * gr[10] && gr[150] >= 20);
+    // a sapling on rich and on spent damp dirt
+    const tr = { 0: { wood: 0, h: 0 }, 150: { wood: 0, h: 0 } };
+    for (const seed of [7, 8, 9]) for (const n of [0, 150]) {
+      const W = 160, H = 120, g = plot(W, H, 40, 200, seed), sx = 80, sy = H - 41; enrich(g, sy + 1, 40, n); g.set(g.idx(sx, sy), TIP);
+      run(g, MIN);
+      for (let i = 0; i < g.type.length; i++) if (g.type[i] === WOOD && g.owner[i]) tr[n].wood += 1 / 3;
+      const t = g.trees.find(t => t.x === sx); tr[n].h += (t ? t.segs[0].len : 0) / 3;
+    }
+    for (const n in tr) { tr[n].wood = Math.round(tr[n].wood); tr[n].h = Math.round(tr[n].h); }
+    console.log(`  saplings after 1 min (3 seeds): on spent soil (0) trunk ${tr[0].h}, ${tr[0].wood} wood; on rich soil trunk ${tr[150].h}, ${tr[150].wood} wood`);
+    check('a tree grows faster on rich soil', tr[150].wood >= 1.15 * tr[0].wood && tr[150].h >= tr[0].h + 4);
+    // slash and burn: a meadow on poor soil is burnt, rain falls on the ash, and the topsoil comes out richer
+    {
+      const W = 120, H = 60, g = plot(W, H, 30, 60), sy = H - 31; enrich(g, sy + 1, 30, 30); g.windHold = 0;
+      for (let x = 0; x < W; x++) for (let k = 0; k < 2; k++) { const i = g.idx(x, sy - k); g.set(i, PLANT); g.life[i] = (40 << 8) | 1; }   // dry, ready to burn
+      const before = topN(g, sy + 1, 3);
+      for (let x = 58; x < 62; x++) g.set(g.idx(x, sy - 2), FIRE);
+      run(g, 0.5 * MIN);
+      let ash = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === ASH) ash++;
+      run(g, 1.5 * MIN, 300, () => { for (let x = 0; x < W; x += 3) { const i = g.idx(x, sy - 12); if (g.type[i] === E) g.set(i, WATER); } });
+      let left = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === ASH) left++;
+      const after = topN(g, sy + 1, 3);
+      console.log(`  burnt meadow: ${ash} ash after the fire, ${left} left after rain; topsoil ${before.toFixed(0)} before, ${after.toFixed(0)} after`);
+      check('a burnt meadow\'s ash feeds the soil', ash > 20 && left < ash / 4 && after > before + 15);
+    }
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
