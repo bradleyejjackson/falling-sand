@@ -55,7 +55,8 @@ function suite(threads) {
   p.window.fire('keydown', { key: 'd' }); p.run(480); p.window.fire('keyup', { key: 'd' });
   const ox1 = g.ox, stored = g.store.size;
   check('panning right streams the window along the world', ox1 >= ox0 + 3 * Sim.REGION && stored >= 3, `window ${ox0} -> ${ox1}, ${stored} regions stored; ${p.els.cam.textContent}`);
-  check('trees keep growing in the new land', g.trees.length > 5, `${g.trees.length} trees`);
+  // (east of the start lies the dry country: scrub and desert, where few trees stand)
+  const wild = census(g, Sim.EL); check('plants keep growing in the new land', g.trees.length > 5 || (wild.Shrub || 0) + (wild.Cactus || 0) > 200, `${g.trees.length} trees, ${wild.Shrub || 0} shrub and ${wild.Cactus || 0} cactus cells`);
   p.window.fire('keydown', { key: 'a' }); for (let k = 0; k < 2000 && g.ox > ox0; k++) p.run(1); p.window.fire('keyup', { key: 'a' }); p.run(2);
   // (the exact round trip is checked in validate.js stream; here the land lives on for the frames it is in the window)
   let same = 0; for (let i = 0; i < here.length; i++) if (here[i] === g.type[i]) same++;

@@ -14,12 +14,14 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   tiles stream (stage 4) sky precip storm steam level
                               #   support cookoff conduct melt groundwater dunes windfire channel
                               #   grass compete seasonfire ... widen (E8) ... landslide frost beams (R5)
+                              #   scrub cactus reeds biomes (R6)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
 node tools/perf.js [seed]     # generates the page's world (Sim.WORLD, mid-world) and times step() and render
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
 BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
+OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
 ```
 
 ## Engine (stage 4)
@@ -262,3 +264,20 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   R4 75-165); stone the brush lays is marked (`LAID`, life bit 15; stone's frost cracking is now 7 bits). Powders and liquids
   no longer slip diagonally between two cells of wood or metal (a sagging plank's steps meet corner to corner). Flood defence's
   houses now have footings: two of them stood a row or two clear of the valley floor. `validate.js beams`.
+- Plant variety (R6, `Grid.wild`, `aridAt`): Shrub, Cactus and Reed, each living on its own ground. A plant is a stem standing on
+  soil; its base cell drinks from the dampest cell of its root zone, grows the stem, a shrub's crown or a cactus's arms, and sows.
+  Shrubs drink soil down to 12 (grass needs 40, and up to 140 in the dry season), so they stay green through the summer on dry
+  dirt and seed across it; in a damp sward 90% of their seedlings are smothered and under trees they die of shade
+  (`validate.js scrub`: 3 shrubs become 37 on dry dirt by late summer while grass beside them cures to sap 0; 8 in a damp
+  meadow). Cacti lose sap at 4% of grass's rate, drink wet sand fast, rot in ground damp past 60 and sow only on dry ground,
+  six cells clear of another cactus. Reeds root in soaked beds (200+) under at most 5 of water, stand 3 out of it, spread by
+  runners and drown in deep water; growing up through water they lift it (`Grid.displace`), so a reed bed doesn't empty a pond.
+- Climate: `aridAt(seed, gx)` is slow noise over the world columns plus one desert always 1000 columns east of the page's world
+  middle. Arid columns dry soil and water up to 4× as fast. Generation lays deep sand (damp under its surface, so it holds over
+  caves) past 0.6, a skin of dirt over sand from 0.3 (scrub), no lakes and thinning grass and trees. Lakes now fill a dip up to
+  the lower of its rims within 24 columns (at most 6 deep): before, a lake was the one-row puddle in a dip, and it had soaked
+  away within seconds. Two years from seed 12345 (tools/biomes.js): at the start, 70-78 shrubs, meadow and forest hold, a reed
+  pond keeps 4-8 reeds; east of it the desert keeps 26-33 cacti over ~410 columns and scrub fire takes shrubs 159 to 79 in the
+  second summer, regrowing after. Flat worlds and scenarios have no climate. `validate.js clouds` now measures at column 640,
+  clear of seed 12345's own desert at 0-600 (a dry stretch widens the cloud-base spread across the whole window); its line is 90
+  (R5 measures 82 there, R6 78-85). Perf A/B vs R5 equal.

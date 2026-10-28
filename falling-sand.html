@@ -114,7 +114,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. The later scenarios: hold a river in flood off a town (dam it with a clay core: sand alone washes out), put out a volcano before its lava reaches the village (water crusts lava over, and the crater wants capping), and grow a forest in the desert (water sinks through sand, so line the beds with clay). Sandbox is free play: New world makes a fresh generated world, Flat world a level field of grass to build on, and the sandbox row skips to the next season, holds the clock still, or sets the wind. Speed runs up to four ticks a frame, in a scenario too. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt, however big the lake behind them. The hills' rock, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. What you build is held up by its strength: a span of laid stone, brick, glass, wood or metal is a beam, bending under its own weight and whatever lies on it, and a thicker beam spans further (pile sand or pour water on a bridge and it bows). Stone, brick and glass are strong in compression but crack when they bend, so a flat stone lintel only spans a few cells while an arch carries a load far wider; wood spans much further, bows a little and then snaps; metal sags under a heavy load and hangs on like a cable instead of breaking, but it softens in a fire, and a hot steel span droops right down. Something held at neither end falls in one piece, and wood floats. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Damp dirt is firm: it holds a bank twice as steep as dry dirt, which slumps like sand, and soaked dirt slumps again. Soil soaked down toward the rock can't hold a steep slope: it lets go as a landslide, a whole slab of hillside sliding down to the foot and running out past it, and leaves bare rock behind. It takes a lot of water to do it (heavy rain on steep hills, a storm), tree roots hold a slope, and grass helps a little. The steepest ground is bare rock to begin with. Rock open to the weather takes water into its cracks, and where it freezes and thaws (high ground, in autumn and spring) the ice wedges them wider until pieces break off as rubble and pile up as scree under the cliffs; rock under soil or scree is sheltered. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it, and its seed blows further off, so a meadow takes back ground a fire or a dead tree has cleared; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it (and reach drier soil than grass can use), and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Weather comes in air masses that drift in from the west: warm, humid air and cold, dry air in turn, a few days apart (Heat view tints the air warmer or colder than usual). Cold air is denser, so the barometer on the stats line rises when cold air comes in and falls when warm air does, and it dips in the trough along a front. Where cold air drives into warm air (a cold front) it forces the warm air up into a line of tall shower clouds with heavy rain, tallest in summer; a warm front, where warm air rides in over cold, comes in gently. A deep storm cloud throws lightning at the highest thing under it: a hilltop, a tall tree, and a metal mast most of all (a lightning rod). It fuses sand to glass, and in the dry season it sets grass and trees alight; in the wet season it mostly scorches them. In the sandbox, Send a cold front brings one in from the west of the screen. Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap. New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools, and water quenches it to a crust of rock where they touch; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. The later scenarios: hold a river in flood off a town (dam it with a clay core: sand alone washes out), put out a volcano before its lava reaches the village (water crusts lava over, and the crater wants capping), and grow a forest in the desert (water sinks through sand, so line the beds with clay). Sandbox is free play: New world makes a fresh generated world, Flat world a level field of grass to build on, and the sandbox row skips to the next season, holds the clock still, or sets the wind. Speed runs up to four ticks a frame, in a scenario too. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. Pan with arrow keys / WASD, right-drag, or the Pan tool. Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt, however big the lake behind them. The hills' rock, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. What you build is held up by its strength: a span of laid stone, brick, glass, wood or metal is a beam, bending under its own weight and whatever lies on it, and a thicker beam spans further (pile sand or pour water on a bridge and it bows). Stone, brick and glass are strong in compression but crack when they bend, so a flat stone lintel only spans a few cells while an arch carries a load far wider; wood spans much further, bows a little and then snaps; metal sags under a heavy load and hangs on like a cable instead of breaking, but it softens in a fire, and a hot steel span droops right down. Something held at neither end falls in one piece, and wood floats. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Damp dirt is firm: it holds a bank twice as steep as dry dirt, which slumps like sand, and soaked dirt slumps again. Soil soaked down toward the rock can't hold a steep slope: it lets go as a landslide, a whole slab of hillside sliding down to the foot and running out past it, and leaves bare rock behind. It takes a lot of water to do it (heavy rain on steep hills, a storm), tree roots hold a slope, and grass helps a little. The steepest ground is bare rock to begin with. Rock open to the weather takes water into its cracks, and where it freezes and thaws (high ground, in autumn and spring) the ice wedges them wider until pieces break off as rubble and pile up as scree under the cliffs; rock under soil or scree is sheltered. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it, and its seed blows further off, so a meadow takes back ground a fire or a dead tree has cleared; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it (and reach drier soil than grass can use), and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Wild plants each suit their own ground, so the land sorts itself by climate. Some stretches of the world are dry country, where the sun dries everything faster: east of where a new world opens the hills turn to scrub and then to a sand desert. Shrub is scrub: deep roots let it drink soil too dry for grass, so it stays green through the dry season on dry ground and seeds itself across it, but in a damp meadow its seedlings are smothered and under trees it dies of shade; dried out, it burns like straw. Cactus stores water: it drinks the sand fast after rain and loses almost none, so it lasts the long dry spells, grows tall and puts out arms, but it rots in damp ground and stands well apart from its neighbours. Reed grows in the soaked bed of a shallow pond or a waterlogged bank, up through the water to stand a few cells out of it, and spreads along the bed; in deep water it drowns, and where the pond dries out it dies back. Valley floors in the wet country hold ponds. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt, and ash enriches it. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Weather comes in air masses that drift in from the west: warm, humid air and cold, dry air in turn, a few days apart (Heat view tints the air warmer or colder than usual). Cold air is denser, so the barometer on the stats line rises when cold air comes in and falls when warm air does, and it dips in the trough along a front. Where cold air drives into warm air (a cold front) it forces the warm air up into a line of tall shower clouds with heavy rain, tallest in summer; a warm front, where warm air rides in over cold, comes in gently. A deep storm cloud throws lightning at the highest thing under it: a hilltop, a tall tree, and a metal mast most of all (a lightning rod). It fuses sand to glass, and in the dry season it sets grass and trees alight; in the wet season it mostly scorches them. In the sandbox, Send a cold front brings one in from the west of the screen. Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap. New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools, and water quenches it to a crust of rock where they touch; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. Engine: the world is eight screens wide. A window three screens across simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
 
 <script>
 // ============================================================================
@@ -150,6 +150,37 @@ const Sim = (() => {
   const SAP0 = 200, CURED = 70, GRASS_DRINK = 40, SIP = 3, SAP_GAIN = 24, TRANSP = 8, SPREAD_M = 50, SPREAD_SAP = 150, SPREAD_P = 0.04, SPREAD_COST = 12,
         DROUGHT_DIE = 0.001, DRY_NEED = 100, GREEN_K = 3, SHADE_DIE = 0.006, CURED_P = 0.3, SEED_IN_GRASS = 0.5,
         SOW_P = 0.006, SOW_REACH = 48, SOW_DROP = 16, SOW_M = 55;   // grass seed: the chance a base blade sows a visit (times growth), how far it blows (and up or down), how damp the root zone must be
+  // Wild plants (Grid.wild) each live on their own ground, so they sort themselves out by climate. A plant is a stem of cells standing
+  // on soil: the cell on the soil (the base) drinks and grows the rest; a cell beside a stem is a branch (a shrub's crown, a cactus's
+  // arm), and one cut off from its stem withers. Each takes water from the deepest-reaching damp cell of its root zone (ROOTZ cells
+  // down) into its sap, and loses sap to the air like grass, at its own rate (LOSS of grass's). The kinds:
+  //  Shrub: scrub. Roots 6 deep that drink soil down to SHRUB_DRY (grass needs GRASS_DRINK, and much more in the dry season), so it
+  //   stays green through a summer that cures the meadow, on ground too dry for grass. Its seed takes on bare soil damp to at least
+  //   SHRUB_SOW, but in grass it is mostly smothered (SHRUB_IN_GRASS) and under trees it dies of shade: where the soil is damp the
+  //   meadow and forest win, and the scrub holds the dry ground. Dry, it catches like straw.
+  //  Cactus: a column of stored water. Shallow roots drink the top few cells of sand after rain (down to CACTUS_DRINK), and it loses
+  //   next to nothing (LOSS 0.04), so it lasts the weeks between rains, but roots that stand wet (CACTUS_ROT) rot it, so it grows on
+  //   sand and dry ground, not on damp dirt. Tall ones put out arms. A hard frost (CACTUS_FROST) kills it.
+  //  Reed: grows from a soaked bed (REED_WET) on the shore or under water up to REED_DEEP deep, up through the water to stand
+  //   REED_ABOVE out of it, and spreads along the bed by runners (into grass, which drowns in waterlogged ground); it drinks only
+  //   while its bed is soaked, so it dies back where a pond dries out, and it browns over winter.
+  const SHRUB_DRY = 12, SHRUB_SOW = 20, SHRUB_IN_GRASS = 0.1, SHRUB_SOW_P = 0.01, SHRUB_REACH = 24,
+        CACTUS_DRINK = 4, CACTUS_ROT = 60, CACTUS_FROST = -14, CACTUS_SOW_P = 0.004, CACTUS_REACH = 40,
+        REED_WET = 200, REED_DEEP = 5, REED_ABOVE = 3, REED_MAX = 9, REED_SPREAD = 0.03, REED_SOW_P = 0.002, REED_REACH = 48,
+        WILD_GROW = 0.04, WILD_WITHER = 0.05, WILD_DIE = 0.004;
+  // climate: some stretches of a generated world are arid (aridAt: 0..1 by world column, from slow noise in the world seed). The
+  // sun dries ground and water there up to 1+ARID_DRY times as fast, and the land is laid out to match: past ARID_DESERT the
+  // topsoil is deep sand (a desert), from ARID_SCRUB a thin layer of dirt over sand that drains it (scrub), and no lakes. One desert
+  // always lies ARID_NEAR columns east of the middle of the page's world, where a new world opens.
+  const ARID_DRY = 3, ARID_DESERT = 0.6, ARID_SCRUB = 0.3, ARID_SCALE = 1400, ARID_NEAR = 1000, ARID_HALF = 500, ARID_H = 0x41d1;
+  function aridAt(seed, gx){
+    if (!seed) return 0;   // (flat worlds and scenarios have no climate)
+    const f=gx/ARID_SCALE, k=Math.floor(f), u=f-k, sm=u*u*(3-2*u), a=hash01(seed^ARID_H,k), b=hash01(seed^ARID_H,k+1);
+    const f2=gx/(ARID_SCALE/3), k2=Math.floor(f2), u2=f2-k2, s2=u2*u2*(3-2*u2), c=hash01(seed^ARID_H,k2+0x8000), d=hash01(seed^ARID_H,k2+0x8001);
+    const n=0.75*(a+(b-a)*sm)+0.25*(c+(d-c)*s2), z=(gx-(WORLD.WIDE/2+ARID_NEAR))/ARID_HALF;
+    const near=1.2*Math.exp(-z*z);
+    return Math.max(0, Math.min(1, Math.max((n-0.6)/0.22, near)));
+  }
   const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,tension:0,k:0.2,cap:1,t0:20,hold:null,life:0,soil:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
 
   const E     = def('Empty',    {kind:'static', k:0.05, rgb:[8,8,10], opaque:false});
@@ -188,6 +219,10 @@ const Sim = (() => {
   const BRICK = def('Brick',    {kind:'static', k:0.12, cap:2, rgb:[158,64,42], vary:24});   // fired clay: strong, and it shrugs off lava and acid
   const RUST  = def('Rust',     {kind:'powder', density:2.0, k:0.15, rgb:[150,72,36], vary:26});   // flakes off wet metal
   const MGLASS= def('Molten glass',{kind:'liquid', density:2.4, disperse:1, lazy:0.8, k:0.3, cap:3, t0:1000, rgb:[255,176,70], vary:30, glow:0.9});   // sand melted; sets to glass below 700°
+  // wild plants that each suit their own ground (life = sap<<8 | the height the plant grows to, set when it takes root; see Grid.wild)
+  const SHRUB = def('Shrub',    {kind:'static', k:0.12, soil:SAP0<<8, rgb:[66,112,50], vary:26, opaque:false});   // a woody bush with deep roots: scrub on ground too dry for a meadow
+  const CACTUS= def('Cactus',   {kind:'static', k:0.2, cap:2, soil:240<<8, rgb:[64,138,84], vary:16, opaque:false});   // a column of stored water on dry sand; rots in wet ground
+  const REED  = def('Reed',     {kind:'static', k:0.15, soil:SAP0<<8, rgb:[104,158,64], vary:28, opaque:false});   // grows up out of shallow water and soaked banks
 
   // phase changes driven by temperature
   const phase = (t,o) => Object.assign(EL[t],o);
@@ -213,6 +248,9 @@ const Sim = (() => {
   phase(FIRE,  {lo:{at:200,to:SMOKE}});
   phase(LITTER,{hi:{at:230,to:FIRE}});
   phase(ROOT,  {hi:{at:300,to:EMBER}});
+  phase(SHRUB, {hi:{at:260,to:EMBER}});
+  phase(REED,  {hi:{at:240,to:EMBER}});
+  phase(CACTUS,{hi:{at:320,to:EMBER}});
 
   const N = EL.length, AMB = 20;
   // flat per-type tables for the hot loops: kind code, heat capacity, hold floor, phase thresholds, and the pairwise conductance
@@ -264,7 +302,7 @@ const Sim = (() => {
                                                //   (Brine still just boils off lava, leaving its salt.)
   const has = new Uint8Array(N), RXA = new Array(N*N).fill(null); for (const [k,list] of RX){ has[(k/N)|0]=1; RXA[k]=list; }   // (RXA: the same lists, flat by a*N+b)
   // dissolution: salt dissolves into water as brine's salt content; acid eats these and is used up, and water dilutes it
-  const ACIDABLE = new Uint8Array(N); for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR,DIRT,LITTER,ROOT,MUD,CLAY,RUST]) ACIDABLE[t]=1;
+  const ACIDABLE = new Uint8Array(N); for (const t of [SAND,STONE,WOOD,OIL,ICE,GUNP,SEED,PLANT,SALT,EMBER,TIP,RUBBLE,CHAR,DIRT,LITTER,ROOT,MUD,CLAY,RUST,SHRUB,CACTUS,REED]) ACIDABLE[t]=1;
   const SALT_UNIT = 128, SPENT = 24;
   // erosion: how readily running water picks up each loose material (dirt holds together better than sand)
   const ERODE = new Float32Array(N); ERODE[SAND]=1; ERODE[DIRT]=0.4; ERODE[ASH]=1.2;
@@ -274,16 +312,19 @@ const Sim = (() => {
   const DEEP = 8, REACH_S = 8, TAU_C = 0.08, SCOUR_K = 0.5, ADVECT = 3;
   // contact ignition: a flame licking fuel lights it faster than conduction alone would
   const FUEL = new Array(N).fill(null);   // (a flat table, every entry the same shape)
-  for (const [t,p,to,r] of [[WOOD,0.02,EMBER],[TIP,0.03,EMBER],[OIL,0.35,FIRE],[PLANT,0.06,EMBER],[CHAR,0.01,EMBER],[SEED,0.1,FIRE],[GUNP,0.5,'explode',7],[GAS,0.5,'explode',3],[LITTER,0.12,FIRE],[ROOT,0.01,EMBER]]) FUEL[t]={p,to,r:r||0};
+  for (const [t,p,to,r] of [[WOOD,0.02,EMBER],[TIP,0.03,EMBER],[OIL,0.35,FIRE],[PLANT,0.06,EMBER],[CHAR,0.01,EMBER],[SEED,0.1,FIRE],[GUNP,0.5,'explode',7],[GAS,0.5,'explode',3],[LITTER,0.12,FIRE],[ROOT,0.01,EMBER],[SHRUB,0.05,EMBER],[REED,0.06,EMBER],[CACTUS,0.004,EMBER]]) FUEL[t]={p,to,r:r||0};
   // wind and fire: FIRE_LEAN scales how much the prevailing wind (cells/tick) speeds catching downwind and slows it upwind; embers throw
   // sparks downwind at chance SPARK_K per tick per unit of wind over SPARK_U, flying 2 + up to SPARK_FAR×wind cells
   const CURED_FUEL = {p:CURED_P, to:EMBER, r:0};   // dry grass: catches five times as readily
+  const WILD = new Uint8Array(N); WILD[SHRUB]=WILD[CACTUS]=WILD[REED]=1;   // the wild plants (Grid.wild)
+  const LOSS = new Float32Array(N); LOSS[SHRUB]=0.6; LOSS[CACTUS]=0.04; LOSS[REED]=1;   // how fast each loses sap to the air, as a share of grass's
+  const CURES = new Uint8Array(N); CURES[SHRUB]=CURES[REED]=1;   // dried out, these catch like straw (a dry cactus is still mostly water)
   const FIRE_LEAN = 7, SPARK_U = 0.03, SPARK_K = 0.02, SPARK_FAR = 100;
   const PERMAFROST = -25;   // the temperature of the rock round an ice vein when a world is made
   const SOURCE = new Uint8Array(N), WET = 150, BOIL = 0.25, LATENT = 300;   // WET: soil moisture that keeps the grass on it from catching; BOIL: chance heat boils off the water wetting fuel
   // structural integrity: which solids can carry weight, and how far each can cantilever before it gives way
   SOURCE[FIRE]=SOURCE[EMBER]=SOURCE[LAVA]=1;
-  const SUPPORTS = new Uint8Array(N); for (const t of [STONE,GLASS,ICE,WOOD,CHAR,SAND,GUNP,SALT,RUBBLE,SNOW,ASH,SEED,PLANT,TIP,DIRT,LITTER,ROOT,METAL,CLAY,BRICK,RUST]) SUPPORTS[t]=1;   // (flat tables, not Sets, for whatever the cell pass looks up)
+  const SUPPORTS = new Uint8Array(N); for (const t of [STONE,GLASS,ICE,WOOD,CHAR,SAND,GUNP,SALT,RUBBLE,SNOW,ASH,SEED,PLANT,TIP,DIRT,LITTER,ROOT,METAL,CLAY,BRICK,RUST,SHRUB,CACTUS,REED]) SUPPORTS[t]=1;   // (flat tables, not Sets, for whatever the cell pass looks up)
   // structural strength: a run of building material with nothing under it is a beam, and bends under its own weight and what lies
   // on it (Grid.beam). Each column of the span takes a bending moment, worked out by statics from the weights (WT) of the columns
   // between its supports (or out to its free end, for a cantilever); it can take STR × depth² (depth: cells of building material in
@@ -492,6 +533,10 @@ const Sim = (() => {
     ac(x,y){ return (y>>2)*this.AW+(x>>2); }                          // the coarse air cell holding (x,y)
     wc(x,y){ return (y>>4)*this.CW+(x>>4); }                          // the wind cell holding (x,y)
     windAt(x,y){ let w=this.wc(x,y); if (this.wsolid[w] && w>=this.CW) w-=this.CW; return this.uc[w]; }   // the sideways wind at (x,y): near the ground, that of the open cell above
+    aridity(){   // each column's drying under its climate (1 + ARID_DRY × aridity), worked out again when the window moves
+      if (this.aridOx!==this.ox || this.aridSeed!==this.worldSeed){ const a=this.aridF||(this.aridF=new Float32Array(this.W)); for (let x=0;x<this.W;x++) a[x]=1+ARID_DRY*aridAt(this.worldSeed,this.ox+x); this.aridOx=this.ox; this.aridSeed=this.worldSeed; }
+      return this.aridF;
+    }
     airAt(x,y){ return this.ambRow[y]+this.massT[x>>2]*this.mfade[y]; }   // the air's usual temperature at (x,y), with the air mass over it
     rh(c){ return this.cap[c]>0 ? this.hum[c]/this.cap[c] : 1; }        // relative humidity
     airOver(x,y){ let a=this.ac(x,Math.max(0,y)); for (let q=0;q<2 && this.cap[a]<=0 && a>=this.AW;q++) a-=this.AW; return a; }   // the air over open ground at (x,y): a coarse cell its ground half fills holds no air, so the one above
@@ -749,8 +794,8 @@ const Sim = (() => {
         if (t===DIRT && (this.life[j]&255)>=WET){ if (spend) this.life[j]-=4; return true; }
         return false; };
       for (let k=0;k<4;k++){ const nx=x+DX4[k], ny=y+DY4[k]; if (this.inb(nx,ny) && wetAt(this.idx(nx,ny))) return true; }
-      if (this.type[this.idx(x,y)]!==PLANT) return false;
-      let b=y+1; while (b<this.H && b<=y+3 && this.type[this.idx(x,b)]===PLANT) b++;
+      const t=this.type[this.idx(x,y)]; if (t!==PLANT && !WILD[t]) return false;
+      let b=y+1; while (b<this.H && b<=y+(t===REED?REED_MAX:t===PLANT?3:6) && this.type[this.idx(x,b)]===t) b++;   // down the stem to its soil
       return b<this.H && wetAt(this.idx(x,b));
     }
     // a fire lights the fuel around it, and the wind leans it: on a windy day fuel downwind catches faster and fuel upwind slower, so
@@ -762,7 +807,7 @@ const Sim = (() => {
         if(!dx&&!dy) continue;
         const nx=x+dx, ny=y+dy; if(!this.inb(nx,ny)) continue;
         // grass catches by how dry it is: straw (sap under CURED) five times as readily as green grass, and lush grass more slowly still
-        const j=this.idx(nx,ny), tj=this.type[j], grass=tj===PLANT && this.owner[j]===0, sap=grass ? this.life[j]>>8 : 0;
+        const j=this.idx(nx,ny), tj=this.type[j], grass=(tj===PLANT && this.owner[j]===0) || CURES[tj], sap=grass ? this.life[j]>>8 : 0;
         const f=grass && sap<CURED ? CURED_FUEL : FUEL[tj], p=!f ? 0 : grass && sap>=CURED ? f.p*Math.min(1, GREEN_K*(1-sap/255)+0.4) : f.p;
         if (!p || R()>=p*(dx*s>0 ? 1+2*lean : dx ? 1-0.9*lean : 1) || (f.to===EMBER && this.soaked(nx,ny,false))) continue;
         if (tj===OIL){ this.life[j]=1; this.wake(nx,ny); continue; }   // (it burns at its surface: burnOil)
@@ -1763,6 +1808,7 @@ const Sim = (() => {
       const {W,H,SW,type:T,temp,dirty,massT}=this;
       const dry=0.35*Math.max(0,(this.climate+6)/20)*(0.25+0.75*this.sun);   // exposed soil dries fastest on warm sunny afternoons
       const evap=0.1*(0.4+0.6*this.sun);   // open water evaporating into the air above it, sleeping lakes included
+      const af=this.aridity();   // (an arid climate dries everything faster)
       for (let y=this.frame%SLOW;y<H;y+=SLOW){
         const amb0=this.ambRow[y], mf=this.mfade[y], row=y*W, crow=(y>>SC_SHIFT)*SW;
         for (let x=0;x<W;x++){
@@ -1771,25 +1817,26 @@ const Sim = (() => {
           if (t===E){ if (asleep) temp[i]+=(amb-temp[i])*0.2; continue; }   // sleeping air still follows the weather
           if (asleep && y>0 && T[i-W]===E && (t===DIRT || t===SAND || t===STONE)) temp[i]+=(amb-temp[i])*0.1;   // and so does bare ground, so snow can lie on it in winter
           switch(t){
-            case DIRT: this.soilWater(x,y,i,t,dry); if (T[i]===DIRT){ if (y>0 && T[i-W]===WATER) this.scour(x,y,i); else this.slip(x,y,i); } break;
-            case SAND: this.soilWater(x,y,i,t,dry); if (T[i]===SAND) this.saltate(x,y,i); if (T[i]===SAND){ if (y>0 && T[i-W]===WATER) this.scour(x,y,i); else this.slip(x,y,i); } break;
+            case DIRT: this.soilWater(x,y,i,t,dry*af[x]); if (T[i]===DIRT){ if (y>0 && T[i-W]===WATER) this.scour(x,y,i); else this.slip(x,y,i); } break;
+            case SAND: this.soilWater(x,y,i,t,dry*af[x]); if (T[i]===SAND) this.saltate(x,y,i); if (T[i]===SAND){ if (y>0 && T[i-W]===WATER) this.scour(x,y,i); else this.slip(x,y,i); } break;
             case STONE: if (T[i-W]!==STONE || T[i-1]!==STONE || T[i+1]!==STONE){ this.frost(x,y,i,amb,dry,asleep); if (T[i]===STONE && (this.life[i]&LAID)) this.audit(x,y,i); } break;   // (buried rock, nearly all of it, has nothing to do)
             case BRICK: case GLASS: this.audit(x,y,i); break;
-            case MUD: case CLAY: this.soilWater(x,y,i,t,dry); break;
+            case MUD: case CLAY: this.soilWater(x,y,i,t,dry*af[x]); break;
             case METAL: this.corrode(x,y,i); if (T[i]===METAL) this.audit(x,y,i); break;
             case SEED: this.soilSeed(x,y,i); break;
             case LITTER: this.soilRot(x,y,i,0.004,0.0008,DIRT,(200<<8)|60); break;
             case ASH: if (y+1<H && T[i+W]===DIRT && R()<0.004){ this.set(i,DIRT); this.life[i]=(255<<8)|40; } break;   // ash works into the soil and feeds it
             case WOOD: if (this.owner[i]===0){ if (this.life[i]>=2) this.soilDecay(x,y,i,LITTER,0); if (T[i]===WOOD) this.audit(x,y,i); } break;   // snags rot; painted wood (life 0 or 1) doesn't
             case ROOT: if (this.owner[i]===0){ if (this.life[i]<2) this.life[i]=ROT; this.soilDecay(x,y,i,DIRT,(160<<8)|80); } break;
-            case PLANT: if (this.owner[i]===0) this.grass(x,y,i,dry); break;
+            case PLANT: if (this.owner[i]===0) this.grass(x,y,i,dry*af[x]); break;
+            case SHRUB: case CACTUS: case REED: this.wild(x,y,i,t,dry*af[x]); break;
             case WATER: case BRINE:
               if (y>0 && (T[i-W]===E || (amb<0 && isGas(T[i-W])))){   // (freezing fog lying on a pond chills it like clear air)
                 if (amb<0 && t===WATER){ temp[i]+=(amb-temp[i])*0.2; if (temp[i]<0) this.wake(x,y); }   // a still surface chills in freezing air, then freezes over as it sheds its latent heat
                 else {
                   // evaporation: faster from warm water into dry air; salt holds water back
                   const a=this.airOver(x,y-1), cp=this.cap[a], deficit=cp>0 ? 1-this.hum[a]/cp : 0;
-                  if (deficit>0 && R()<evap*deficit*Math.min(3, SAT(temp[i])/SAT(15))*(t===BRINE?1-this.life[i]/400:1) && this.openSky(x,y)) this.evaporate(i,a);
+                  if (deficit>0 && R()<evap*af[x]*deficit*Math.min(3, SAT(temp[i])/SAT(15))*(t===BRINE?1-this.life[i]/400:1) && this.openSky(x,y)) this.evaporate(i,a);
                 }
               }
               break;
@@ -1885,7 +1932,7 @@ const Sim = (() => {
     }
     // ---- landslides (see SLIP_). ground: is (x,y) ground the slope is measured on (not air, gas or plants)? surfAt: the row of the
     //      top of the ground in column x near row y (looking up to the top, or down to it, at most 3×SLIP_B rows)
-    ground(x,y){ const q=this.type[y*this.W+x]; return !(q===E || KIND[q]===3 || q===PLANT); }
+    ground(x,y){ const q=this.type[y*this.W+x]; return !(q===E || KIND[q]===3 || q===PLANT || WILD[q]); }
     surfAt(x,y){
       let r=y, k=0; const lim=3*SLIP_B;
       if (this.ground(x,r)){ while (k++<lim && r>0 && this.ground(x,r-1)) r--; return r; }
@@ -2023,6 +2070,95 @@ const Sim = (() => {
         if (this.canSprout(x,y)){ for (let k=0;k<g;k++) this.set(i+k*this.W,E); this.set(i+g*this.W,TIP); return; }
       }
       if (R()<0.002) this.set(i,E);
+    }
+    // wild plants (see SHRUB_DRY): the base cell, on the soil, drinks for the whole plant, grows it and sows it; a stem cell (on its own
+    // kind) leaves that to the base, and a branch (beside a stem) withers once it is cut off from one
+    wild(x,y,i,t,dry){
+      const W=this.W, H=this.H, T=this.type, L=this.life, below=y+1<H ? T[i+W] : STONE;
+      if (below===t) return;
+      if (!SOAKS[below]){
+        const held=s=>{ const nx=x+s; if (nx<0 || nx>=W || T[i+s]!==t) return false; const u=T[i+s+W]; return u===t || SOAKS[u]; };
+        if (!held(-1) && !held(1) && R()<WILD_WITHER) this.set(i,LITTER,this.temp[i]);
+        return;
+      }
+      let sap=L[i]>>8, hgt=L[i]&255;
+      if (!hgt){   // just taken root: how tall it will grow (a reed: up out of the water it stands in)
+        if (t===REED){ let d=0; for (let j=i-W; j>=0 && T[j]===WATER && d<REED_MAX; j-=W) d++; hgt=Math.min(255, (d ? d+1 : 0)+REED_ABOVE); }
+        else hgt = t===SHRUB ? 3+((R()*2)|0) : 4+((R()*5)|0);
+      }
+      let h=1, top=i; while (h<REED_MAX+2 && top>=W && T[top-W]===t){ top-=W; h++; }
+      const ty=(top/W)|0, over=ty>0 ? T[top-W] : STONE;
+      // the root zone: the dampest cell within reach
+      let m=0, mj=-1; for (let q=1, j=i+W, deep=t===SHRUB?6:t===CACTUS?3:2; q<=deep && y+q<H && SOAKS[T[j]]; q++, j+=W){ const mm=L[j]&255; if (mm>m){ m=mm; mj=j; } }
+      // sap: lost to the air from the top of the plant, made good from the soil
+      if (over===E || isGas(over)){
+        const a=this.airOver(x,ty-1), loss=TRANSP*LOSS[t]*dry/0.35*Math.max(0,1-this.rh(a)), lost=(loss|0)+(R()<loss%1?1:0);
+        if (lost){ const l=Math.min(sap,lost); sap-=l; this.hum[a]+=l/800; }
+      }
+      if (mj>=0 && sap<230){
+        if (t===CACTUS){ if (m>=CACTUS_DRINK && this.temp[i]>0){ L[mj]-=Math.min(m,2); sap=Math.min(255,sap+40); } }
+        else if (this.growth>0 && m>=(t===SHRUB ? SHRUB_DRY : REED_WET)){ L[mj]-=SIP; sap=Math.min(255,sap+SAP_GAIN); }
+      }
+      // death: drought in the growing season, shade, and for a cactus wet roots or a hard frost; a reed under water too deep to reach the air drowns
+      let die = sap===0 && this.growth>0 && R()<WILD_DIE;
+      if (t===CACTUS) die = die || ((m>=CACTUS_ROT || (x>0 && T[i-1]===WATER) || (x+1<W && T[i+1]===WATER)) && R()<0.01) || (this.temp[i]<CACTUS_FROST && R()<0.01);
+      if (t!==REED && this.growth>0 && R()<SHADE_DIE && this.shaded(x,ty)) die=true;
+      if (t===REED && over===WATER && h>=Math.min(hgt,REED_MAX) && R()<0.03) die=true;
+      if (die){ for (let j=i; j>=0 && T[j]===t; j-=W) this.set(j,LITTER,this.temp[j]); return; }   // the stem dies back to litter, and its branches wither after it
+      // growth, in the warm part of the year, while it has sap to spare
+      if (sap>=160 && this.growth>0.3 && R()<WILD_GROW*this.growth*(t===CACTUS?0.25:1)){
+        if (h<Math.min(hgt,REED_MAX) && (over===E || (t===REED && over===WATER && this.displace(top-W)))){ this.set(top-W,t,this.temp[top-W]); h++; top-=W; sap-=20; }
+        else if (t===SHRUB && h>=2){   // a crown of twigs either side of the stem
+          const c=i-(1+((R()*(h-1))|0))*W+(R()<0.5?-1:1), cx=c%W;
+          if (Math.abs(cx-x)===1 && T[c]===E){ this.set(c,SHRUB,this.temp[c]); sap-=20; }
+        } else if (t===CACTUS && h>=5){   // an arm: out one cell from the stem, then up
+          const s=R()<0.5?-1:1, c=i-(2+((R()*(h-3))|0))*W+s, cx=x+s;
+          if (cx>0 && cx<W-1 && T[c]===E && T[c-W]===E && T[c+W]===E && T[c+s]!==CACTUS && T[c-W+s]!==CACTUS){ this.set(c,CACTUS,this.temp[c]); this.set(c-W,CACTUS,this.temp[c-W]); L[c]=L[c-W]=sap<<8; sap-=30; }
+        }
+      }
+      // spreading: shrub and cactus seed blow onto open ground that suits them; reeds send runners along the bed and seed further off
+      if (sap>=150 && this.growth>0.3){
+        const r=R();
+        if (t===SHRUB && r<SHRUB_SOW_P*this.growth) this.sow(x,y,SHRUB,2+((R()*(SHRUB_REACH-1))|0),8);
+        else if (t===CACTUS && sap>=200 && r<CACTUS_SOW_P*this.growth) this.sow(x,y,CACTUS,3+((R()*(CACTUS_REACH-2))|0),8);
+        else if (t===REED){ if (r<REED_SPREAD*this.growth) this.sow(x,y,REED,1+((R()*2)|0),2); else if (r<(REED_SPREAD+REED_SOW_P)*this.growth) this.sow(x,y,REED,3+((R()*(REED_REACH-2))|0),12); }
+      }
+      L[i]=(sap<<8)|hgt;
+      // the rest of the plant shows its sap (and burns by it)
+      for (let j=i-W, k=1; k<h; k++, j-=W){ L[j]=sap<<8; for (const s of [-1,1]){ const nx=x+s; if (nx>=0 && nx<W && T[j+s]===t && T[j+s+W]!==t && !SOAKS[T[j+s+W]]) L[j+s]=sap<<8; } }
+    }
+    // a reed growing up through water pushes it aside: the water cell it takes goes on top of the water over it (false: no room)
+    displace(c){
+      let j=c; while (j>=this.W && this.type[j-this.W]===WATER) j-=this.W;
+      if (j<this.W || this.type[j-this.W]!==E) return false;
+      this.set(j-this.W,WATER,this.temp[c]); this.life[j-this.W]=this.life[c]; return true;
+    }
+    // a wild plant's seed (or a reed's runner) lands `dist` columns to one side, on the first open ground within `rows` up or down,
+    // and takes root there if the ground suits it
+    sow(x,y,t,dist,rows){
+      const W=this.W, H=this.H, T=this.type, L=this.life, nx=x+(R()<0.5?-1:1)*dist; if (nx<1 || nx>=W-1) return;
+      for (let dy=-rows; dy<=rows; dy++){
+        const ny=y+dy; if (ny<1 || ny+1>=H) continue;
+        const c=ny*W+nx, tc=T[c], grass=tc===PLANT && this.owner[c]===0, d=c+W;
+        if (!SOAKS[T[d]] || !(tc===E || grass || (t===REED && tc===WATER))) continue;
+        let m=0; for (let q=0; q<(t===SHRUB?6:3) && ny+1+q<H && SOAKS[T[d+q*W]]; q++) m=Math.max(m,L[d+q*W]&255);
+        if (t===REED){
+          if ((L[d]&255)<REED_WET) return;
+          let w=0; for (let j=c; j>=0 && T[j]===WATER; j-=W) w++; if (w>REED_DEEP) return;
+          for (let q=-2;q<=2;q++) if (T[c+q*W-1]===REED || T[c+q*W+1]===REED) return;   // (stems stand apart, a column between)
+          if (grass && R()>=0.3) return;   // reeds take waterlogged ground from grass
+        } else {
+          if (t===SHRUB ? m<SHRUB_SOW || m>=SATM : m>=CACTUS_ROT*0.8) return;
+          if (grass && (t===CACTUS || R()>=SHRUB_IN_GRASS)) return;   // smothered in the sward
+          if (this.shaded(nx,ny)) return;
+          const gap = t===SHRUB ? 2 : 6;   // shrubs stand close; cacti share out the little rain there is, so they stand well apart
+          for (let yy=Math.max(0,ny-gap); yy<=Math.min(H-1,ny+gap); yy++) for (let xx=Math.max(0,nx-gap); xx<=Math.min(W-1,nx+gap); xx++) if (T[yy*W+xx]===t) return;
+        }
+        if (grass){ for (let j=c; j>=0 && T[j]===PLANT && this.owner[j]===0; j-=W) this.set(j,E); }
+        if (tc===WATER && !this.displace(c)) return;
+        this.set(c,t,this.temp[c]); L[c]=(t===CACTUS ? 90 : SAP0)<<8;
+        return;
+      }
     }
     wetAround(x,y){
       for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){
@@ -2419,7 +2555,7 @@ const Sim = (() => {
     save(){
       const rle=(len,get,out)=>{ let run=get(0), n=0; for (let i=0;i<len;i++){ const v=get(i); if (v===run && n<65535) n++; else { out.push(run,n); run=v; n=1; } } if (len) out.push(run,n); return out; };
       const pack=out=>{ const b=new Uint8Array(new Uint16Array(out).buffer); let s=''; for (let i=0;i<b.length;i+=8192) s+=String.fromCharCode.apply(null,b.subarray(i,i+8192)); return btoa(s); };
-      const keep=[], fluid=[], sand=[], grass=[], rock=[]; for (let i=0;i<this.type.length;i++){ const t=this.type[i]; if (KEEP_LIFE.has(t)) keep.push(this.life[i]); else if (FLUID_LIFE.has(t)) fluid.push(this.life[i]); else if (t===SAND) sand.push(this.life[i]); else if (t===PLANT) grass.push(this.life[i]); else if (t===STONE) rock.push(this.life[i]>>1); }
+      const keep=[], fluid=[], sand=[], grass=[], rock=[]; for (let i=0;i<this.type.length;i++){ const t=this.type[i]; if (KEEP_LIFE.has(t)) keep.push(this.life[i]); else if (FLUID_LIFE.has(t)) fluid.push(this.life[i]); else if (t===SAND) sand.push(this.life[i]); else if (t===PLANT || WILD[t]) grass.push(this.life[i]); else if (t===STONE) rock.push(this.life[i]>>1); }
       const hum=this.hum;
       return pack(rle(this.type.length,i=>this.type[i],[this.W,this.H]))+'|'+this.treesSave()+'|'+pack(rle(keep.length,i=>keep[i],[]))+'|'+Math.round(this.clock)
         +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]))+'|'+this.storeSave()+'|'+pack(rle(sand.length,i=>sand[i],[]))+'|'+pack(rle(grass.length,i=>grass[i],[]))+'|'+(this.fronts ? this.massX.toFixed(2) : '')+'|'+pack(rle(rock.length,i=>rock[i],[]));
@@ -2442,7 +2578,7 @@ const Sim = (() => {
       if (soil) unrle(soil,KEEP_LIFE);     // older saves have no soil section: dirt keeps its default moisture
       if (fluids) unrle(fluids,FLUID_LIFE); // nor liquid state: water is clean, brine and acid take their defaults
       if (sandy) unrle(sandy,new Set([SAND]));   // nor wet sand: it loads dry
-      if (plants) unrle(plants,new Set([PLANT]));   // nor grass sap: grass loads green
+      if (plants) unrle(plants,new Set([PLANT,SHRUB,CACTUS,REED]));   // nor grass sap: grass loads green
       if (rocks){ unrle(rocks,new Set([STONE])); for (let j=0;j<this.type.length;j++) if (this.type[j]===STONE) this.life[j]<<=1; }   // nor weathered rock: it loads sound (and every rock re-checks its support, as it always has)
       this.storeLoad(stream, dy);          // nor a wider world: it loads as a world the size of the window
       this.treesLoad(treeJson, dy);
@@ -2488,13 +2624,14 @@ const Sim = (() => {
     const top=g.top, LH=g.H-top;
     return g.noise={seed:s, nz, cave, ore, surf:gx=>top+((LH*0.32 + (nz(gx/90,0.5,4)-0.5)*LH*0.35)|0)};
   }
-  const LAKE=0x1a4e, TREE=0x7e3e, GRASS=0x6a55, TREES_EVERY=12, COOK=12, GAP=4, CRAG_LO=1.2, CRAG_HI=1.8;
+  const LAKE=0x1a4e, LAKE_RIM=24, LAKE_DEEP=6, TREE=0x7e3e, GRASS=0x6a55, WILDS=0x5c21, CACTI_EVERY=13, TREES_EVERY=12, COOK=12, GAP=4, CRAG_LO=1.2, CRAG_HI=1.8;
   // (a generator: it yields between slices of work, so a region can be made a little at a time in spare moments)
   function* columns(g, x0, x1){
     const {W,H,top}=g, LH=H-top, T=terrain(g), {nz,cave,ore}=T, gx0=g.ox+x0, gx1=g.ox+x1, s=g.worldSeed;
     const surf=new Int16Array(x1-x0); for (let x=x0;x<x1;x++) surf[x-x0]=T.surf(g.ox+x);
     // soil can't stay on the steepest ground: it thins out over slopes of CRAG_LO to CRAG_HI (over 6 columns), and steeper than
     // that the rock stands bare in crags (and what soil there is starts out stable, so a new world doesn't open with landslides)
+    const ar=new Float32Array(x1-x0); for (let x=x0;x<x1;x++) ar[x-x0]=aridAt(s,g.ox+x);   // the climate (ARID_DRY)
     const keepSoil=new Float32Array(x1-x0); for (let x=x0;x<x1;x++){ const gx=g.ox+x, st=Math.abs(T.surf(gx+3)-T.surf(gx-3))/6; keepSoil[x-x0]=Math.max(0,Math.min(1,(CRAG_HI-st)/(CRAG_HI-CRAG_LO))); }
     // lava lies in sealed chambers: nothing that burns starts within COOK cells of it (it would go off in the first seconds of a
     // new world, and the fire would run along the cave to every gas pocket and oil pool). A gap of GAP cells of open air is left
@@ -2515,8 +2652,8 @@ const Sim = (() => {
       const gx=g.ox+x, i=g.idx(x,y), sy=surf[x-x0]; if (y<sy) continue;
       const depth=y-sy, ly=y-top, dn=ly/LH;   // (the land's noise is in its own rows, so the extra sky doesn't change it)
       let t=STONE, frozen=false;
-      const soil=(4+nz(gx/20,ly/20,2)*8)*keepSoil[x-x0];
-      if (depth<soil) t = sy>top+LH*0.42 ? SAND : DIRT;                    // topsoil, with sandy shores in the low valleys
+      const a=ar[x-x0], soil=(4+nz(gx/20,ly/20,2)*8)*keepSoil[x-x0];
+      if (depth<soil) t = sy>top+LH*0.42 || a>=ARID_DESERT || (a>=ARID_SCRUB && depth>=2) ? SAND : DIRT;   // topsoil, with sandy shores in the low valleys, sand in the desert and a skin of dirt over sand in the scrub
       else {
         const c=cave(gx/48,ly/32,3), o=ore(gx/30,ly/30,3);
         if (c>0.62 && depth>8){ t=E;
@@ -2535,33 +2672,58 @@ const Sim = (() => {
       if (y>=H-3) t=STONE;
       if (t!==E) g.set(i,t, EL[t].t0===AMB ? g.ambAt(y) : undefined);   // the ground starts at the local ambient, so it doesn't spend its first minutes cooling
       if (frozen && (t===STONE || t===ICE)) g.temp[i]=PERMAFROST;
-      if (t===DIRT) g.life[i]=(40<<8)|Math.min(MOIST, 70+depth*18);      // damper with depth
-      else if (t===SAND && depth<soil) g.life[i]=Math.min(SATM-10, 20+depth*16);   // sandy topsoil too (sand deep in the rock is dry)
+      if (t===DIRT) g.life[i]=(40<<8)|(Math.min(MOIST, 70+depth*18)*(1-0.6*a));      // damper with depth (and drier where the climate is)
+      else if (t===SAND && depth<soil) g.life[i]=Math.max(Math.min(SATM-10, 20+depth*16)*(1-0.8*a), depth>=2 ? CLUMP+8 : 0);   // sandy topsoil too, damp enough under the desert's surface to hold together (sand deep in the rock is dry)
     } }
-    // lakes: flood shallow dips in the surface (a dip just outside the range can still spill into it)
+    // lakes: flood dips in the surface up to the lower of the rims either side (at most LAKE_DEEP deep, and no wider than 25 cells
+    // either side of the dip), so a valley floor holds a pond; a dip just outside the range can still spill into it
     for (let c=Math.max(1,gx0-25); c<Math.min(g.worldW-1,gx1+25); c++){
       const sc=T.surf(c), l=T.surf(c-1), r=T.surf(c+1);
-      if (!(sc>l && sc>r && hash01(s^LAKE,c)<0.5)) continue;
-      const lvl=Math.min(l,r);
-      for (let gx=Math.max(gx0,c-25); gx<Math.min(gx1,c+25); gx++){ const x=gx-g.ox, top=T.surf(gx); for (let y=lvl;y<top;y++){ const i=g.idx(x,y); if (g.type[i]===E) g.set(i,WATER); } }
+      if (!(sc>l && sc>r && hash01(s^LAKE,c)<0.5) || aridAt(s,c)>=ARID_SCRUB) continue;   // (no lakes in the dry country)
+      let rl=l, rr=r; for (let k=2;k<=LAKE_RIM;k++){ rl=Math.min(rl,T.surf(c-k)); rr=Math.min(rr,T.surf(c+k)); }
+      const lvl=Math.max(rl,rr,sc-LAKE_DEEP);
+      let a=c, b=c; while (a>c-25 && T.surf(a-1)>lvl) a--; while (b<c+25 && T.surf(b+1)>lvl) b++;
+      for (let gx=Math.max(gx0,a); gx<=Math.min(gx1-1,b); gx++){ const x=gx-g.ox, top=T.surf(gx); for (let y=lvl;y<top;y++){ const i=g.idx(x,y); if (g.type[i]===E) g.set(i,WATER); } }
     }
     // soil under and beside water starts soaked, so lakes don't drain into their own beds
     for (let x=x0;x<x1;x++){ let wet=0; for (let y=0;y<H;y++){ const i=g.idx(x,y), t=g.type[i]; if (t===WATER) wet=12; else if (SOAKS[t] && wet>0){ g.life[i]=(g.life[i]&0xff00)|MOIST; wet--; } else if (!SOAKS[t]) wet=0; } }
     // grass on most of the damp open ground, but not where a tree may stand (laid before the trees grow, and without looking at them,
     // so a region makes the same grass however its neighbours were made; the canopy shades out what grows under it later)
     for (let x=x0;x<x1;x++){
-      const gx=x+g.ox, sy=surf[x-x0]; if (sy<1 || hash01(s^GRASS,gx)>=0.75) continue;
+      const gx=x+g.ox, sy=surf[x-x0]; if (sy<1 || hash01(s^GRASS,gx)>=0.75*(1-ar[x-x0]/ARID_SCRUB)) continue;
       let near=false; for (let b=Math.floor((gx-4)/TREES_EVERY); b*TREES_EVERY<=gx+4; b++){ const tx=b*TREES_EVERY+((hash01(s^TREE,b+0x10000)*TREES_EVERY)|0); if (Math.abs(tx-gx)<=4) near=true; }
       const d=g.idx(x,sy); if (near || g.type[d]!==DIRT || (g.life[d]&255)<GRASS_DRINK || g.type[d-W]!==E) continue;
       const h=hash01(s^GRASS,gx+0x10000)<0.4?2:1;
       for (let k=1;k<=h;k++){ const i=d-k*W; if (g.type[i]!==E) break; g.set(i,PLANT,g.ambAt(sy-k)); g.life[i]=(220<<8)|1; }
+    }
+    // wild plants, from hashes of the column and what lies in it (never reaching over a region's edge, so a region comes out the
+    // same made with the window or on its own): scrub on the dry fringe and into the desert, cacti spaced out over the desert's sand,
+    // and reeds standing up out of the shallows. The sward and the trees' sites are left to them
+    const edge=gx=>{ const r=((gx%REGION)+REGION)%REGION; return r<2 || r>REGION-3; };
+    const lay=(x,y,t,h)=>{ for (let k=0;k<h;k++){ const i=g.idx(x,y-k); if (y-k<1 || g.type[i]!==E && !(g.type[i]===WATER && g.displace(i))) return k; g.set(i,t,g.ambAt(y-k)); g.life[i]=(220<<8)|(k?0:h); } return h; };   // (a reed lifts the water it stands in)
+    for (let x=x0;x<x1;x++){
+      const gx=x+g.ox, sy=surf[x-x0], a=ar[x-x0], d=g.idx(x,sy); if (sy<2 || edge(gx)) continue;
+      const hs=hash01(s^WILDS,gx), hh=hash01(s^WILDS,gx+0x10000);
+      if (a>=ARID_SCRUB/2 && a<ARID_DESERT+0.25 && SOAKS[g.type[d]] && g.type[d-W]===E && g.type[d-W-1]!==SHRUB && hs<0.35){
+        const h=lay(x,sy-1,SHRUB,3+((hh*2)|0));
+        for (let k=1;k<h;k++) for (const q of [-1,1]){ const c=g.idx(x+q,sy-1-k); if (g.type[c]===E && hash01(s^WILDS,gx*4+k*2+q+0x20000)<0.8){ g.set(c,SHRUB,g.ambAt(sy-1-k)); g.life[c]=220<<8; } }
+      } else if (a>=ARID_DESERT-0.1 && g.type[d]===SAND && g.type[d-W]===E && gx%CACTI_EVERY===((hash01(s^WILDS,Math.floor(gx/CACTI_EVERY)+0x30000)*CACTI_EVERY)|0) && hs<0.7){
+        const h=lay(x,sy-1,CACTUS,4+((hh*5)|0));
+        if (h>=5){ const q=hs<0.35?-1:1, c=g.idx(x+q,sy-3-((hh*7|0)&1)); if (g.type[c]===E && g.type[c-W]===E && g.type[c+W]===E){ g.set(c,CACTUS,g.ambAt(sy-3)); g.set(c-W,CACTUS,g.ambAt(sy-4)); g.life[c]=g.life[c-W]=220<<8; } }
+      }
+    }
+    for (let x=x0;x<x1;x++){
+      const gx=x+g.ox, sy=surf[x-x0]; if (sy<1 || edge(gx) || hash01(s^WILDS,gx+0x40000)>=0.45 || g.type[g.idx(x-1,sy-1)]===REED || g.type[g.idx(x-1,Math.max(0,sy-2))]===REED) continue;   // (stems apart, with water between)
+      let w=0; while (sy-1-w>=0 && g.type[g.idx(x,sy-1-w)]===WATER) w++;
+      if (w<1 || w>REED_DEEP || !SOAKS[g.type[g.idx(x,sy)]]) continue;
+      lay(x,sy-1,REED,w+REED_ABOVE);
     }
     // trees: at most one in each run of TREES_EVERY columns, grown up before the world is handed over
     const fresh=[];
     for (let b=Math.floor(gx0/TREES_EVERY); b*TREES_EVERY<gx1; b++){
       if (hash01(s^TREE,b)>=0.34) continue;
       const gx=b*TREES_EVERY+((hash01(s^TREE,b+0x10000)*TREES_EVERY)|0), x=gx-g.ox, sy=surf[x-x0];
-      if (gx<gx0 || gx>=gx1 || gx<8 || gx>=g.worldW-8) continue;
+      if (gx<gx0 || gx>=gx1 || gx<8 || gx>=g.worldW-8 || hash01(s^TREE,b+0x20000)<ar[x-x0]/ARID_SCRUB) continue;   // (thinning out toward the dry country)
       reseed(mix(s^TREE,gx));
       if (g.type[g.idx(x,sy)]===DIRT && g.type[g.idx(x,sy-1)]===E && g.plantTree(x,sy-1)) fresh.push(g.trees[g.trees.length-1]);
     }
@@ -2636,7 +2798,7 @@ const Sim = (() => {
   // a chain: each different product made in the last CHAIN_WINDOW ticks adds CHAIN_STEP to the multiplier, up to CHAIN_MAX
   const POINT = 0.01;   // reaction points per unit of VALUE (a big fire turns over hundreds of thousands of cells)
   const CHAIN_WINDOW = 180, CHAIN_STEP = 0.5, CHAIN_MAX = 4, HOLD_GOAL = 90, CHECK = 6;
-  const STARTER = ['Sand','Dirt','Clay','Mud','Seed','Snow','Water','Stone','Metal','Wood','Fire','Smoke'];   // the sandbox rack before any unlocks
+  const STARTER = ['Sand','Dirt','Clay','Mud','Seed','Shrub','Cactus','Reed','Snow','Water','Stone','Metal','Wood','Fire','Smoke'];   // the sandbox rack before any unlocks
 
   // building helpers for a scenario's layout, in box coordinates
   function builder(g){
@@ -2877,7 +3039,7 @@ const Sim = (() => {
   // is a piece of saved text a scenario (rather than a plain world)?
   const isScenario = text => /^\s*\{/.test(text);
 
-  return {WORLD,EL,N,CH,SC,AMB,DAY,YEAR,SLIP_TAG,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,BOLT_T,MASS_L,canShare,Grid,generate,flat,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS}};
+  return {WORLD,EL,N,CH,SC,AMB,DAY,YEAR,aridAt,ARID_DESERT,ARID_SCRUB,SLIP_TAG,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,BOLT_T,MASS_L,canShare,Grid,generate,flat,reseed,R,BOX,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS,SHRUB,CACTUS,REED}};
 })();
 
 // ============================================================================
@@ -2885,7 +3047,7 @@ const Sim = (() => {
 // ============================================================================
 (() => {
 const {WORLD,EL,Grid,CH,SC,generate,ids,REGION,BOX,SCENARIOS,Game,BOLT_T}=Sim;
-const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS}=ids;
+const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS,SHRUB,CACTUS,REED}=ids;
 const ERASE=255, PAN=254, CURED_SAP=Sim.CURED, MUD_DRY=190;
 const W=WORLD.W, H=WORLD.H, VW=320, VH=240, WORLD_W=WORLD.WIDE;   // the grid is a window that streams along a world ten times as wide
 const canThread=Sim.canShare && typeof Worker!=='undefined' && typeof Blob!=='undefined';
@@ -2959,6 +3121,13 @@ function rgbOf(i,out){
     case SAND:{ const m=Math.min(1,(l&255)/200), v=EL[SAND].vary*s, k=1-0.38*m; out[0]=(205+v*0.8)*k;out[1]=(170+v*0.7)*k*(1-0.04*m);out[2]=(90+v*0.5)*k*(1-0.12*m); return; }   // darker when damp
     case PLANT:{ const v=EL[PLANT].vary*s; if (g.owner[i]){ out[0]=50+v*0.8;out[1]=160+v*0.7;out[2]=60+v*0.5; return; }   // grass greens with its sap and dries to straw
       const w=Math.min(1,Math.max(0,((l>>8)-CURED_SAP)/(255-CURED_SAP))); out[0]=196-146*w+v*0.8;out[1]=170-10*w+v*0.7;out[2]=84-24*w+v*0.5; return; }
+    case SHRUB:{ const w=Math.min(1,Math.max(0,((l>>8)-CURED_SAP)/(255-CURED_SAP))), v=EL[SHRUB].vary*s;
+      if (g.type[i-1]!==SHRUB && g.type[i+1]!==SHRUB && g.type[i-W]===SHRUB){ out[0]=92+v*0.5;out[1]=70+v*0.4;out[2]=44+v*0.3; return; }   // the bare woody stem under the crown
+      out[0]=132-70*w+v*0.8;out[1]=114-6*w+v*0.7;out[2]=74-26*w+v*0.5; return; }   // dark scrub green, grey-brown when parched
+    case CACTUS:{ const w=Math.min(1,(l>>8)/160), v=EL[CACTUS].vary*s, p=s<0.12?30:0; out[0]=150-86*w+v*0.8+p;out[1]=146-8*w+v*0.7+p;out[2]=86-2*w+v*0.5+p; return; }   // plump and green, yellowing as it shrivels (and flecked with spines)
+    case REED:{ const w=Math.min(1,Math.max(0,((l>>8)-CURED_SAP)/(255-CURED_SAP))), v=EL[REED].vary*s;
+      if (i>=W && g.type[i-W]===E && (l&255)===0){ out[0]=112+v*0.6;out[1]=80+v*0.4;out[2]=48+v*0.3; return; }   // the brown seed head
+      out[0]=192-96*w+v*0.8;out[1]=170-14*w+v*0.7;out[2]=104-44*w+v*0.5; return; }   // green in summer, straw over winter
     case DIRT:{ const m=(l&255)/255, r=(l>>8)/255*0.15, v=EL[DIRT].vary*s, k=1-0.42*m-r; out[0]=(120+v)*k;out[1]=(86+v*0.7)*k;out[2]=(54+v*0.5)*k*(1-0.15*m); return; }   // darker when wet or rich
     case MUD:{ const m=Math.min(1,Math.max(0,((l&255)-MUD_DRY)/(255-MUD_DRY))), v=EL[MUD].vary*s, k=0.8+0.2*(1-m); out[0]=(84+v)*k;out[1]=(58+v*0.7)*k;out[2]=(36+v*0.5+m*10)*k; return; }   // a wet sheen, lighter as it dries
     case CLAY:{ const m=Math.min(1,(l&255)/200), v=EL[CLAY].vary*s, k=1-0.3*m; out[0]=(190+v*0.8)*k;out[1]=(128+v*0.7)*k;out[2]=(98+v*0.5)*k; return; }   // darker when wet
@@ -3029,7 +3198,7 @@ function render(){
 const GROUPS=[
   ['Powders',[SAND,DIRT,CLAY,GUNP,SALT,SEED,SNOW,RUBBLE,ASH,LITTER,RUST]],
   ['Liquids',[WATER,MUD,OIL,ACID,LAVA,MGLASS,BRINE]],
-  ['Solids', [STONE,BRICK,METAL,WOOD,ICE,GLASS,CHAR,PLANT,TIP]],
+  ['Solids', [STONE,BRICK,METAL,WOOD,ICE,GLASS,CHAR,PLANT,SHRUB,CACTUS,REED,TIP]],
   ['Gases',  [FIRE,SMOKE,STEAM,CLOUD,GAS]],
   ['Tools',  [ERASE,PAN]],
 ];
