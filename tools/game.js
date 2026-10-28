@@ -1,6 +1,6 @@
 // Stage 5 checks: every scenario can be won by a scripted solution and is not won by doing nothing; budgets, scoring,
 // unlocks and scenario save/load behave.
-// usage: node tools/game.js [scenario id...]   (VERBOSE=1 prints goal values as it runs)
+// usage: node tools/game.js [scenario id...]   (VERBOSE=1 prints goal values as it runs; SEED=n plays them on another random stream)
 const { loadSim } = require('./load');
 const Sim = loadSim(process.env.SIMFILE);
 const { BOX, SCENARIOS, Game } = Sim;
@@ -13,7 +13,8 @@ const byId = id => SCENARIOS.find(s => s.id === id);
 function paintRect(game, x0, y0, x1, y1, t) { let n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) n += game.paint(game.g.idx(BOX.x + x, BOX.y + y), t) ? 1 : 0; return n; }
 // play a scenario: `moves` maps a tick to a function run before that tick's step; stops when it is decided
 function play(id, moves = {}, max) {
-  const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), game = Game.start(g, byId(id));
+  const sc = process.env.SEED ? { ...byId(id), seed: +process.env.SEED } : byId(id);   // SEED=n replays every scenario on another random stream (sweeps)
+  const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), game = Game.start(g, sc);
   const end = max || game.sc.time + 10;
   for (let f = 0; f < end && game.state === 'play'; f++) {
     if (moves[f]) moves[f](game);
@@ -25,12 +26,13 @@ function play(id, moves = {}, max) {
 const summary = game => `${game.state}${game.why ? ' (' + game.why + ')' : ''} at ${(game.t / 60).toFixed(1)} s; ` +
   game.goals.concat(game.fails).map(c => `${c.label} ${c.value}`).join(', ') + `; score ${game.score}, reaction points ${game.points | 0}`;
 
-// Volcano: every half second, a water blob dropped just above the first lava cell open to the air, the way a player chases it
+// Volcano: every half second, a water blob dropped just above the first lava cell open to the air (as the goal counts it), the way a player chases it
 function quench(game) {
   const g = game.g;
   for (let y = 1; y < BOX.h; y++) for (let x = 0; x < BOX.w; x++) {
     const i = g.idx(BOX.x + x, BOX.y + y); if (g.type[i] !== LAVA) continue;
     const a = g.type[i - g.W]; if (a !== E && Sim.EL[a].kind !== 'gas') continue;
+    if (game.sealed(i - g.W)) continue;   // (a bubble sealed in the crust doesn't count as open: chase the next one)
     paintRect(game, x - 4, y - 12, x + 4, y - 8, WATER); return;
   }
 }

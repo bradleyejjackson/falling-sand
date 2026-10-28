@@ -28,7 +28,7 @@ those and the double-width copies (`KHD`, `CAPD`, ...), never the `EL` objects, 
 2. The cell pass (`stepTile` for every listed tile, phase by phase). A tile only touches cells within `REACH` (32) of itself, so
    tiles in one phase can run on any number of threads. Each tile seeds the random stream from the frame seed and its index
    (`reseed(mix(seed, tile))`), so the result doesn't depend on thread count or tile order.
-3. `endStep`, on one thread: deferred work (saplings become trees), trees, the soil pass (every 8th row, `SLOW`), the air pass
+3. `endStep`, on one thread: deferred work (saplings become trees; every `PRESS_EVERY` (4) ticks, the pressure search), trees, the soil pass (every 8th row, `SLOW`), the air pass
    (every 4th coarse row, `AIRSLOW`), the wind solve (every 4th tick), the clock and climate.
 
 ### The cell pass
@@ -45,6 +45,15 @@ Inside a tile, rows bottom to top; within a row, sleep blocks left to right on e
 5. Everything else: reactions (`RXA`, fire lighting fuel, salt dissolving, acid), then by kind: powders and liquids move
    (`stepMobile`), gases (`stepGas`, `stepCloud`, `stepSteam`), statics with a life counter (`stepLife`) or behaviour
    (`stepStatic`: embers, saplings, grass).
+
+### Pressure
+
+A liquid cell at rest that can't move asks, at 1% a tick, to be pushed (`defer(-1-cell)`), so the search can cross tiles. Every
+`PRESS_EVERY` ticks `pressure()` takes the cells that asked, sorted, and for each searches its whole body (breadth-first, no cap,
+one search per body shared by every cell of it that asked) for free surface cells that water would lie in (empty, not under the
+liquid, over something solid or liquid). The highest one lower than the top of the asking cell's column (by at least a row) gets
+the cell. A cell that pushed asks again next time (up to `PUSHING`, 64), so an out-of-level body keeps levelling itself, asleep
+or not, and stops when it is level. The search costs ~0.05 ms a tick in the generated world.
 
 ### Sleeping
 
