@@ -134,6 +134,17 @@ Every column of the judged span is marked for the tick (`beamSeen`), so one span
 (life bit 0); the soil pass re-opens settled spans now and then (`audit`, `BEAM_AUDIT`), so a load piled on later is felt. Stone
 the brush lays carries `LAID` (life bit 15; stone's cracking is bits 8-14) and is a building material; generated rock is not.
 
+### Animals (R8)
+
+Rabbits and grasshoppers are single cells: statics (`ANIMAL`) that `stepStatic` hands to `rabbit` and `hopper` every tick. All
+their state is in the cell, so streaming and saves carry them like any other cell (`KEEP_LIFE`): `life` holds energy (low byte),
+age (bits 8-12), a rabbit's gut seed (bits 13-14) and a grasshopper's egg bit (15); the sign of `vx` is the way a rabbit is
+heading (|vx| 2: running from fire). Every move is a `swap` of at most 3 cells, and the widest look (`near`, crowding, 24 columns;
+`fireNear`, 16) stays inside a tile's `REACH`, so animals run on any thread. A living animal keeps only its own sleep block awake
+each tick (like a storm cloud); its moves wake the rest. An egg doesn't wake anything: it waits in the soil pass (`egg`), which
+hatches it in spring. Grazing and chewing only write the plant cells they eat (`graze`, `chew`); a rabbit's droppings feed the
+soil (`feed`) and plant the seed in its gut behind it (grass directly, scrub through `sow`).
+
 ### Sleeping
 
 A cell is only stepped if its 4×4 block was woken during the last tick. `wake(x,y)` marks every block within 2 cells of (x,y).
