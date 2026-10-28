@@ -303,3 +303,22 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   `NREF`. Checks that hung on one random stream now take more runs: `dew` averages four plots, `mud` sums eight (four plots
   made 42-67 mud on R6 and 23-95 on R7 by the random stream alone). `compete`'s line is 0.65 of the open: the tree's litter
   makes rich dirt under it (topsoil ~82 there against ~59 in the open), so the grass under it grows back faster (0.60; R6 0.54).
+- Animals (R8, `Grid.rabbit`, `Grid.hopper`, docs/ENGINE.md): Rabbit and Grasshopper, one cell each, all state in the cell
+  (energy, age, a rabbit's gut seed, a grasshopper's egg bit) so saves and streaming carry them. Rabbits walk the ground keeping
+  a heading, hop up 2 (3 over plants), turn back at drops and water, graze grass, shrubs and reeds from the top (a grass base only
+  1 time in 10, half the time once hungry), breed in the growing season while fed and not crowded (under 5 within 24 columns),
+  lie up over winter (burning energy at 0.3 of the summer rate), run from fire at 2 cells a tick and won't step onto hot ground,
+  swim for the shore, and die as litter. Grazing seeding plants fills the gut; droppings feed the soil (`DUNG_N`) and plant the
+  seed behind the rabbit (grass, or shrub through `sow`). Grasshoppers hop (the wind carries them in the air), chew sap, breed
+  through spring and summer up to 3x as fast in the dry season, lay eggs from late summer, die in the frost; eggs wait in the
+  soil pass and hatch in spring. Generated worlds lay a rabbit per ~40 columns of meadow or scrub and an egg per ~12 of grass.
+  The season reaches the worker threads through `gf` (the first build read the clock on the worker's own stale grid, and
+  `threads.js` caught it). Measured (`validate.js animals`): 8 rabbits on a 160-wide meadow over 4 min of spring grow to ~20
+  and leave 140+ columns grassed, 8 on bare dirt all starve; across 60 columns of bare rock no grass arrives in 3 min of
+  summer without rabbits and 46-72 cells with 10; 6 of 10 rabbits outrun a cured-meadow fire to bare ground; 5 of 5 swim out
+  of a pond; 20 grasshoppers in midsummer leave ~55 eggs, none survive the winter as adults, and the eggs hatch the next spring.
+  Three years (`tools/animals.js`, seeds 12345/99/777): rabbits boom each summer and thin out over winter (12345: 35 -> 98-132
+  -> 35-111), grasshoppers cycle through eggs (30-80 a summer). Meadow holds up: 12345 ends at 437 columns against 338
+  without animals. Big summer wildfires (which hit 99 and 777 without animals too) wipe out the local population on those
+  seeds: 777 keeps ~5 rabbits, 99 loses them by year 3. Tuning lessons: a mate within 6 columns was an Allee trap (the
+  population drifted to zero); grasshoppers that aged out before late summer never laid eggs.

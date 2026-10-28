@@ -1547,6 +1547,77 @@ const scenarios = {
       check('a burnt meadow\'s ash feeds the soil', ash > 20 && left < ash / 4 && after > before + 15);
     }
   },
+  animals() {
+    // rabbits graze a meadow without stripping it and starve on bare ground; they carry grass seed across bare rock the wind's seed
+    // can't cross; they run from a grass fire and swim out of a pond; grasshoppers lay eggs in autumn that hatch the next spring
+    const { RABBIT, HOPPER } = Sim.ids;
+    const meadow = (g, x0, x1, sy, sap = 220) => { for (let x = x0; x < x1; x++) for (let k = 0; k < 2; k++) { const i = g.idx(x, sy - k); if (g.type[i] === E) { g.set(i, PLANT); g.life[i] = (sap << 8) | 1; } } };
+    const loose = (g, t, xs, sy) => { for (const x of xs) { let y = sy; while (g.type[g.idx(x, y)] !== E) y--; g.set(g.idx(x, y), t); } };
+    const count = (g, t, x0 = 0, x1 = g.W) => { let n = 0; for (let y = 0; y < g.H; y++) for (let x = x0; x < x1; x++) { const i = g.idx(x, y); if (g.type[i] === t && !(t === HOPPER && g.life[i] & Sim.EGG) && !(t === PLANT && g.owner[i])) n++; } return n; };
+    const at = (g, p) => { g.clock = Sim.YEAR * p; g.updateClimate(); };
+    // grazing: 8 rabbits on a damp meadow and 8 on bare damp dirt, 4 min of late spring
+    const gz = {};
+    for (const grass of [true, false]) {
+      const W = 160, H = 60, g = plot(W, H, 30, 120), sy = H - 31; at(g, 0.2); g.windHold = 0;
+      if (grass) meadow(g, 0, W, sy);
+      const g0 = count(g, PLANT); loose(g, RABBIT, [10, 14, 50, 54, 90, 94, 130, 134], sy);
+      let low = 8; run(g, 4 * MIN, 600, () => { low = Math.min(low, count(g, RABBIT)); });
+      let bases = 0; for (let x = 0; x < W; x++) if (g.type[g.idx(x, sy)] === PLANT) bases++;
+      gz[grass] = { r: count(g, RABBIT), low, g0, g1: count(g, PLANT), bases, litter: count(g, LITTER) };
+    }
+    console.log(`  meadow: rabbits 8 -> ${gz.true.r} (fewest ${gz.true.low}), grass ${gz.true.g0} -> ${gz.true.g1} cells, ${gz.true.bases}/160 columns still grassed; bare dirt: rabbits 8 -> ${gz.false.r}, ${gz.false.litter} litter`);
+    check('rabbits live on a meadow and graze it without stripping it bare', gz.true.low >= 6 && gz.true.g1 < gz.true.g0 * 1.3 && gz.true.bases >= 120);
+    check('rabbits on bare ground starve (to litter)', gz.false.r === 0 && gz.false.litter >= 3);
+    // seed: a meadow on the west, 60 columns of bare rock, then bare damp dirt. The wind's seed reaches 48 columns, so only seed that
+    // rabbits carry gets across. A summer, with 10 rabbits and without
+    const sd = {};
+    for (const n of [0, 10]) {
+      let far = 0;
+      for (const seed of [7, 8]) {
+        const W = 300, H = 60, g = plot(W, H, 30, 120, seed), sy = H - 31; at(g, 0.35); g.windHold = 0;
+        for (let x = 70; x < 130; x++) for (let y = sy - 1; y < H - 3; y++) g.set(g.idx(x, y), STONE);   // a shelf of rock a cell over the ground
+        meadow(g, 0, 70, sy);
+        loose(g, RABBIT, Array.from({ length: n }, (_, k) => 5 + k * 6), sy);
+        run(g, 3 * MIN);
+        far += count(g, PLANT, 130, W);
+      }
+      sd[n] = far;
+    }
+    console.log(`  grass past 60 columns of bare rock after 3 min of summer (2 seeds): without rabbits ${sd[0]} cells, with 10 rabbits ${sd[10]}`);
+    check('rabbits carry grass seed across ground the wind\'s seed can\'t cross', sd[0] === 0 && sd[10] >= 3);
+    // fire: rabbits on a cured meadow run from a fire lit at its west end toward the bare ground in the east
+    {
+      const W = 260, H = 60, g = plot(W, H, 30, 30), sy = H - 31; at(g, 0.45); g.windHold = 0;
+      meadow(g, 0, 200, sy, 40);
+      const xs = []; for (let x = 40; x < 190; x += 15) xs.push(x); loose(g, RABBIT, xs, sy);
+      for (let x = 2; x < 6; x++) g.set(g.idx(x, sy - 2), FIRE);
+      run(g, 1.5 * MIN);
+      const burnt = 200 - count(g, PLANT, 0, 200) / 2, safe = count(g, RABBIT), east = count(g, RABBIT, 190, W);
+      console.log(`  grass fire: ~${burnt.toFixed(0)}/200 columns burnt; rabbits ${xs.length} -> ${safe}, ${east} of them out on the bare ground`);
+      check('rabbits run from a grass fire', burnt > 150 && safe >= xs.length / 2 && east >= xs.length / 3);
+    }
+    // swimming: rabbits dropped in a pond 6 deep come out on the shore
+    {
+      Sim.reseed(4); const W = 120, H = 60, g = plot(W, H, 20, 200), sy = H - 21; g.windHold = 0;
+      for (let x = 40; x < 80; x++) for (let y = sy - 4; y < sy + 2; y++) g.set(g.idx(x, y), WATER);
+      for (let x = 0; x < W; x++) if (x < 40 || x >= 80) for (let y = sy - 4; y < sy; y++) g.set(g.idx(x, y), DIRT);   // banks level with the water
+      loose(g, RABBIT, [45, 52, 60, 68, 75], sy - 4);
+      run(g, 0.5 * MIN);
+      const out = count(g, RABBIT, 0, 40) + count(g, RABBIT, 80, W);
+      console.log(`  pond: ${out} of 5 rabbits out on the banks after 30 s, ${count(g, RABBIT)} alive`);
+      check('rabbits swim out of a pond', out >= 4);
+    }
+    // grasshoppers through a year: 20 on a meadow in midsummer; eggs by autumn, no adults over winter, hatched by next spring
+    {
+      const W = 200, H = 60, g = plot(W, H, 30, 150), sy = H - 31; at(g, 0.4); g.windHold = 0;
+      meadow(g, 0, W, sy); loose(g, HOPPER, Array.from({ length: 20 }, (_, k) => 5 + k * 10), sy);
+      const eggs = () => { let n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === HOPPER && g.life[i] & Sim.EGG) n++; return n; };
+      const log = [];
+      for (const p of [0.7, 0.95, 1.3]) { while (g.clock < Sim.YEAR * p) { g.step(); for (let x = 0; x < W; x += 20) { const i = g.idx(x, sy - 30); if (g.frame % 900 === 0 && g.type[i] === E) g.set(i, WATER); } } log.push([count(g, HOPPER), eggs()]); }
+      console.log(`  grasshoppers from 20 in midsummer: autumn ${log[0][0]} (${log[0][1]} eggs), late winter ${log[1][0]} (${log[1][1]} eggs), next spring ${log[2][0]} (${log[2][1]} eggs)`);
+      check('grasshoppers lay eggs in autumn, die in the frost, and hatch in spring', log[0][1] >= 10 && log[1][0] === 0 && log[1][1] >= 5 && log[2][0] >= 5);
+    }
+  },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
 
