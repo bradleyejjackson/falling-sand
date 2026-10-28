@@ -13,12 +13,13 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
                               #   tiles stream (stage 4) sky precip storm steam level
                               #   support cookoff conduct melt groundwater dunes windfire channel
-                              #   grass compete seasonfire
+                              #   grass compete seasonfire ... widen (E8)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
-node tools/perf.js [seed]     # generates the page's 960x640 world (Sim.WORLD) and times step() and render
+node tools/perf.js [seed]     # generates the page's world (Sim.WORLD, mid-world) and times step() and render
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
+BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
 ```
 
 ## Engine (stage 4)
@@ -216,3 +217,38 @@ glass already existed; they behave more like the real thing now.
   grass fire went out on its own (game.js caught it).
 - Rack: Clay and Mud are in the starter sandbox; Rust unlocks with Irrigation, Brick and Molten glass with Lava crossing.
 - No save changes beyond Mud and Clay joining the saved soil life. `validate.js glass mud clay rust oil smoke`.
+
+## Engine speed and a bigger world (E8)
+
+See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order and sleeping rules, written for the Godot port.
+
+- Pure speed-ups, checked bit for bit against the E7 build with `tools/same.js` (and the frame pixel for pixel): the heat step
+  runs inline in the cell pass with flat double-precision tables; Sets and keyed objects on hot paths are flat tables;
+  statics that only conduct heat (`INERT`) skip the rest of the pass; `Grid` sets every property in its constructor so V8
+  keeps one shape; `wake` uses shifts. Render looks its per-element values up in flat tables. Tick 1.28x, render 1.3x.
+- Sleeping is per 4×4 block (`SC`) instead of per 16×16 chunk (the wind grid keeps 16×16). A moving grain used to keep up to
+  1024 cells awake; now 64. What this changed, and the fixes:
+  - Heat wakes by heat flow (degrees × capacity over `WAKEQ`, 0.3; metal 0.05) rather than by degrees, so a lava flow crusting
+    over slowly (capacity 25) stays awake until it sets, and a metal bar's warm front keeps moving. Without it the Volcano
+    solution lost (a lava cell stayed open to the air) and a bar was 90° 15 cells along (118° before; now 169°).
+  - A reaction that could happen next tick keeps its cell awake (`stepReactions`; salt beside water it can dissolve into; acid
+    beside what it eats or clean water; brine beside a sharp salt edge). Diluted acid used to be left over in a pool (29 of 50).
+  - Damp sand and clay still gathering speed in mid-air keep falling (`Grid.sticky`): they used to lose their speed on any
+    tick without a whole step, and sticky clay hung in the air. Desert bloom's beds now land as laid; its solution wins 7 of
+    8 scenario seeds, as on E7.
+- The window is 1280×640 (was 960×640: a third more of the world stays alive around the camera) on a world 12800 wide (was
+  7680). A busy mid-world tick, 4 seeds: E7 9.5 ms at 960 wide; now 6.3 ms at 960, 8.4 ms at 1280. Saves from the 960-wide
+  window load into the left of the new one; the rest is taken from the save's stored regions or generated from its seed, and a
+  flat world or a scenario carries its last column across (`validate.js widen`). Scenarios are unchanged: the box sits where it
+  did, with more stone to its right.
+- Scenarios: the box sits where it did, with more stone to its right. `Game.start` now sets the frame count to 0, so a
+  scenario's natural wind (which follows the frame count) is the same every time; before, it depended on how long the sandbox
+  had been running. A scenario may pin the wind (`wind`, saved in its definition). Firebreak does: a steady 0.5 east wind
+  drives the fire at the west wood. With the natural wind, doing nothing already won on 7 of 8 scenario seeds on E7 (the fire
+  burnt out in green grass) and won on its own seed in the wider window; now, over 8 seeds, doing nothing loses 8/8, the
+  firebreak wins 8/8 and water alone 6/8.
+- Two checks were judged on too few runs to survive any change: `mud` (E7 itself made 9-24 mud across plot seeds against a
+  threshold of 20) now sums four plots, and `compete` uses six seeds instead of three (a tree whose leaves all grow above the
+  30 rows shade reaches shades nothing; the new build drew two of those in the first three seeds). Under the tree, grass thins to
+  0.47 of the open meadow over six seeds (E7: 0.30).
+

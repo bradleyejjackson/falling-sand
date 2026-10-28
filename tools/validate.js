@@ -586,6 +586,32 @@ const scenarios = {
     k.shift(-1); k0.shift(-1); ok = 0; for (let i = 0; i < k0.type.length; i++) if (k0.type[i] === k.type[i + dy * W]) ok++;
     check('and its stored regions come back shifted down too', k.ox === a.ox - Sim.REGION && ok === k0.type.length && k.trees.length === k0.trees.length, `${ok}/${k0.type.length} cells`);
   },
+  widen() {
+    // E8: the window grew from 960 to Sim.WORLD.W. A save from the 960-wide window loads into its left part, and the rest of the
+    // window comes from the world it was in: regions the save had stored come back out of the store, the others are generated
+    const { W, H } = Sim.WORLD, R = Sim.REGION;
+    const a = new Sim.Grid(960, H); Sim.generate(a, 4242, 7680, 3200); run(a, 120);
+    const fresh = new Sim.Grid(W, H); Sim.generate(fresh, 4242, 7680, a.ox);
+    const s = a.save(), k = new Sim.Grid(W, H), k0 = new Sim.Grid(960, H); k.load(s); k0.load(s);   // (against the save loaded at its own size: loading redraws trees)
+    let left = 0, n = 0; for (let y = 0; y < H; y++) for (let x = 0; x < 960; x++) { const i = y * 960 + x, j = y * W + x; if (k0.owner[i] || k.owner[j]) continue; n++; if (k0.type[i] === k.type[j]) left++; }   // (trees just over the old edge reach back across it)
+    let right = 0, m = 0; for (let y = 0; y < H; y++) for (let x = 960; x < W; x++) { const j = y * W + x; if (fresh.owner[j] || k.owner[j]) continue; m++; if (fresh.type[j] === k.type[j]) right++; }
+    const hum = Math.abs(k0.hum[30 * k0.AW + 50] - k.hum[30 * k.AW + 50]) < 0.01;
+    console.log(`  a 960-wide save in the ${W}-wide window: its own cells match on ${left}/${n}; the land made to widen it matches land made in place on ${(100 * right / m).toFixed(2)}%`);
+    check('a narrower save loads into the left of the window', left === n && hum && k.ox === a.ox);
+    check('and the window is filled out with the same world', right / m > 0.995 && k.worldW === 7680);
+    // shifting left stores the region just right of the window (as it was, after a minute of play): the widened window takes it back
+    a.shift(-1); run(a, 30);
+    const key = (a.ox + 960) / R, rec = a.store.get(key), k2 = new Sim.Grid(W, H); k2.load(a.save());
+    const unrle = r => { let len = 0; for (let p = 1; p < r.length; p += 2) len += r[p]; const o = new Uint16Array(len); for (let p = 0, q = 0; p < r.length; p += 2) { o.fill(r[p], q, q + r[p + 1]); q += r[p + 1]; } return o; };
+    const ty = unrle(Uint16Array.from(rec.type)); let same = 0, c = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < R; x++) { const j = y * W + 960 + x; if (k2.owner[j]) continue; c++; if (ty[y * R + x] === k2.type[j]) same++; }
+    console.log(`  with that region stored: ${a.store.size} stored -> ${k2.store.size}; it comes back matching on ${same}/${c} cells`);
+    check('a region the save had stored comes back out of the store', !k2.store.has(key) && k2.store.size === a.store.size - 1 && same === c);
+    // a flat world (not generated) carries its last column across
+    const f = new Sim.Grid(960, H), top = Sim.flat(f), fk = new Sim.Grid(W, H); fk.load(f.save());
+    check('a narrower flat world loads widened, ground and all', fk.type[fk.idx(W - 1, top + 30)] === STONE && fk.type[fk.idx(W - 1, top - 20)] === E && fk.worldW === W);
+    k.step(); k2.step(); fk.step();
+  },
   // ---------------- E2: heat conduction, melting and freezing ----------------
   conduct() {
     // a metal bar and a stone bar in air, one end of each held at 600°: heat runs along the metal and barely into the stone
@@ -799,9 +825,10 @@ const scenarios = {
   compete() {
     // a tree in a meadow: its shade and its roots thin the grass under it while the open meadow holds; seeds falling on grass
     // take root less often than on bare dirt; a seedling that can't drink dies of thirst
-    // (judged over the columns the tree's leaves end up over, against open columns well away from it, over three seeds)
+    // (judged over the columns the tree's leaves end up over, against open columns well away from it, over six seeds: a tree
+    // whose leaves all grow high, past the 30 rows shade reaches down, shades nothing, and on three seeds that can be two of them)
     let under = 0, nu = 0, open = 0, no = 0;
-    for (const seed of [7, 8, 9]) {
+    for (const seed of [7, 8, 9, 10, 11, 12]) {
       const W = 200, H = 120, g = plot(W, H, 30, 90, seed), sy = H - 31;
       for (let x = 0; x < W; x++) { const i = g.idx(x, sy); g.set(i, PLANT); g.life[i] = (220 << 8) | 1; }
       g.set(g.idx(100, sy), TIP);
@@ -878,18 +905,22 @@ const scenarios = {
   mud() {
     const { MUD } = Sim.ids;
     { // a puddle on soaked dirt churns it to mud (on damp ground it just soaks in); the puddle gone and the ground drained, the sun dries the mud back into dirt
-      const W = 120, H = 80, g = plot(W, H, 20, 240); g.windHold = 0; g.clock = Sim.YEAR * 0.4; g.updateClimate();
-      for (let y = H - 23; y < H - 20; y++) for (let x = 30; x < 90; x++) g.set(g.idx(x, y), WATER);
-      let peak = 0; run(g, MIN, 60, () => { peak = Math.max(peak, census(g, Sim.EL).Mud || 0); });
-      for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER) g.set(i, E);
-      for (let y = 0; y < H - 22; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (g.type[i] === MUD) g.set(i, E); }   // (leave only the mud lying on the field)
-      for (let i = 0; i < g.type.length; i++) if (g.type[i] === DIRT) g.life[i] = (40 << 8) | 100;   // and the field drained under it
-      const lying = census(g, Sim.EL).Mud || 0;
-      run(g, 6 * MIN, 1, () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = Math.min(g.hum[c], 0.3 * g.cap[c]); });
-      const left = census(g, Sim.EL).Mud || 0;
-      console.log(`  a 3-deep puddle on soaked dirt: up to ${peak} mud in a minute; ${lying} lying when drained, ${left} left after 6 min of sun`);
-      check('a puddle on soaked dirt makes mud', peak >= 20);
-      check('mud dries back into dirt', lying >= 20 && left <= lying / 4, `${left}/${lying}`);
+      // (summed over four plots: on one plot it is a few dozen chances, and E7's own build made 9-24 across seeds)
+      let peak = 0, lying = 0, left = 0;
+      for (const seed of [7, 1, 2, 3]) {
+        const W = 120, H = 80, g = plot(W, H, 20, 240, seed); g.windHold = 0; g.clock = Sim.YEAR * 0.4; g.updateClimate();
+        for (let y = H - 23; y < H - 20; y++) for (let x = 30; x < 90; x++) g.set(g.idx(x, y), WATER);
+        let p = 0; run(g, MIN, 60, () => { p = Math.max(p, census(g, Sim.EL).Mud || 0); }); peak += p;
+        for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER) g.set(i, E);
+        for (let y = 0; y < H - 22; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (g.type[i] === MUD) g.set(i, E); }   // (leave only the mud lying on the field)
+        for (let i = 0; i < g.type.length; i++) if (g.type[i] === DIRT) g.life[i] = (40 << 8) | 100;   // and the field drained under it
+        lying += census(g, Sim.EL).Mud || 0;
+        run(g, 6 * MIN, 1, () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = Math.min(g.hum[c], 0.3 * g.cap[c]); });
+        left += census(g, Sim.EL).Mud || 0;
+      }
+      console.log(`  3-deep puddles on soaked dirt, four plots: up to ${peak} mud in a minute; ${lying} lying when drained, ${left} left after 6 min of sun`);
+      check('a puddle on soaked dirt makes mud', peak >= 48);
+      check('mud dries back into dirt', lying >= 48 && left <= lying / 4, `${left}/${lying}`);
     }
     { // under a deep lake the bed stays dirt
       const W = 80, H = 80, g = plot(W, H, 20, 255); g.windHold = 0;
