@@ -13,7 +13,7 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   shadow updraft fog dew clouds erosion lava tension salt acid canopy save
                               #   tiles stream (stage 4) sky precip storm steam level
                               #   support cookoff conduct melt groundwater dunes windfire channel
-                              #   grass compete seasonfire ... widen (E8)
+                              #   grass compete seasonfire ... widen (E8) ... landslide frost beams (R5)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -251,4 +251,14 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   threshold of 20) now sums four plots, and `compete` uses six seeds instead of three (a tree whose leaves all grow above the
   30 rows shade reaches shades nothing; the new build drew two of those in the first three seeds). Under the tree, grass thins to
   0.47 of the open meadow over six seeds (E7: 0.30).
-
+- Structural strength (R5, `Grid.beam`, docs/ENGINE.md): building materials are beams. Laid stone, brick, glass, wood and metal
+  with nothing under them bend under their own weight and whatever lies on them, by statics over the span between the columns
+  that hold them, against `STR × depth²`. Stone, brick and glass crack where it is worst and the crack runs on; wood bows a
+  little then snaps; metal sags along a smooth curve and hangs on like a cable, but softens past 300° and tears once a hot span
+  has sagged a quarter of its width. Arches carry their load by thrust: a 30-wide stone arch two thick stands where a flat slab
+  three thick cracks and falls. Anything held at neither end falls in one piece; wood floats. Wood and metal used to float in
+  the air, and a stone span broke past 10 cells however thick it was. The hills' own rock (generated, or lava set hard), ice
+  and charcoal keep their old rule, so a new world sheds as much rubble in its first 30 s as before (82-154 cells over 3 seeds,
+  R4 75-165); stone the brush lays is marked (`LAID`, life bit 15; stone's frost cracking is now 7 bits). Powders and liquids
+  no longer slip diagonally between two cells of wood or metal (a sagging plank's steps meet corner to corner). Flood defence's
+  houses now have footings: two of them stood a row or two clear of the valley floor. `validate.js beams`.

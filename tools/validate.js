@@ -78,7 +78,7 @@ const scenarios = {
     for (let x = 10; x < 30; x++) g.set(g.idx(x, H - 21), LITTER);
     for (let x = 50; x < 70; x++) g.set(g.idx(x, H - 21), ASH);
     for (let y = H - 30; y < H - 20; y++) { const i = g.idx(40, y); g.set(i, WOOD); g.life[i] = 600; }   // a dead snag (life >= 2)
-    const pw = g.idx(20, H - 30); g.set(pw, WOOD);                                                    // painted wood (life 0) on a ledge
+    const pw = g.idx(20, H - 30); g.set(pw, WOOD);                                                    // painted wood (life 0), in mid-air: it drops onto the litter
     let litterGone = -1, ashGone = -1;
     run(g, 6 * MIN, 120, f => {
       const c = census(g, Sim.EL);
@@ -92,7 +92,8 @@ const scenarios = {
     check('most litter rots into dirt within 6 min', litterGone > 0);
     check('ash turns into rich dirt', ashGone > 0 && n > 10 && rich / n > 200);
     check('the snag has rotted', (c.Wood || 0) - 1 < 10, `${c.Wood - 1} cells left`);
-    check('painted wood does not rot', g.type[pw] === WOOD);
+    let painted = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === WOOD && g.life[i] < 2) painted++;
+    check('painted wood does not rot', painted === 1, `${painted} painted wood cells`);
   },
   seasons() {
     // one year on a generated world: the temperature swing and leaf drop
@@ -685,6 +686,7 @@ const scenarios = {
     const { METAL, ICE } = Sim.ids, g = new Sim.Grid(160, 60);
     for (let y = 50; y < 60; y++) for (let x = 0; x < 160; x++) g.set(g.idx(x, y), STONE, 20);
     for (const [row, t] of [[20, METAL], [35, STONE]]) for (let x = 20; x < 80; x++) g.set(g.idx(x, row), t, 20);
+    for (const x of [30, 50, 70]) for (let y = 21; y < 50; y++) g.set(g.idx(x, y), STONE, 20);   // (posts under the metal bar: on its own in the air it falls now)
     const at = (x, row) => g.temp[g.idx(x, row)];
     for (let f = 1; f <= 600; f++) { g.temp[g.idx(20, 20)] = 600; g.temp[g.idx(20, 35)] = 600; g.step(); }
     console.log(`  after 10 s: metal ${at(25, 20).toFixed(0)}° 5 cells along, ${at(35, 20).toFixed(0)}° at 15, ${at(50, 20).toFixed(0)}° at 30; stone ${at(25, 35).toFixed(0)}° at 5, ${at(35, 35).toFixed(0)}° at 15`);
@@ -1323,7 +1325,7 @@ const scenarios = {
       for (let y = top; y < H; y++) for (let x = 0; x < W; x++) if (!(x >= 140 && y < top + 60)) g.set(g.idx(x, y), STONE, g.ambAt(y));
       for (let x = 80; x <= 120; x++) for (let y = top - 6; y < top; y++) { const i = g.idx(x, y); g.set(i, DIRT, g.ambAt(y)); g.life[i] = (40 << 8) | 150; }
       g.initAir(); run(g, Math.round(days * Sim.DAY));
-      const crack = (x0, x1, y0, y1) => { let s = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = g.idx(x, y); if (g.type[i] === STONE) { s += g.life[i] >> 8; n++; } } return n ? s / n : 0; };
+      const crack = (x0, x1, y0, y1) => { let s = 0, n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = g.idx(x, y); if (g.type[i] === STONE) { s += ((g.life[i] >> 8) & 127) * 2; n++; } } return n ? s / n : 0; };
       let scree = 0; for (let y = top + 40; y < top + 60; y++) for (let x = 140; x < 160; x++) if (g.type[g.idx(x, y)] === RUBBLE) scree++;
       return { face: crack(139, 140, top, top + 60), soil: crack(81, 120, top, top + 1), broke: g.frostBroke, scree };
     };
@@ -1331,6 +1333,59 @@ const scenarios = {
     console.log(`  autumn to spring: face cracked ${winter.face.toFixed(0)}/255 on average, ${winter.broke} cells broke off, ${winter.scree} lie at the foot; rock under soil ${winter.soil.toFixed(0)}; summer: face ${summer.face.toFixed(0)}, ${summer.broke} broke`);
     check('a cold-country cliff face cracks and sheds rubble to its foot over a winter', winter.face > 40 && winter.broke >= 5 && winter.scree >= 3, `${winter.face.toFixed(0)}, ${winter.broke} broke, ${winter.scree} at the foot`);
     check('rock under soil stays sound, and nothing cracks in summer', winter.soil < 5 && summer.face === 0 && summer.broke === 0, `${winter.soil.toFixed(1)}, ${summer.face.toFixed(1)}`);
+  },
+  beams() {
+    // structural strength: a span between two stone piers, `d` rows thick, with `load` rows of sand on it. Measured after 15 s:
+    // how much of it is still up at its own height or within `sagged` rows of it, and how far it sags
+    const { BRICK, METAL, RUBBLE } = Sim.ids;
+    const span = (m, L, d, { load = 0, rise = 0, temp, ticks = 900, after } = {}) => {
+      Sim.reseed(5); const W = L + 60, H = 120, g = new Sim.Grid(W, H); g.windHold = 0;
+      const put = (x, y, t) => g.set(g.idx(x, y), t, g.ambAt(y));
+      for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) put(x, y, STONE);
+      const a = 20, b = 21 + L, top = 60;   // (the span is laid as the brush lays it: laid stone is a building material, the piers are the ground's own rock)
+      for (let y = top - rise - d; y < H - 4; y++) for (let k = 0; k < 6; k++) { put(a - k, y, STONE); put(b + k, y, STONE); }
+      const cells = [];
+      for (let x = a + 1; x < b; x++) {
+        const u = (x - a) / (b - a) * 2 - 1, yb = Math.round(top + d - 1 - rise * Math.sqrt(Math.max(0, 1 - u * u)));   // the underside: flat, or a semicircle rising `rise`
+        for (let y = yb - d + 1; y <= yb; y++) { g.lay(g.idx(x, y), m, g.ambAt(y)); cells.push([x, y]); }
+        for (let k = 1; k <= load; k++) put(x, yb - d + 1 - k, SAND);
+      }
+      g.initAir(); g.wakeAll();
+      const heat = () => { if (temp !== undefined) for (let i = 0; i < g.type.length; i++) if (g.type[i] === m) g.temp[i] = temp; };
+      for (let f = 0; f < ticks; f++) { heat(); g.step(); }
+      if (after) { after(g, a, b, top); for (let f = 0; f < ticks; f++) { heat(); g.step(); } }
+      let up = 0, sag = 0, n = 0;
+      for (const [x, y] of cells) { let k = 0; while (k <= 12 && g.type[g.idx(x, y + k)] !== m) k++; if (k <= 12) { up++; sag = Math.max(sag, k); } n++; }
+      let rubble = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === RUBBLE) rubble++;
+      return { up, n, sag, whole: up === n, rubble };
+    };
+    const f = r => `${r.up}/${r.n} up, sags ${r.sag}`;
+    const w1 = span(WOOD, 24, 1), w1s = span(WOOD, 24, 1, { load: 3 }), w2s = span(WOOD, 24, 2, { load: 3 }), wl = span(WOOD, 80, 1);
+    console.log(`  wood plank, 24 wide: bare ${f(w1)}; under 3 rows of sand ${f(w1s)}; two thick under the same sand ${f(w2s)}; 80 wide ${f(wl)}`);
+    check('a 24-cell wooden plank carries itself without sagging', w1.whole && w1.sag === 0);
+    check('the same plank breaks under 3 rows of sand, and a plank twice as thick carries it', !w1s.whole && w2s.whole && w2s.sag <= 2);
+    check('a wooden plank 80 cells long gives way', !wl.whole);
+    const sf = span(STONE, 30, 3), sa = span(STONE, 30, 2, { rise: 15 }), bf = span(BRICK, 30, 3, { load: 4 }), ba = span(BRICK, 30, 3, { rise: 8, load: 4 });
+    console.log(`  30 wide: flat stone slab 3 thick ${f(sf)} (${sf.rubble} rubble); stone arch 2 thick ${f(sa)}; flat brick under 4 rows of sand ${f(bf)}; a brick arch rising 8 under the same sand ${f(ba)}`);
+    check('a flat stone slab 30 wide cracks and falls; a stone arch the same width stands', !sf.whole && sf.rubble > 0 && sa.whole);
+    check('brick: a flat span 30 wide fails under sand, an arch carries it', !bf.whole && ba.whole);
+    const m1 = span(METAL, 40, 1), mh = span(METAL, 40, 2, { temp: 600 }), mc = span(METAL, 40, 2), mx = span(METAL, 40, 2, { temp: 850 });
+    console.log(`  metal, 40 wide: one thick ${f(m1)}; two thick ${f(mc)}, at 600° ${f(mh)}, at 850° ${f(mx)} (the rest more than 12 rows down)`);
+    check('a thin metal span sags into a curve but holds', m1.whole && m1.sag >= 2 && m1.sag <= 8);
+    check('two thick it stays straight; heated it sags, and red hot it droops right down', mc.sag === 0 && mh.sag >= 3 && mh.whole && mx.up < mx.n / 2);
+    // load added later: pour sand onto a wooden bridge that carried itself and it bows, then gives way
+    let before = null;
+    const pour = span(WOOD, 32, 2, { ticks: 600, after: (g, a, b, top) => { before = 0; for (let x = a + 1; x < b; x++) if (g.type[g.idx(x, top + 1)] === WOOD) before++; for (let x = a + 1; x < b; x++) for (let k = 1; k <= 12; k++) g.set(g.idx(x, top - k), SAND); } });
+    console.log(`  32-wide wooden bridge two thick: ${before}/32 columns level before, then 12 rows of sand poured on: ${f(pour)}`);
+    check('sand poured on a bridge that stood brings it down', before === 32 && !pour.whole);
+    // a wooden raft floats on a lake: water under it bears it
+    Sim.reseed(6); const g = new Sim.Grid(140, 60); g.windHold = 0;
+    for (let x = 0; x < 140; x++) for (let y = 34; y < 60; y++) g.set(g.idx(x, y), y >= 56 || x < 5 || x >= 135 ? STONE : WATER);
+    for (let x = 20; x < 120; x++) g.lay(g.idx(x, 33), WOOD);
+    g.initAir(); g.wakeAll(); for (let f = 0; f < 600; f++) g.step();
+    let raft = 0; for (let x = 0; x < 140; x++) if (g.type[g.idx(x, 33)] === WOOD) raft++;
+    console.log(`  a raft of wood 100 long on a lake: ${raft} cells still floating level`);
+    check('a wooden raft floats on water, not a span', raft === 100);
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
