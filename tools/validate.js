@@ -232,6 +232,7 @@ const scenarios = {
     run(g, 3 * Sim.DAY, Sim.DAY / 8, () => {
       const now = [];
       for (let x = 0; x < W; x++) {
+        if (Sim.aridAt && Sim.aridAt(12345, x) > 0.05) continue;   // (one climate: the base sits higher over this world's desert, as dry air must rise further to condense)
         let y = 0; while (y < g.H && (g.type[y * W + x] === E || Sim.EL[g.type[y * W + x]].kind === 'gas')) y++;
         for (let yy = y - 8; yy >= 0; yy--) if (g.type[yy * W + x] === CLOUD) { if (g.type[(yy + 1) * W + x] !== CLOUD) { if (yy >= g.top) now.push(yy); else high++; } break; }
       }
@@ -956,6 +957,87 @@ const scenarios = {
     console.log(`  spring (sap ${spring.sap.toFixed(0)}): fire ran ${spring.reach} cells in 5 s; ${late.season} at dryness ${late.dry.toFixed(2)} (sap ${late.sap.toFixed(0)}): ${late.reach} cells`);
     check('late-summer grass has cured to straw', late.sap < Sim.CURED);
     check('a dry-season grass fire runs 2.5x+ faster than a spring one', late.reach >= 2.5 * spring.reach && spring.reach > 0, `${late.reach} vs ${spring.reach}`);
+  },
+  // ---------------- R6: wild plants ----------------
+  scrub() {
+    // shrubs hold dry ground: on dirt too dry for a meadow they stay green through the dry season and sow themselves, while grass
+    // beside them cures to straw; on damp ground under a full sward their seedlings are smothered
+    const { SHRUB } = Sim.ids, res = {};
+    for (const [label, m, sward] of [['dry', 25, false], ['damp', 90, true]]) {
+      const W = 240, H = 80, g = plot(W, H, 30, m, 5), sy = H - 31;
+      if (sward) for (let x = 0; x < W; x++) { const i = g.idx(x, sy); g.set(i, PLANT); g.life[i] = (220 << 8) | 1; }
+      else for (let x = 10; x < 40; x++) { const i = g.idx(x, sy); g.set(i, PLANT); g.life[i] = (220 << 8) | 1; }
+      for (const x of [90, 120, 150]) { const i = g.idx(x, sy); g.set(i, SHRUB); }
+      run(g, 2.6 * MIN);   // spring to the dry season's height
+      let bases = 0, sap = 0, tall = 0, grass = 0, gsap = 0;
+      for (let x = 0; x < W; x++) {
+        const i = g.idx(x, sy); if (g.type[i] === SHRUB) { bases++; sap += g.life[i] >> 8; let h = 1; while (g.type[i - h * W] === SHRUB) h++; tall = Math.max(tall, h); }
+        if (x >= 10 && x < 40 && g.type[i] === PLANT) { grass++; gsap += g.life[i] >> 8; }
+      }
+      res[label] = { bases, sap: bases ? sap / bases : 0, tall, grass, gsap: grass ? gsap / grass : 0 };
+      console.log(`  ${label} dirt (moisture ${m}${sward ? ', under a sward' : ''}): ${bases} shrubs after 2.6 min (${g.seasonName}, dryness ${g.dryness.toFixed(2)}), sap ${res[label].sap.toFixed(0)}, tallest ${tall}` + (sward ? '' : `; the strip of grass beside them: ${grass} columns, sap ${res[label].gsap.toFixed(0)}`));
+    }
+    check('shrubs on dry dirt stay green through the dry season', res.dry.bases >= 3 && res.dry.sap >= Sim.CURED && res.dry.tall >= 3, `${res.dry.bases} shrubs, sap ${res.dry.sap.toFixed(0)}, tallest ${res.dry.tall}`);
+    check('and sow themselves on the dry ground', res.dry.bases >= 6, `${res.dry.bases} from 3`);
+    check('while grass on the same ground cures or dies', res.dry.grass === 0 || res.dry.gsap < Sim.CURED, `${res.dry.grass} columns, sap ${res.dry.gsap.toFixed(0)}`);
+    check('in a meadow on damp ground few shrub seedlings take', res.damp.bases <= 0.5 * res.dry.bases, `${res.damp.bases} vs ${res.dry.bases} on dry ground`);
+  },
+  cactus() {
+    // a cactus lives on dry sand through a long dry spell, drinks fast when rain wets the sand, and rots in damp dirt;
+    // a shrub on the same sand parches
+    const { CACTUS, SHRUB } = Sim.ids;
+    const field = (ground, m) => {
+      Sim.reseed(4); const W = 160, H = 70, g = new Sim.Grid(W, H);
+      for (let y = H - 25; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, ground); g.life[i] = ground === DIRT ? (40 << 8) | m : m; } }
+      g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] *= 0.3; return g;
+    };
+    const stem = (g, x) => { let h = 0; for (let y = g.H - 26; y > 0 && g.type[g.idx(x, y)] === CACTUS; y--) h++; return h; };
+    const dry = field(SAND, 8), sy = dry.H - 26;
+    dry.set(dry.idx(50, sy), CACTUS); dry.set(dry.idx(110, sy), SHRUB);
+    run(dry, 2 * MIN);
+    const cs = dry.life[dry.idx(50, sy)] >> 8, h = stem(dry, 50), shrub = dry.type[dry.idx(110, sy)] === SHRUB ? dry.life[dry.idx(110, sy)] >> 8 : -1;
+    console.log(`  on dry sand for 2 min: the cactus stands ${h} tall with sap ${cs}; the shrub ${shrub < 0 ? 'died' : 'has sap ' + shrub}`);
+    check('a cactus lasts a long dry spell on dry sand', dry.type[dry.idx(50, sy)] === CACTUS && cs >= 120 && h >= 3, `sap ${cs}, ${h} tall`);
+    check('a shrub there parches', shrub < Sim.CURED, shrub < 0 ? 'died' : `sap ${shrub}`);
+    // rain: a thirsty cactus drinks the wetted sand
+    const wet = field(SAND, 8); wet.set(wet.idx(80, sy), CACTUS); wet.life[wet.idx(80, sy)] = 60 << 8;
+    for (let x = 70; x < 91; x++) if (x !== 80) wet.set(wet.idx(x, sy), WATER);
+    run(wet, 30 * 60);
+    const after = wet.life[wet.idx(80, sy)] >> 8;
+    console.log(`  a thirsty cactus (sap 60) after a shower on the sand round it: sap ${after} 30 s later`);
+    check('a cactus drinks fast when rain wets the sand', after >= 160, `sap ${after}`);
+    // damp dirt rots it
+    const damp = field(DIRT, 130); damp.set(damp.idx(80, sy), CACTUS);
+    let gone = -1; run(damp, 2 * MIN, 60, f => { if (gone < 0 && damp.type[damp.idx(80, sy)] !== CACTUS) gone = f; });
+    console.log(`  on damp dirt: the cactus ${gone < 0 ? 'still stands after 2 min' : 'rotted after ' + (gone / 60).toFixed(0) + ' s'}`);
+    check('a cactus rots in damp dirt', gone > 0, gone < 0 ? 'still there' : (gone / 60).toFixed(0) + ' s');
+  },
+  reeds() {
+    // reeds root in the soaked bed of a shallow pond, grow up out of the water and spread along the bed; in deep water they drown,
+    // and where the ground has dried they die back
+    const { REED } = Sim.ids;
+    const pond = (depth, m = 255) => {
+      Sim.reseed(6); const W = 200, H = 70, g = new Sim.Grid(W, H), bed = H - 20;
+      for (let y = bed; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (40 << 8) | m; } }
+      for (let x = 0; x < W; x++) if (x < 30 || x >= W - 30) for (let y = bed - depth - 2; y < bed; y++) { const i = g.idx(x, y); g.set(i, DIRT); g.life[i] = (40 << 8) | m; }
+      if (depth) for (let y = bed - depth; y < bed; y++) for (let x = 30; x < W - 30; x++) g.set(g.idx(x, y), WATER);
+      for (const x of [80, 120]) g.set(g.idx(x, bed - 1), REED);
+      g.initAir(); return { g, bed };
+    };
+    const count = (g, bed) => { let bases = 0, top = g.H; for (let x = 30; x < g.W - 30; x++) for (let y = bed - 12; y < bed + 2; y++) { const i = g.idx(x, y); if (g.type[i] !== REED) continue; top = Math.min(top, y); if (g.type[i + g.W] !== REED) bases++; } return { bases, top }; };
+    const sh = pond(3); run(sh.g, 1.5 * MIN);
+    const a = count(sh.g, sh.bed), surface = sh.bed - 3, above = surface - a.top;
+    console.log(`  a pond 3 deep: ${a.bases} reeds after 1.5 min (from 2), standing ${above} above the water`);
+    check('reeds grow up out of shallow water', above >= 2 && above <= 4, `${above} above`);
+    check('and spread along the bed', a.bases >= 8, `${a.bases} reeds`);
+    const dp = pond(10); run(dp.g, 2 * MIN);
+    const b = count(dp.g, dp.bed);
+    console.log(`  a pond 10 deep: ${b.bases} reeds left in it after 2 min`);
+    check('reeds drown in deep water', b.bases === 0, `${b.bases} left`);
+    const dr = pond(0, 60); run(dr.g, 2 * MIN);
+    const c = count(dr.g, dr.bed);
+    console.log(`  on drained ground (moisture 60): ${c.bases} reeds left after 2 min`);
+    check('reeds die where the ground is not soaked', c.bases === 0, `${c.bases} left`);
   },
   // ---------------- E6: new materials ----------------
   glass() {
