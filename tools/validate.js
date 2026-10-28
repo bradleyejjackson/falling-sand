@@ -885,6 +885,16 @@ const scenarios = {
     check('grass spreads over damp dirt', res.damp.cols >= 30 && res.damp.sap >= Sim.CURED, `${res.damp.cols} columns`);
     check('grass on dry dirt does not spread and dries out', res.dry.cols <= 4 && res.dry.sap < Sim.CURED, `${res.dry.cols} columns, sap ${res.dry.sap.toFixed(0)}`);
   },
+  sow() {
+    // grass seed blows onto damp bare ground its runners can't reach: here a field 10 rows below the meadow's terrace
+    const W = 200, H = 80, g = plot(W, H, 30, 90), sy = H - 31;
+    for (let y = sy - 9; y <= sy; y++) for (let x = 0; x < 40; x++) { const i = g.idx(x, y); g.set(i, DIRT); g.life[i] = (40 << 8) | 90; }
+    for (let x = 5; x < 35; x++) { const i = g.idx(x, sy - 10); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+    g.initAir(); run(g, 1.5 * MIN);
+    let cols = 0; for (let x = 50; x < W; x++) if (g.type[g.idx(x, sy)] === PLANT) cols++;
+    console.log(`  a meadow on a terrace 10 rows up: after 1.5 min grass has come up in ${cols} columns of the field below`);
+    check('grass seeds bare ground out of its runners\' reach', cols >= 10, `${cols} columns`);
+  },
   compete() {
     // a tree in a meadow: its shade and its roots thin the grass under it while the open meadow holds; seeds falling on grass
     // take root less often than on bare dirt; a seedling that can't drink dies of thirst

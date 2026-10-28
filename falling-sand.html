@@ -147,8 +147,8 @@ const Sim = (() => {
   // SPREAD_M sends runners up to 3 cells sideways onto bare damp dirt; drought (no sap) and shade kill it to litter. In the dry season
   // (late summer) it needs up to DRY_NEED more soil moisture to keep drinking, so it cures on the hills and stays green by the water.
   const SAP0 = 200, CURED = 70, GRASS_DRINK = 40, SIP = 3, SAP_GAIN = 24, TRANSP = 8, SPREAD_M = 50, SPREAD_SAP = 150, SPREAD_P = 0.04, SPREAD_COST = 12,
-        DROUGHT_DIE = 0.001, DRY_NEED = 100, GREEN_K = 3, SHADE_DIE = 0.006, CURED_P = 0.3, SEED_IN_GRASS = 0.25,
-        SOW_P = 0.002, SOW_REACH = 16, SOW_M = 55;   // grass seed: the chance a base blade sows a visit (times growth), how far, how damp the root zone must be
+        DROUGHT_DIE = 0.001, DRY_NEED = 100, GREEN_K = 3, SHADE_DIE = 0.006, CURED_P = 0.3, SEED_IN_GRASS = 0.5,
+        SOW_P = 0.006, SOW_REACH = 48, SOW_DROP = 16, SOW_M = 55;   // grass seed: the chance a base blade sows a visit (times growth), how far it blows (and up or down), how damp the root zone must be
   const def = (name,o) => { const id=EL.length; EL.push(Object.assign({id,name,density:0,disperse:0,lazy:0,tension:0,k:0.2,cap:1,t0:20,hold:null,life:0,soil:0,decay:null,hi:null,lo:null,rgb:[0,0,0],vary:0,opaque:true,glow:0},o)); return id; };
 
   const E     = def('Empty',    {kind:'static', k:0.05, rgb:[8,8,10], opaque:false});
@@ -288,6 +288,7 @@ const Sim = (() => {
   const INERT = new Uint8Array(N); for (const e of EL) INERT[e.id] = e.id!==E && e.kind==='static' && !e.life && !has[e.id] && !SOURCE[e.id] && ![SALT,ACID,TIP,EMBER,PLANT].includes(e.id) ? 1 : 0;
   const FALLS_AS = {[STONE]:RUBBLE,[GLASS]:RUBBLE,[ICE]:SNOW,[CHAR]:ASH,[BRICK]:RUBBLE};
   // ecology: a day is a minute at 60 fps and a year is eight days; the soil pass visits each row once every SLOW ticks
+  const ROOT_DRY = 20;   // tree roots drink soil down to this (deeper and tougher than grass, which needs GRASS_DRINK): a tree outlasts a dry spell that browns the meadow
   const THIRST = 450;   // growth-season tree steps (TREE_TICK ticks each, so two days) a tree survives without water; it wilts at half that
   const DAY = 3600, YEAR = DAY*8, SLOW = 8, TREE_TICK = 16, MOIST = 255, HOLD = 70, ROT = 600, MATURE = 220, MAX_TREES = 160;
   const SEASONS = ['Spring','Summer','Autumn','Winter'], START = DAY*1.08;   // new worlds open on the second morning of spring
@@ -969,7 +970,7 @@ const Sim = (() => {
         for (let n=0;n<tries && roots.length;n++){
           const j=this.nb4(roots[(R()*roots.length)|0]); if (j<0) continue;
           const tj=this.type[j];
-          if (tj===DIRT){ const v=this.life[j], m=v&255, rich=v>>8; if (m>30){ const take=Math.min(m-20,40); this.life[j]=(Math.max(0,rich-3)<<8)|(m-take); t.water+=take/20*(1+rich/255); this.hum[this.ac(t.x,Math.max(0,Math.round(t.y-segs[0].len)))]+=take*0.001; } }   // and breathes a little of it out through its leaves
+          if (tj===DIRT){ const v=this.life[j], m=v&255, rich=v>>8; if (m>ROOT_DRY){ const take=Math.min(m-ROOT_DRY+8,40); this.life[j]=(Math.max(0,rich-3)<<8)|(m-take); t.water+=take/20*(1+rich/255); this.hum[this.ac(t.x,Math.max(0,Math.round(t.y-segs[0].len)))]+=take*0.001; } }   // and breathes a little of it out through its leaves
           else if (tj===WATER){ this.set(j,E); t.water+=5; }
         }
       }
@@ -1477,11 +1478,11 @@ const Sim = (() => {
             this.set(c,PLANT,this.temp[c]); L[c]=(SAP0<<8)|1; L[soil]-=SPREAD_COST; break;
           }
         }
-        // seed: a green stand sows bare ground further off (up to SOW_REACH columns), where the soil a few cells down is damp enough
+        // seed: a green stand sows bare ground further off (the wind takes it up to SOW_REACH columns), where the soil a few cells down is damp enough
         // for a seedling to root, so a meadow takes back ground that a fire or a dead tree has cleared
         if (base && this.growth>0.3 && R()<SOW_P*this.growth){
           const nx=x+(R()<0.5?-1:1)*(4+((R()*(SOW_REACH-3))|0));
-          if (nx>=0 && nx<W) for (let dy=-6;dy<=6;dy++){
+          if (nx>=0 && nx<W) for (let dy=-SOW_DROP;dy<=SOW_DROP;dy++){
             const ny=y+dy; if (ny<1 || ny+3>=H) continue;
             const c=ny*W+nx, d=c+W;
             if (T[c]!==E || T[d]!==DIRT) continue;
