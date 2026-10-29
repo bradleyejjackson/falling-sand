@@ -25,21 +25,22 @@ function suite(threads) {
   p.run(1); g.clear();
   btn('Dirt').fire('click');
   for (let vx = 100; vx <= 220; vx += 4) { cv.fire('pointerdown', at(vx, 180)); cv.fire('pointerup', at(vx, 180)); }
-  p.run(120);
+  p.run(600);   // (the bed takes a while to settle; a seed sown while it is still falling gets buried)
   const c1 = census(g, Sim.EL);
   check('painting dirt places damp dirt', c1.Dirt > 300 && [...g.type].some((t, i) => t === Sim.ids.DIRT && (g.life[i] & 255) >= 60), `${c1.Dirt} cells`);
   btn('Seed').fire('click');
   p.els.brush.value = '1'; p.els.brush.fire('input');
-  cv.fire('pointerdown', at(160, 100)); cv.fire('pointerup', at(160, 100));
+  for (const vx of [130, 160, 190]) { cv.fire('pointerdown', at(vx, 100)); p.run(8); cv.fire('pointerup', at(vx, 100)); }   // (a click held for a few frames)
+  p.run(1); check('a seed click sows one seed', census(g, Sim.EL).Seed === 3, `${census(g, Sim.EL).Seed} seeds`);
   p.run(1200);
-  check('a seed dropped on painted dirt becomes a tree', g.trees.length >= 1, `${g.trees.length} trees`);
+  check('seeds dropped on painted dirt become trees', g.trees.length >= 1, `${g.trees.length} trees`);
 
-  for (const id of ['moistview', 'heatview', 'windview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
+  for (const id of ['moistview', 'heatview', 'windview', 'soilview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
   p.run(3);
   check('view toggles render without errors', true);
 
   p.run(1); p.els.save.fire('click'); p.run(1); const saved = p.store['sandfall.world'];
-  check('save writes a 7-part world', saved && saved.split('|').length === 7, p.els.msg.textContent);
+  check('save writes an 11-part world', saved && saved.split('|').length === 11, p.els.msg.textContent);
   const trees = g.trees.length; p.run(1); g.clear(); p.els.load.fire('click'); p.run(1);
   check('load restores trees', g.trees.length === trees, `${g.trees.length}/${trees}; ${p.els.msg.textContent}`);
   p.els.export.fire('click'); p.run(1); const text = p.els.iotext.value;
@@ -47,20 +48,21 @@ function suite(threads) {
   check('export/import round-trips', p.els.msg.textContent === 'Imported' && g.trees.length === trees, p.els.msg.textContent);
   p.els.newworld.fire('click'); p.run(60);
   check('new world generates with dirt and trees', (census(g, Sim.EL).Dirt || 0) > 1000 && g.trees.length > 5, `${census(g, Sim.EL).Dirt} dirt, ${g.trees.length} trees`);
-  check('the world is eight windows wide and starts in the middle', g.worldW === 7680 && g.ox > 0 && /7680/.test(p.els.dims.textContent), `${p.els.dims.textContent}, window at ${g.ox}`);
+  check('the world is ten windows wide and starts in the middle', g.worldW === Sim.WORLD.WIDE && g.worldW === 10 * g.W && g.ox > 0 && new RegExp(Sim.WORLD.WIDE).test(p.els.dims.textContent), `${p.els.dims.textContent}, window at ${g.ox}`);
 
   // walk right with the keyboard: the window streams along; walk back and the land is as we left it
   const ox0 = g.ox, here = Array.from(g.type);
   p.window.fire('keydown', { key: 'd' }); p.run(480); p.window.fire('keyup', { key: 'd' });
   const ox1 = g.ox, stored = g.store.size;
   check('panning right streams the window along the world', ox1 >= ox0 + 3 * Sim.REGION && stored >= 3, `window ${ox0} -> ${ox1}, ${stored} regions stored; ${p.els.cam.textContent}`);
-  check('trees keep growing in the new land', g.trees.length > 5, `${g.trees.length} trees`);
+  // (east of the start lies the dry country: scrub and desert, where few trees stand)
+  const wild = census(g, Sim.EL); check('plants keep growing in the new land', g.trees.length > 5 || (wild.Shrub || 0) + (wild.Cactus || 0) > 200, `${g.trees.length} trees, ${wild.Shrub || 0} shrub and ${wild.Cactus || 0} cactus cells`);
   p.window.fire('keydown', { key: 'a' }); for (let k = 0; k < 2000 && g.ox > ox0; k++) p.run(1); p.window.fire('keyup', { key: 'a' }); p.run(2);
   // (the exact round trip is checked in validate.js stream; here the land lives on for the frames it is in the window)
   let same = 0; for (let i = 0; i < here.length; i++) if (here[i] === g.type[i]) same++;
   check('panning back brings the first land back', g.ox === ox0 && same / here.length > 0.95, `${(100 * same / here.length).toFixed(1)}% of cells the same type`);
   p.run(1); p.els.save.fire('click'); p.run(1); const big = p.store['sandfall.world'];
-  check('a streamed world saves', big && big.split('|').length === 7, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
+  check('a streamed world saves', big && big.split('|').length === 11, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
 
   // scenarios: the Play row, a budgeted rack, winning through the brush, unlocks, and saving a scenario in progress
   const scn = n => p.created.find(e => e.className === 'el scn' && e.innerHTML.includes(n));
@@ -84,9 +86,65 @@ function suite(threads) {
   p.run(30); p.els.save.fire('click'); p.run(1); const ss = p.store['sandfall.world'];
   check('saving in a scenario saves the scenario', ss && ss[0] === '{' && JSON.parse(ss).def.id === 'lava', p.els.msg.textContent);
   p.els.leave.fire('click'); p.run(2);
-  check('Sandbox leaves the scenario, with its unlocks', !p.sf.game() && !p.els.mission.classList.contains('on') && !btn('Oil').disabled && btn('Lava').disabled && g.worldW === 7680);
+  check('Sandbox leaves the scenario, with its unlocks', !p.sf.game() && !p.els.mission.classList.contains('on') && !btn('Oil').disabled && btn('Lava').disabled && g.worldW === Sim.WORLD.WIDE);
   p.els.load.fire('click'); p.run(2);
   check('loading the save resumes the scenario', p.sf.game() && p.sf.game().sc.id === 'lava' && p.sf.game().t >= 30, p.els.msg.textContent);
+  p.els.leave.fire('click'); p.run(2);
+
+  // Green the valley played through the brush at its default size: a dirt bed (the budget covers two thirds of the valley),
+  // water over it, five seed clicks on the soil.
+  // (a seed click used to fill the whole brush circle, so the first one spent all ten seeds in one clump: one tree)
+  const unlock = p.created.find(e => e.id === 'unlockall');
+  unlock.fire('click'); scn('Green the valley').fire('click'); p.run(2);
+  const gv = p.sf.game(), box = Sim.BOX, cy = by => (by + 40) / 1.2;   // box y to canvas y (the view shows 40 rows of sky over the box)
+  p.els.brush.value = '4'; p.els.brush.fire('input');
+  const sweep = (y0, x0, x1) => { cv.fire('pointerdown', at(x0, cy(y0))); for (let x = x0; x <= x1; x += 3) { cv.fire('pointermove', at(x, cy(y0))); p.run(1); } cv.fire('pointerup', at(x1, cy(y0))); };
+  btn('Dirt <b>1200</b>').fire('click'); sweep(125, 60, 260); p.run(120);
+  btn('Water <b>900</b>').fire('click'); sweep(110, 60, 260); p.run(300);
+  btn('Seed <b>10</b>').fire('click');
+  cv.fire('pointerdown', at(70, cy(100))); p.run(8); cv.fire('pointerup', at(70, cy(100))); p.run(1);
+  check('one seed click sows one seed', gv.left('Seed') === 9, `${10 - gv.left('Seed')} sown`);
+  for (const x of [95, 120, 145, 170]) { cv.fire('pointerdown', at(x, cy(100))); cv.fire('pointerup', at(x, cy(100))); p.run(1); }
+  for (let k = 0; k < 7200 && gv.state === 'play'; k++) p.run(1);
+  check('Green the valley is won through the brush', gv.state === 'won', `${gv.state} ${gv.why} at ${(gv.t / 60).toFixed(0)} s; ${gv.goals[0].value} tall trees; seeds left ${gv.left('Seed')}`);
+  p.els.leave.fire('click'); p.run(2);
+
+  // Flood defence through the brush: a clay wall dragged down the hillside below the river, sand banked against its far side
+  scn('Flood defence').fire('click'); p.run(2);
+  const fd = p.sf.game();
+  const vsweep = (x, y0, y1) => { cv.fire('pointerdown', at(x, cy(y0))); for (let y = y0; y <= y1; y += 2) { cv.fire('pointermove', at(x, cy(y))); p.run(1); } cv.fire('pointerup', at(x, cy(y1))); };
+  btn('Clay <b>250</b>').fire('click'); for (const x of [104, 108]) vsweep(x, 92, 124);
+  btn('Sand <b>700</b>').fire('click'); for (const x of [113, 118, 122]) vsweep(x, 92, 130);
+  for (let k = 0; k < 4800 && fd.state === 'play'; k++) p.run(1);
+  check('Flood defence is won through the brush', fd.state === 'won', `${fd.state} ${fd.why} at ${(fd.t / 60).toFixed(0)} s; water in town ${fd.goals[0].value}; clay left ${fd.left('Clay')}, sand left ${fd.left('Sand')}`);
+
+  // the sandbox row: hidden in a scenario, and Speed runs the scenario's clock faster
+  check('the sandbox row hides in a scenario', p.els.sbox.classList.contains('off'));
+  scn('Volcano').fire('click'); p.run(2);
+  const vt = p.sf.game().t; p.els.speed.fire('click'); p.run(10);
+  check('Speed ×2 runs two ticks a frame', p.sf.game().t - vt === 20 && p.els.speed.textContent === 'Speed ×2', `${p.sf.game().t - vt} ticks in 10 frames`);
+  p.els.speed.fire('click'); p.els.speed.fire('click'); p.run(1);   // (×4, then back to ×1)
+  p.els.leave.fire('click'); unlock.fire('click'); p.run(2);
+  check('leaving a scenario shows the sandbox row', !p.els.sbox.classList.contains('off'));
+  p.els.flatworld.fire('click'); p.run(2);
+  const cf = census(g, Sim.EL);
+  check('Flat world lays level ground with grass, one window wide', g.worldW === g.W && cf.Plant > 900 && cf.Dirt > 900 * 20 && g.trees.length === 0, `${cf.Plant} grass, ${cf.Dirt} dirt, world ${g.worldW}`);
+  const s0 = g.seasonName; p.els.season.fire('click'); p.run(1);
+  check('Next season moves the calendar on a season', g.seasonName !== s0 && /^(Spring|Summer|Autumn|Winter)$/.test(p.els.msg.textContent), `${s0} -> ${g.seasonName}`);
+  p.els.hold.fire('click'); const c0 = g.clock; p.run(30);
+  check('Hold time stops the clock', g.clock === c0 && g.hold, `${g.clock - c0} ticks passed`);
+  p.els.hold.fire('click'); p.run(5); check('and releasing it starts it again', g.clock > c0);
+  p.els.windset.fire('click'); p.run(5);
+  check('the wind button holds the wind', g.wind === 0 && /calm/.test(p.els.windset.textContent), `${g.wind} ${p.els.windset.textContent}`);
+  p.els.front.fire('click'); p.run(30);
+  const frontAt = (() => { for (let ax = 1; ax < g.AW; ax++) if (g.massT[ax - 1] < 0 && g.massT[ax] > 0) return ax * 4; return -1; })();
+  check('Send a cold front brings one in at the west of the screen', g.fronts && frontAt >= 0 && /cold front/.test(p.els.msg.textContent) && /hPa/.test(p.els.wind.textContent), `front at x ${frontAt}, ${p.els.wind.textContent}`);
+  const s1 = g.strikes; g.strike(g.W >> 1, 40); p.run(3);
+  check('a lightning strike draws and is counted', g.strikes === s1 + 1);
+  p.els.heatview.fire('click'); p.run(2); p.els.heatview.fire('click');
+  scn('Irrigation').fire('click'); p.run(2);
+  check('a scenario puts the wind and clock back to natural', g.windHold === null && !g.hold && /natural/.test(p.els.windset.textContent));
+  check('and has one air mass and no lightning', !g.fronts && !g.lightning && g.massT.every(v => v === 0));
   p.els.leave.fire('click'); p.run(2);
   p.close();
 }
