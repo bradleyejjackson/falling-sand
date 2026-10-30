@@ -2,7 +2,7 @@
 
 A falling-sand simulation prototyped as a single HTML file (`falling-sand.html`), headed for a Godot port once the design settles. Published as a Claude artifact, on GitHub Pages at https://bradleyejjackson.github.io/falling-sand/ , and (once set up) on Cloudflare Pages at https://sand.bradleyejjackson.com .
 
-GitHub Pages: `.github/workflows/pages.yml` runs `node tools/pages.js`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`, and deploys it on every push to main. Repo Settings → Pages → Source must be "GitHub Actions". Pages can't send COOP/COEP headers, so `tools/pages.js` also ships `tools/coi-serviceworker.js`: on the first visit it installs itself as the site's service worker and reloads once, and from then on it adds the headers to the site's responses, so the page is cross-origin isolated and runs the cell pass on its worker pool. A browser where that doesn't take runs the serial path (same results). The font stylesheet is loaded `crossorigin` so it still loads under `require-corp`.
+GitHub Pages: `.github/workflows/pages.yml` runs `node tools/pages.js`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`, and deploys it on every push to main. Repo Settings → Pages → Source must be "GitHub Actions". Pages can't send COOP/COEP headers, so the page isn't cross-origin isolated and the sim runs on the main thread (the serial path, same results as the worker pool).
 
 Cloudflare Pages: builds with the same `node tools/pages.js _site`; `tools/_headers` is copied into the output and makes Cloudflare send COOP/COEP, so the worker pool runs there. Setup steps: `docs/cloudflare-pages.md`.
 
