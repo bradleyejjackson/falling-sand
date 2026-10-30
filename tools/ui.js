@@ -40,15 +40,15 @@ function suite(threads) {
   check('view toggles render without errors', true);
 
   p.run(1); p.els.save.fire('click'); p.run(1); const saved = p.store['sandfall.world'];
-  check('save writes an 11-part world', saved && saved.split('|').length === 11, p.els.msg.textContent);
+  check('save writes a 12-part world', saved && saved.split('|').length === 12, p.els.msg.textContent);
   const trees = g.trees.length; p.run(1); g.clear(); p.els.load.fire('click'); p.run(1);
   check('load restores trees', g.trees.length === trees, `${g.trees.length}/${trees}; ${p.els.msg.textContent}`);
   p.els.export.fire('click'); p.run(1); const text = p.els.iotext.value;
   p.run(1); g.clear(); p.els.import.fire('click'); p.run(1);
   check('export/import round-trips', p.els.msg.textContent === 'Imported' && g.trees.length === trees, p.els.msg.textContent);
-  p.els.newworld.fire('click'); p.run(60);
+  { const mr = Math.random; Math.random = () => 0.25; p.els.newworld.fire('click'); p.run(60); Math.random = mr; }   // (a seed that opens in green country: about one in four opens in scrub or desert)
   check('new world generates with dirt and trees', (census(g, Sim.EL).Dirt || 0) > 1000 && g.trees.length > 5, `${census(g, Sim.EL).Dirt} dirt, ${g.trees.length} trees`);
-  check('the world is ten windows wide and starts in the middle', g.worldW === Sim.WORLD.WIDE && g.worldW === 10 * g.W && g.ox > 0 && new RegExp(Sim.WORLD.WIDE).test(p.els.dims.textContent), `${p.els.dims.textContent}, window at ${g.ox}`);
+  check('the world is several windows wide and starts in the middle', g.worldW === Sim.WORLD.WIDE && g.worldW >= 6 * g.W && Math.abs(g.ox + g.W / 2 - g.worldW / 2) <= Sim.REGION && new RegExp(Sim.WORLD.WIDE).test(p.els.dims.textContent), `${p.els.dims.textContent}, window at ${g.ox}`);
 
   // walk right with the keyboard: the window streams along; walk back and the land is as we left it
   const ox0 = g.ox, here = Array.from(g.type);
@@ -62,7 +62,7 @@ function suite(threads) {
   let same = 0; for (let i = 0; i < here.length; i++) if (here[i] === g.type[i]) same++;
   check('panning back brings the first land back', g.ox === ox0 && same / here.length > 0.95, `${(100 * same / here.length).toFixed(1)}% of cells the same type`);
   p.run(1); p.els.save.fire('click'); p.run(1); const big = p.store['sandfall.world'];
-  check('a streamed world saves', big && big.split('|').length === 11, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
+  check('a streamed world saves', big && big.split('|').length === 12, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
 
   // scenarios: the Play row, a budgeted rack, winning through the brush, unlocks, and saving a scenario in progress
   const scn = n => p.created.find(e => e.className === 'el scn' && e.innerHTML.includes(n));

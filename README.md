@@ -2,7 +2,7 @@
 
 A falling-sand simulation prototyped as a single HTML file (`falling-sand.html`), headed for a Godot port once the design settles. Published as a Claude artifact, on GitHub Pages at https://bradleyejjackson.github.io/falling-sand/ , and (once set up) on Cloudflare Pages at https://sand.bradleyejjackson.com .
 
-GitHub Pages: `.github/workflows/pages.yml` runs `node tools/pages.js`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`, and deploys it on every push to main. Repo Settings → Pages → Source must be "GitHub Actions". Pages can't send COOP/COEP headers, so the page isn't cross-origin isolated and the sim runs on the main thread (the serial path, same results as the worker pool).
+GitHub Pages: `.github/workflows/pages.yml` runs `node tools/pages.js`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`, and deploys it on every push to main. Repo Settings → Pages → Source must be "GitHub Actions". Pages can't send COOP/COEP headers, so `tools/pages.js` also ships `tools/coi-serviceworker.js`: on the first visit it installs itself as the site's service worker and reloads once, and from then on it adds the headers to the site's responses, so the page is cross-origin isolated and runs the cell pass on its worker pool. A browser where that doesn't take runs the serial path (same results). The font stylesheet is loaded `crossorigin` so it still loads under `require-corp`.
 
 Cloudflare Pages: builds with the same `node tools/pages.js _site`; `tools/_headers` is copied into the output and makes Cloudflare send COOP/COEP, so the worker pool runs there. Setup steps: `docs/cloudflare-pages.md`.
 
@@ -19,11 +19,13 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   support cookoff conduct melt groundwater dunes windfire channel
                               #   grass compete seasonfire ... widen (E8) ... landslide frost beams (R5)
                               #   scrub cactus reeds biomes (R6)
-                              #   nutrients (R7) vigour
+                              #   nutrients (R7) vigour narrow (N0)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
 node tools/perf.js [seed]     # generates the page's world (Sim.WORLD, mid-world) and times step() and render
+node tools/steady.js [seed] [frames] [warm]   # the step once a new world has settled (perf.js includes its first, all-awake ticks)
+node tools/prof.js [seed] [frames]   # the step split by pass (cell pass, soil, air, waves, wind, trees, ...)
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
 BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
 OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
@@ -72,9 +74,10 @@ node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, bi
 
 ## Sky
 
-- The page's grid is `Sim.WORLD`, 960×640. The land is laid out in the bottom 480 rows of any grid (`LAND_H`); the `g.top` rows
-  above it are extra sky (160 here), so a 480-row grid generates the same land it always did, and the 640-row world is that land
-  shifted down under more sky. Terrain noise, the climate's lapse rate (`skyY`) and the scenario box (`BOX`, at the bottom) all
+- The page's grid is `Sim.WORLD`, 960×960 (N0; it was 960×640, then 1280×640). The land is laid out in the bottom 640 rows of
+  any grid (`LAND_H`); the `g.top` rows above it are extra sky (320 here). The hills stand as in a 480-row land (`SURF_H`) and the
+  ground goes on down under them, so a 480-row grid generates the same land it always did, and the 960-row world is the same
+  hills shifted down under more sky, over deeper ground (the underground layers, caves, oil, ice veins and lava, stretch to fill it). Terrain noise, the climate's lapse rate (`skyY`) and the scenario box (`BOX`, at the bottom) all
   sit relative to the land.
 - Weather was not retuned: thermals, cloud bases and rain are as before, and the extra sky gets higher cloud layers on cool nights
   that clear by day (`validate.js clouds` measures both).
@@ -88,8 +91,9 @@ node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, bi
   (`validate.js precip`), the share of what reaches the ground as snow went from 65% to 7% in early spring and from 32% to 0
   in late autumn; winter still snows all the way down. The cloud-base check is now judged per snapshot (bases rise and fall with the air from day to day).
 - The view is 320×240 (4:3); in a scenario it shows the box with 40 rows of sky above it.
-- Saves from the 480-row world load into the taller one with the sky added on top (cells, trees, vapour and stored regions shifted
-  down; `validate.js sky`).
+- Saves from shorter worlds load into the taller one with the sky added on top and the ground they didn't have filled in under
+  them as rock (cells, trees, vapour and stored regions shifted down; `validate.js sky`). Saves now end with the rows of land they
+  hold; older ones held 480.
 
 ## Rough edges fixed
 
@@ -344,3 +348,28 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   in the open reach 60 by age ~60. The trees a new world grows at the start drink its fresh humus, so they come out about
   as big as before. Perf A/B on the same year-old save: tick p50 10.8 vs 10.1 ms. `nutrients`' burnt-meadow check now sums
   four plots: one plot passed with under a quarter of the ash left by luck (main leaves 88 of 334 over the four; this build 89).
+
+## Taller, narrower map and a faster tick (N0 + N1)
+
+- The window is 960×960 (was 1280×640) on a world 6400 wide (was 12800): 320 more rows in all, 160 of them sky over the hills
+  and 160 of deeper ground. The page starts in the middle (window at 2560) with the near desert just east of it.
+- Old saves: a save from the 1280-wide window loads into one of its own width, which keeps its left 960 columns and puts the
+  last 320 into the store as a region (`Grid.narrow`; a flat world or a scenario just loses them), so walking right brings
+  them back. Generated worlds line their land up with the land here; flat worlds and scenarios line up their bottoms, so the
+  scenario box lands where `BOX` now is (`validate.js narrow`, `sky`, `widen`).
+- Sleeping, tightened (measured with `tools/prof.js` and a census of what kept each awake block awake):
+  - Heat lane: a block woken only by heat flowing (`Grid.warm`, dirty 2) steps one tick in `LANE` (4), staggered across blocks,
+    taking four ticks of heat at once, implicitly in its own temperature so the big step can't overshoot. Anything else that
+    wakes it puts it back on every tick. Metal still wakes fully (a bar's warm front would crawl). Hot cave air rising
+    (convection) wakes onto the lane too.
+  - Rock needs a heat flow of 1 (`WAKEQ[STONE]`, was 0.3) to stay awake: the rock round a lava chamber has no sink and warmed
+    for ever, keeping a ring of rock a hundred cells across awake.
+  - Lazy cells (lava, molten glass, mud, snow, litter) only keep their block awake while they could still move or are moving
+    (`canSlump`, `VX0`); lava and snow never slept before.
+  - Cave gas under a roof (nothing open over it or diagonally over it) stops wandering sideways and sleeps (`gasRoom`).
+  - Oil (no surface tension) lying still on still oil only moves along the surface toward somewhere lower, and the wave pass
+    calls an oil surface a cell rough level (`SW_ROUGH`): a part-filled top row wandered for ever.
+  - Generation: the permafrost round ice veins thaws out over a few cells at its edge instead of stopping dead, and salt and
+    gunpowder in it are as cold as the rock; air masses no longer reach down into caves (`mfade` fades out `MASS_DEEP` rows
+    under `skyY`). Both were heat flowing from the first tick for thousands of ticks.
+

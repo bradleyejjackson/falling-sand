@@ -39,12 +39,16 @@ Inside a tile, rows bottom to top; within a row, sleep blocks left to right on e
 (cells too). Blocks not marked `dirty` are skipped whole. For each cell of an awake block:
 
 1. Heat: diffuse with the 4 neighbours (pairwise `KH`, divided by heat capacity; air also bleeds toward `ambRow`), hold floor
-   (`HOLDT`: burning things stay hot). If the heat gained or lost (degrees × capacity) is over `WAKEQ` (0.3; metal 0.05), wake.
+   (`HOLDT`: burning things stay hot). If the heat gained or lost (degrees × capacity) is over `WAKEQ` (0.3; metal 0.05, stone 1),
+   wake onto the heat lane (`warm`; metal wakes fully). A block on the heat lane (dirty 2) steps only on ticks where
+   `(frame + bx + by) % LANE == 0` (`LANE` 4) and then takes `LANE` ticks of heat in one implicit step:
+   v' = (v + L/cap · Σ k·T) / (1 + L/cap · Σ k), the sums over the 4 neighbours (and the ambient for air, k 0.03). On its other
+   ticks it is skipped and re-marks itself (2) in `next`. Any `wake` (1) takes it off the lane.
 2. Phase change (`phaseHeat`) only for types that can (`SLOWHEAT`, or past `HIAT`/`LOAT`, or burning oil): latent-heat melting
    and freezing, boiling, ignition, explosions. A cell that changed is done for this tick.
 3. `INERT` statics (stone, metal, brick, glass, wood, ...) stop here, after a support check if they have a `SPAN` (`stepSupport`: the
    ground's own rock settles or crumbles by its local rule; a building material with nothing bearing under it defers itself to `beam`).
-4. Empty air: hot air under cooler air swaps up (convection).
+4. Empty air: hot air under cooler air swaps up (convection); this wakes onto the heat lane.
 5. Everything else: reactions (`RXA`, fire lighting fuel, salt dissolving, acid), then by kind: powders and liquids move
    (`stepMobile`), gases (`stepGas`, `stepCloud`, `stepSteam`), statics with a life counter (`stepLife`) or behaviour
    (`stepStatic`: embers, saplings, grass).
@@ -150,8 +154,12 @@ soil (`feed`) and plant the seed in its gut behind it (grass directly, scrub thr
 A cell is only stepped if its 4×4 block was woken during the last tick. `wake(x,y)` marks every block within 2 cells of (x,y).
 What keeps a cell awake is that something calls `wake` near it: moving (`swap`, `set`), heat still flowing (step 1), a life
 counter running down, a reaction that could happen next tick (`stepReactions`, salt next to water it can dissolve into, acid
-next to what it eats), clouds, lazy liquids that could still slump. A process that waits on chance must wake itself, or it
-stops when its block sleeps. The soil pass and the air pass run on sleeping ground too. A front's storm cloud cells (cloud with life 1) keep only
+next to what it eats), clouds, lazy cells (lava, molten glass, mud, snow, litter) that could still slump or are still moving
+(`canSlump`, `VX0`). A process that waits on chance must wake itself, or it stops when its block sleeps. Things that rest:
+cave gas with nothing open over it (`gasRoom`); a cell of a liquid without surface tension lying still on still liquid of its
+kind, unless a drop lies within its spreading reach; a wave-pass surface less than `SW_LEVEL` (water, brine, acid) or
+`SW_ROUGH` (oil, 0.07: a cell rough) off level and slower than `SW_STILL`. Blocks woken only by heat flow are on the heat lane
+(see the cell pass). The soil pass and the air pass run on sleeping ground too. A front's storm cloud cells (cloud with life 1) keep only
 their own block awake, not the blocks round it (they wake those as they move): a ragged storm cloud kept half the sky awake.
 
 ## Determinism and checks
@@ -165,10 +173,13 @@ their own block awake, not the blocks round it (they wake those as they move): a
 
 ## Streaming
 
-The grid is a window of `WORLD.W`×`WORLD.H` (1280×640) onto a world `WORLD.WIDE` (12800) cells across. It moves `REGION` (320)
+The grid is a window of `WORLD.W`×`WORLD.H` (960×960) onto a world `WORLD.WIDE` (6400) cells across. It moves `REGION` (320)
 columns at a time (`shiftWindow`): the region leaving is run-length packed into `store`, the region arriving is unpacked or
 generated from world-coordinate noise, so land is the same however you got there. A save from a narrower window loads into
-the left of the window and the rest is filled from the store or generated (`Grid.widen`).
+the left of the window and the rest is filled from the store or generated (`Grid.widen`); one from a wider window loads at its
+own width and hands over its left part, the rest going into the store (`Grid.narrow`). A save from a shorter grid is shifted
+down: a generated world so its land lines up (`g.top`; ground it lacks is filled in as rock), a flat world or scenario so its
+bottom does. The land is laid out in the bottom `LAND_H` (640) rows, with the hills placed as in a `SURF_H` (480) row land.
 
 ## Speed (E8)
 

@@ -655,52 +655,80 @@ const scenarios = {
     // save and load the streamed world
     const s = g.save(), k = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); k.load(s);
     check('a streamed world saves and loads', k.ox === g.ox && k.worldW === 7680 && k.store.size === g.store.size && k.trees.length === g.trees.length, `${(s.length / 1024) | 0} KB`);
-    k.shift(-1); check('and keeps streaming after loading', k.ox === g.ox - Sim.REGION && k.trees.length > 0);
+    k.shift(-1); g.shift(-1); check('and keeps streaming after loading', k.ox === g.ox && k.trees.length === g.trees.length && k.store.size === g.store.size);
   },
   sky() {
-    // the page's world is the 480-row land with extra sky over it: same land, shifted down; a 480-row save (streamed regions,
-    // trees and vapour included) loads into it with the sky added on top
-    const { W, H } = Sim.WORLD, a = new Sim.Grid(W, 480), b = new Sim.Grid(W, H), dy = b.top;
-    Sim.generate(a, 4242, 7680, 3200); Sim.generate(b, 4242, 7680, 3200);
-    let same = 0, n = 0; for (let y = 0; y < 480; y++) for (let x = 0; x < W; x++) { const i = a.idx(x, y); if (a.owner[i] || b.owner[b.idx(x, y + dy)]) continue; n++; if (a.type[i] === b.type[b.idx(x, y + dy)]) same++; }
+    // the page's world is the 480-row land with more sky over it and more ground under it: the same hills, shifted down, in the
+    // same climate; a 480-row save (streamed regions, trees and vapour included) loads into it shifted down, with rock under it
+    const { W, H } = Sim.WORLD, a = new Sim.Grid(W, 480), b = new Sim.Grid(W, H), dy = b.top, deep = H - dy - 480;
+    const sa = Sim.generate(a, 4242, 7680, 3200), sb = Sim.generate(b, 4242, 7680, 3200);
+    let same = 0, n = 0; for (let x = 0; x < W; x++) for (let y = 0; y <= sa[x] + 8; y++) { const i = a.idx(x, y); if (a.owner[i] || b.owner[b.idx(x, y + dy)]) continue; n++; if (a.type[i] === b.type[b.idx(x, y + dy)]) same++; }
     let skyEmpty = true; for (let i = 0; i < dy * W; i++) if (b.type[i] !== E && !b.owner[i]) skyEmpty = false;
-    console.log(`  ${dy} rows of extra sky; the land matches the 480-row world on ${same}/${n} non-tree cells`);
-    check('the taller world is the same land with sky above it', dy === H - 480 && skyEmpty && same === n);
+    let rock = 0; for (let i = (H - 3) * W; i < H * W; i++) if (b.type[i] === STONE) rock++;
+    console.log(`  ${dy} rows of extra sky and ${deep} of extra ground; the hills and topsoil match the 480-row world on ${same}/${n} non-tree cells`);
+    check('the taller world is the same hills, with more sky above and deeper ground below', dy > 160 && deep > 0 && skyEmpty && same === n && sb.every((v, x) => v === sa[x] + dy) && rock === 3 * W);
     check('and keeps the same climate at the same height above the land', Math.abs(a.ambAt(200) - b.ambAt(200 + dy)) < 1e-9);
     run(a, 200); a.shift(1); a.shift(1); run(a, 60);
     // (compared with the same save loaded at its own size: loading redraws trees, which may differ by a cell or two from the live world)
     const s = a.save(), k = new Sim.Grid(W, H), k0 = new Sim.Grid(W, 480); k.load(s); k0.load(s);
+    const under = g => { for (let i = (dy + 480) * W; i < H * W; i++) if (g.type[i] !== STONE) return false; return true; };
     let ok = 0; for (let i = 0; i < k0.type.length; i++) if (k0.type[i] === k.type[i + dy * W]) ok++;
     const hum = Math.abs(k0.hum[10 * a.AW + 7] - k.hum[(10 + dy / Sim.AC) * k.AW + 7]) < 0.01;
-    check('a save from the 480-row world loads into the taller one, shifted down', ok === k0.type.length && hum && k.trees.length === k0.trees.length && k.trees.every((t, j) => t.y === k0.trees[j].y + dy), `${ok}/${k0.type.length} cells`);
+    check('a save from the 480-row world loads into the taller one, shifted down, with rock under it', ok === k0.type.length && under(k) && hum && k.trees.length === k0.trees.length && k.trees.every((t, j) => t.y === k0.trees[j].y + dy), `${ok}/${k0.type.length} cells`);
+    const k1 = new Sim.Grid(W, H); k1.load(s.split('|').slice(0, -1).join('|'));   // (from before saves said how deep their land is)
+    let ok1 = 0; for (let i = 0; i < k.type.length; i++) if (k.type[i] === k1.type[i]) ok1++;
+    check('so does one saved before saves said how deep the land is', ok1 === k.type.length);
     k.shift(-1); k0.shift(-1); ok = 0; for (let i = 0; i < k0.type.length; i++) if (k0.type[i] === k.type[i + dy * W]) ok++;
-    check('and its stored regions come back shifted down too', k.ox === a.ox - Sim.REGION && ok === k0.type.length && k.trees.length === k0.trees.length, `${ok}/${k0.type.length} cells`);
+    check('and its stored regions come back shifted down too', k.ox === a.ox - Sim.REGION && ok === k0.type.length && under(k) && k.trees.length === k0.trees.length, `${ok}/${k0.type.length} cells`);
   },
   widen() {
-    // E8: the window grew from 960 to Sim.WORLD.W. A save from the 960-wide window loads into its left part, and the rest of the
-    // window comes from the world it was in: regions the save had stored come back out of the store, the others are generated
-    const { W, H } = Sim.WORLD, R = Sim.REGION;
-    const a = new Sim.Grid(960, H); Sim.generate(a, 4242, 7680, 3200); run(a, 120);
+    // E8: the window grew. A save from a narrower window loads into its left part, and the rest of the window comes from the world
+    // it was in: regions the save had stored come back out of the store, the others are generated
+    const { W, H } = Sim.WORLD, R = Sim.REGION, W0 = W - R;
+    const a = new Sim.Grid(W0, H); Sim.generate(a, 4242, 7680, 3200); run(a, 120);
     const fresh = new Sim.Grid(W, H); Sim.generate(fresh, 4242, 7680, a.ox);
-    const s = a.save(), k = new Sim.Grid(W, H), k0 = new Sim.Grid(960, H); k.load(s); k0.load(s);   // (against the save loaded at its own size: loading redraws trees)
-    let left = 0, n = 0; for (let y = 0; y < H; y++) for (let x = 0; x < 960; x++) { const i = y * 960 + x, j = y * W + x; if (k0.owner[i] || k.owner[j]) continue; n++; if (k0.type[i] === k.type[j]) left++; }   // (trees just over the old edge reach back across it)
-    let right = 0, m = 0; for (let y = 0; y < H; y++) for (let x = 960; x < W; x++) { const j = y * W + x; if (fresh.owner[j] || k.owner[j]) continue; m++; if (fresh.type[j] === k.type[j]) right++; }
+    const s = a.save(), k = new Sim.Grid(W, H), k0 = new Sim.Grid(W0, H); k.load(s); k0.load(s);   // (against the save loaded at its own size: loading redraws trees)
+    let left = 0, n = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W0; x++) { const i = y * W0 + x, j = y * W + x; if (k0.owner[i] || k.owner[j]) continue; n++; if (k0.type[i] === k.type[j]) left++; }   // (trees just over the old edge reach back across it)
+    let right = 0, m = 0; for (let y = 0; y < H; y++) for (let x = W0; x < W; x++) { const j = y * W + x; if (fresh.owner[j] || k.owner[j]) continue; m++; if (fresh.type[j] === k.type[j]) right++; }
     const hum = Math.abs(k0.hum[30 * k0.AW + 50] - k.hum[30 * k.AW + 50]) < 0.01;
-    console.log(`  a 960-wide save in the ${W}-wide window: its own cells match on ${left}/${n}; the land made to widen it matches land made in place on ${(100 * right / m).toFixed(2)}%`);
+    console.log(`  a ${W0}-wide save in the ${W}-wide window: its own cells match on ${left}/${n}; the land made to widen it matches land made in place on ${(100 * right / m).toFixed(2)}%`);
     check('a narrower save loads into the left of the window', left === n && hum && k.ox === a.ox);
     check('and the window is filled out with the same world', right / m > 0.995 && k.worldW === 7680);
     // shifting left stores the region just right of the window (as it was, after a minute of play): the widened window takes it back
     a.shift(-1); run(a, 30);
-    const key = (a.ox + 960) / R, rec = a.store.get(key), k2 = new Sim.Grid(W, H); k2.load(a.save());
+    const key = (a.ox + W0) / R, rec = a.store.get(key), k2 = new Sim.Grid(W, H); k2.load(a.save());
     const unrle = r => { let len = 0; for (let p = 1; p < r.length; p += 2) len += r[p]; const o = new Uint16Array(len); for (let p = 0, q = 0; p < r.length; p += 2) { o.fill(r[p], q, q + r[p + 1]); q += r[p + 1]; } return o; };
     const ty = unrle(Uint16Array.from(rec.type)); let same = 0, c = 0;
-    for (let y = 0; y < H; y++) for (let x = 0; x < R; x++) { const j = y * W + 960 + x; if (k2.owner[j]) continue; c++; if (ty[y * R + x] === k2.type[j]) same++; }
+    for (let y = 0; y < H; y++) for (let x = 0; x < R; x++) { const j = y * W + W0 + x; if (k2.owner[j]) continue; c++; if (ty[y * R + x] === k2.type[j]) same++; }
     console.log(`  with that region stored: ${a.store.size} stored -> ${k2.store.size}; it comes back matching on ${same}/${c} cells`);
     check('a region the save had stored comes back out of the store', !k2.store.has(key) && k2.store.size === a.store.size - 1 && same === c);
     // a flat world (not generated) carries its last column across
-    const f = new Sim.Grid(960, H), top = Sim.flat(f), fk = new Sim.Grid(W, H); fk.load(f.save());
+    const f = new Sim.Grid(W0, H), top = Sim.flat(f), fk = new Sim.Grid(W, H); fk.load(f.save());
     check('a narrower flat world loads widened, ground and all', fk.type[fk.idx(W - 1, top + 30)] === STONE && fk.type[fk.idx(W - 1, top - 20)] === E && fk.worldW === W);
     k.step(); k2.step(); fk.step();
+  },
+  narrow() {
+    // N0: the window narrowed (1280 -> 960) as the world got taller. A save from a wider window loads its left part into the window,
+    // and the columns past the window's edge go into the store as regions of the world, to come back when the window walks over them
+    const { W, H } = Sim.WORLD, R = Sim.REGION, WB = W + R;
+    const a = new Sim.Grid(WB, H); Sim.generate(a, 4242, 7680, 3200); run(a, 120);
+    const s = a.save(), k = new Sim.Grid(W, H), k0 = new Sim.Grid(WB, H); k.load(s); k0.load(s);   // (against the save loaded at its own size)
+    let left = 0, n = 0; for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * WB + x, j = y * W + x; if (k0.owner[i] || k.owner[j]) continue; n++; if (k0.type[i] === k.type[j]) left++; }
+    const stored = k.store.has((a.ox + W) / R), trees = k.trees.length + [...k.storedTrees.keys()].length;
+    console.log(`  a ${WB}-wide save in the ${W}-wide window: its left part matches on ${left}/${n} cells; ${k.store.size} regions stored; trees ${k.trees.length} here + ${k.storedTrees.size} stored of ${k0.trees.length + k0.storedTrees.size}`);
+    check('a wider save loads its left part into the window', left === n && k.ox === a.ox && k.worldW === 7680 && Math.abs(k.clock - a.clock) < 1);
+    check('and stores the rest as a region, trees and all', stored && trees === k0.trees.length + k0.storedTrees.size);
+    k.shift(1); let back = 0, m = 0;
+    for (let y = 0; y < H; y++) for (let x = W - R; x < W; x++) { const i = y * WB + x + R, j = y * W + x; if (k0.owner[i] || k.owner[j]) continue; m++; if (k0.type[i] === k.type[j]) back++; }
+    check('which comes back as it was when the window walks over it', back === m, `${back}/${m} cells`);
+    // an old window, 1280 wide and 480 tall (no extra sky): narrowed and shifted down in one go
+    const o = new Sim.Grid(WB, 480); Sim.generate(o, 4242, 7680, 3200); const so = o.save(), ko = new Sim.Grid(W, H); ko.load(so);
+    let ok = 0, c = 0; for (let y = 0; y < 480; y++) for (let x = 0; x < W; x++) { const i = y * WB + x, j = (y + ko.top) * W + x; if (o.owner[i] || ko.owner[j]) continue; c++; if (o.type[i] === ko.type[j]) ok++; }
+    check('an old 480-row save from a wider window loads narrowed and shifted down', ok === c && ko.store.has((o.ox + W) / R), `${ok}/${c} cells`);
+    // a flat world (not generated) just loses the columns past the window
+    const f = new Sim.Grid(WB, H), top = Sim.flat(f), fk = new Sim.Grid(W, H); fk.load(f.save());
+    check('a wider flat world loads cut to the window', fk.type[fk.idx(W - 1, top + 30)] === STONE && fk.type[fk.idx(W - 1, top - 20)] === E && fk.worldW === W && fk.store.size === 0);
+    k.step(); ko.step(); fk.step();
   },
   // ---------------- E2: heat conduction, melting and freezing ----------------
   conduct() {
@@ -1099,7 +1127,7 @@ const scenarios = {
       let x0 = 999, x1 = -1; for (let i = 0; i < g.type.length; i++) if (g.type[i] === GLASS) { x0 = Math.min(x0, i % g.W); x1 = Math.max(x1, i % g.W); }
       const c = census(g, Sim.EL);
       console.log(`  200 cells of molten glass on cold stone: all set by ${set < 0 ? 'never' : (set / 60).toFixed(0) + ' s'}, ${c.Glass || 0} glass spread over ${x1 - x0 + 1} columns`);
-      check('molten glass sets into glass within 40 s', set > 0 && (c.Glass || 0) >= 190);
+      check('molten glass sets into glass within 40 s', set > 0 && (c.Glass || 0) + (c.Rubble || 0) >= 195 && (c.Glass || 0) >= 175);   // (a few spans of the new glass break off as rubble: seed luck)
       check('molten glass runs before it sets (wider than the pour)', x1 - x0 + 1 >= 24, `${x1 - x0 + 1} cols`);
       const h = box(80, 60); for (let x = 10; x < 70; x++) h.set(h.idx(x, 53), GLASS);
       for (let x = 10; x < 70; x++) for (let y = 43; y < 53; y++) h.set(h.idx(x, y), LAVA);
