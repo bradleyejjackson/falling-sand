@@ -121,7 +121,7 @@ const scenarios = {
     const Y = Sim.YEAR, rows = [], leafAt = {}, clim = {};
     run(g, Y, Y / 32, f => {
       const c = census(g, Sim.EL);
-      c.Plant = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === PLANT && g.owner[i]) c.Plant++;   // leaves only, not grass
+      c.Plant = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === PLANT && g.owner[i] && g.life[i] !== 2) c.Plant++;   // broadleaf leaves only, not grass or a conifer's needles
       leafAt[g.seasonName] = Math.max(leafAt[g.seasonName] || 0, c.Plant || 0);
       clim[g.seasonName] = (clim[g.seasonName] || []).concat(g.climate);
       rows.push(`${g.seasonName.padEnd(6)} ${(g.yearPhase).toFixed(2)} climate ${g.climate.toFixed(1).padStart(5)} snow ${String(c.Snow || 0).padStart(5)} leaves ${String(c.Plant || 0).padStart(5)} litter ${String(c.Litter || 0).padStart(4)} trees ${g.trees.length} cloud ${c.Cloud || 0} water ${c.Water || 0}`);
@@ -130,7 +130,7 @@ const scenarios = {
     const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
     console.log('  mean climate offset: ' + Object.entries(clim).map(([k, v]) => `${k} ${avg(v).toFixed(1)}`).join(', '));
     check('summer is warmer than winter by 10+ degrees', avg(clim.Summer) - avg(clim.Winter) > 10);
-    check('trees have fewer leaves in winter than in summer', (leafAt.Winter || 0) < 0.5 * (leafAt.Summer || 1), `${leafAt.Winter} vs ${leafAt.Summer}`);
+    check('broadleaf trees have fewer leaves in winter than in summer', (leafAt.Winter || 0) < 0.5 * (leafAt.Summer || 1), `${leafAt.Winter} vs ${leafAt.Summer}`);
   },
   snow() {
     // clouds snow in winter and rain in summer; snow on a cold hilltop lasts the winter and melts in spring
@@ -1761,6 +1761,70 @@ const scenarios = {
     }
   },
   // ---------------- X1: devices (spout, drain, heater, cooler, fan) ----------------
+  // ---------------- N4: conifers, the treeline and succession ----------------
+  conifers() {
+    // ground `d` rows over the reference level (so as cold as a hill that high): soil 20 deep at nutrients n, rock under it
+    const hill = (W, d, n, seed = 7) => {
+      Sim.reseed(seed); const H = 300, g = new Sim.Grid(W, H), gy = typeof d === 'function' ? null : g.skyY - d; g.windHold = 0;
+      for (let x = 0; x < W; x++) { const top = gy ?? g.skyY - d(x); for (let y = top + 1; y < H; y++) { const i = g.idx(x, y); if (y > top + 20) g.set(i, STONE, g.ambAt(y)); else { g.set(i, DIRT, g.ambAt(y)); g.life[i] = (n << 8) | 160; } } }
+      g.initAir(); return g;
+    };
+    const water = (g, f) => { if (f % 64) return; for (let i = f % 3; i < g.type.length; i += 3) if (g.type[i] === DIRT && (g.life[i] & 255) < 120) g.life[i] = (g.life[i] & 0xff00) | 160; };
+    const grow = (g, x, con, n = 260) => { const sy = (() => { let y = 0; while (g.type[g.idx(x, y + 1)] === E) y++; return y; })(); g.plantTree(x, sy, con); const t = g.trees[g.trees.length - 1]; t.water = 20;
+      for (let k = 0; k < n; k++) { t.water = Math.max(t.water, 5); if (!g.growTree(t, true)) break; } return t; };
+    const shape = (g, t) => { let top = t.y, x0 = t.x, x1 = t.x, leaves = 0; for (const [i, c] of t.cells) { if (t.segs[c >> 1].root || g.type[i] === Sim.ids.ROOT) continue; top = Math.min(top, (i / g.W) | 0); x0 = Math.min(x0, i % g.W); x1 = Math.max(x1, i % g.W); if ((c & 1) && g.type[i] === PLANT) leaves++; } return { h: t.y - top + 1, w: x1 - x0 + 1, leaves }; };
+    // the treeline: seeds of both kinds sown on a valley floor (30 rows up), an upland (62) and a summit (80)
+    {
+      const P = 80, ds = [30, 62, 80], g = hill(3 * P, x => ds[(x / P) | 0], 80);
+      g.clock = Sim.YEAR * 0.2; g.updateClimate();
+      for (let k = 0; k < 3; k++) for (let n = 0; n < 8; n++) { const x = k * P + 6 + n * 9, i = g.idx(x, g.skyY - ds[k] - 1); g.set(i, SEED); g.life[i] = 1 | (n % 2 ? Sim.CONE : 0); }
+      run(g, Sim.YEAR / 4, 1, f => water(g, f));
+      const got = ds.map((d, k) => ({ b: g.trees.filter(t => !t.con && ((t.x / P) | 0) === k).length, c: g.trees.filter(t => t.con && ((t.x / P) | 0) === k).length, w: g.warmth(g.skyY - d - 1) }));
+      console.log('  ' + got.map((r, k) => `${['valley', 'upland', 'summit'][k]} (${r.w.toFixed(1)}°): ${r.b} broadleaf, ${r.c} conifers`).join('; '));
+      check('in the valley both kinds sprout', got[0].b >= 2 && got[0].c >= 2, `${got[0].b} and ${got[0].c}`);
+      check('on the upland only conifers sprout', got[1].b === 0 && got[1].c >= 2, `${got[1].b} broadleaf, ${got[1].c} conifers`);
+      check('over the treeline nothing sprouts', got[2].b + got[2].c === 0);
+    }
+    // a conifer is a narrow spire that keeps its needles over winter; a broadleaf spreads and drops its leaves
+    {
+      const g = hill(200, 30, 80); g.clock = Sim.YEAR * 0.45; g.updateClimate();
+      const b = grow(g, 50, false), c = grow(g, 150, true), sb = shape(g, b), sc = shape(g, c);
+      g.clock = Sim.YEAR * 0.85; g.updateClimate(); run(g, 1200);
+      const wb = shape(g, b), wc = shape(g, c);
+      console.log(`  summer: broadleaf ${sb.h} tall ${sb.w} wide ${sb.leaves} leaves, conifer ${sc.h} tall ${sc.w} wide ${sc.leaves} needles; winter: ${wb.leaves} leaves, ${wc.leaves} needles`);
+      check('a conifer is a spire (at most 0.6 as wide as it is tall, and 0.6 of a broadleaf\'s spread for its height)', sc.w / sc.h <= 0.6 && sc.w / sc.h <= 0.6 * sb.w / sb.h && sc.h >= 20, `${(sc.w / sc.h).toFixed(2)} vs ${(sb.w / sb.h).toFixed(2)}`);
+      check('a conifer keeps its needles over winter and a broadleaf drops its leaves', wc.leaves >= 0.8 * sc.leaves && wb.leaves <= 0.3 * sb.leaves, `${wc.leaves}/${sc.leaves} vs ${wb.leaves}/${sb.leaves}`);
+    }
+    // who wins where: on rich soil in a warm valley the broadleaf outgrows a conifer; on a cold upland the conifer the broadleaf
+    {
+      const sz = (d, n) => { const g = hill(200, d, n); g.clock = Sim.YEAR * 0.45; g.updateClimate(); const b = grow(g, 50, false, 400), c = grow(g, 150, true, 400); for (const t of [b, c]) { t.soil = t.fert; } return [shape(g, b).h, shape(g, c).h]; };
+      const [vb, vc] = sz(30, 200), [ub, uc] = sz(62, 80);
+      console.log(`  rich valley: broadleaf ${vb} tall, conifer ${vc}; upland: broadleaf ${ub}, conifer ${uc}`);
+      check('on rich valley soil the broadleaf grows a quarter taller than the conifer', vb >= 1.25 * vc, `${vb} vs ${vc}`);
+      check('on the cold upland the conifer grows half as tall again as the broadleaf', uc >= 1.5 * ub, `${uc} vs ${ub}`);
+    }
+    // fire: a crown fire runs along a stand of conifers and kills them, and their cones seed the burn; broadleaf crowns burn slower
+    {
+      const stand = con => { const g = hill(160, 30, 80, 3); g.clock = Sim.YEAR * 0.5; g.updateClimate(); const ts = []; for (let k = 0; k < 6; k++) ts.push(grow(g, 30 + k * 10, con, 200));
+        const t0 = ts[0]; let n = 0; for (const [i, c] of t0.cells) if ((c & 1) && n++ < 12) g.set(i, FIRE); g.wakeAll();
+        run(g, 1800); const dead = ts.filter(t => t.dead || t.cones || !g.trees.includes(t)).length;
+        run(g, 2400); let seeds = 0; for (let i = 0; i < g.type.length; i++) if ((g.type[i] === SEED || g.type[i] === TIP) && (g.life[i] & Sim.CONE)) seeds++;
+        return { dead, seeds: seeds + g.trees.filter(t => t.con && !ts.includes(t)).length }; };
+      const c = stand(true), b = stand(false);
+      console.log(`  conifer stand: ${c.dead} of 6 killed, ${c.seeds} cone seeds and seedlings after; broadleaf stand: ${b.dead} of 6 killed`);
+      check('a crown fire kills most of a conifer stand, and more of it than of a broadleaf one', c.dead >= 4 && c.dead > b.dead, `${c.dead} vs ${b.dead}`);
+      check('burnt conifers seed the ground after the fire', c.seeds >= 6, `${c.seeds}`);
+    }
+    // a new world: no tree over its kind's line, and the cold sites go to conifers
+    {
+      let bad = 0, n = 0; const cold = [], warm = [];
+      for (const ox of [0, 1920, 3840, 5440]) { const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345, Sim.WORLD.WIDE, ox); n += g.trees.length;
+        for (const t of g.trees) { if (g.hardy(t.con, t.y) < 0.25) bad++; if (g.hardy(false, t.y) < 0.5) cold.push(t); else if (g.hardy(false, t.y) >= 1) warm.push(t); } }
+      const share = a => a.length ? a.filter(t => t.con).length / a.length : 0;
+      console.log(`  ${n} trees in four windows: ${cold.length} on cold ground (${(share(cold) * 100).toFixed(0)}% conifers), ${warm.length} in the warm (${(share(warm) * 100).toFixed(0)}%)`);
+      check('a new world has no tree over its treeline, conifers on the cold ground and broadleaf in the warm', bad === 0 && share(cold) >= 0.75 && share(warm) <= 0.35, `${bad} over the line, ${share(cold).toFixed(2)} vs ${share(warm).toFixed(2)}`);
+    }
+  },
   devices() {
     const { SPOUT, DRAIN, HEATER, COOLER, FAN, METAL, ICE, STEAM, SMOKE, GUNP } = Sim.ids;
     const box = (W, H) => { const g = new Sim.Grid(W, H); for (let y = H - 4; y < H; y++) for (let x = 0; x < W; x++) g.set(g.idx(x, y), STONE, g.ambAt(y)); return g; };

@@ -29,6 +29,7 @@ BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exact
 OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
 OX=0 node tools/soil.js [seed] [seasons]   # R7: topsoil and subsoil nutrients by cover (forest, meadow, scrub, bare), each season
 node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, binned by sun and soil
+node tools/forest.js [seed] [seasons]   # N4: broadleaf trees and conifers each season, by site warmth (valley, slope, upland, high)
 ```
 
 ## Engine (stage 4)
@@ -395,3 +396,32 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
 - Perf (this container, `steady.js`, alternating runs): main 9.97 / 9.04 ms, this build 11.01 / 8.85 ms (seeds 12345 / 7),
   the same world either way and within run-to-run noise. A view with two spouts, a drain, a heater, a cooler and a fan
   running in it: 11.41 / 10.24 ms against 10.26 / 11.51 without, again noise.
+
+
+## Conifers, the treeline and succession (N4)
+
+- A tree entity now has a kind: `t.con` marks a conifer (saved in the tree record; old saves load as broadleaf). A seed's kind is
+  `Sim.CONE` (bit 8) in its life, so a conifer's seeds grow conifers; birds and rabbits carry broadleaf seed. The sapling
+  marker (Tip) carries the bit too. The brush rack has a Cone button beside Seed (it comes with Seed's unlock, sandbox only).
+- Shape (`Grid.growConifer`): one straight trunk; whorls of two drooping branches added 2.5 cells apart just under the leader,
+  each reaching out 1 + 0.33 × its distance below the top, so the crown is a spire; past `CON_TIERS` whorls, or low on a tall
+  trunk, the lowest whorls die off and fall as litter. Needles (leaf cells with life 2, drawn dark blue-green) run along every
+  branch and close round the trunk through the live crown. Conifers are evergreen (they only shed under drought).
+- Site warmth (`Grid.warmth(y)`): the yearly mean air temperature at row y, the lapse rate without the season. `Grid.hardy(con,y)`
+  is 1 down to `BROAD_FULL` (11.5°) or `CON_FULL` (9.5°) and 0 at `BROAD_LINE` (9.5°) or `CON_LINE` (8°). It multiplies the
+  growth gate, stunts vigour (0.4 + 0.6 × hardy), and a seed only sprouts where it is over 0.25. On generated worlds that puts
+  broadleaf trees below about 62 rows over the reference level, conifers up to about 75, and nothing over that.
+- Conifers grow from earlier in spring to later in autumn (`growthCold`), mind shade (`CON_SUN_LO` 0.5) and poor soil less, get
+  little from rich soil (`CON_SOIL_HI`), shoot up while young (`CON_YOUNG`), sprout on soil damp to `CON_DAMP` (30, against 45),
+  stand twice the drought, and fare badly in warm valleys (past `CON_HOT` 13° vigour falls and they live 0.6 as long).
+- Fire: needles catch at `CON_FUEL` (0.1, leaves 0.06) and a conifer that loses half its needles to fire dies. Its cones then
+  open: once the ground has cooled (`CON_OPEN` growth steps, then retried while it still burns) `CON_CONES` seeds fall within
+  10 columns. Conifer seed looks through 4 cells of ash, charcoal or litter to the soil and lies dormant 4 times as long.
+- Generation picks each tree's kind by its site: a conifer for sure where it is too cold for a broadleaf, likelier toward the
+  dry country, `CON_PIONEER` (12%) in the warm valleys; stands are denser up the hills and absent over the conifer line.
+- Census: `conifers` and `broadleaf` counts, and a fourth chart panel, Trees. The inspector says broadleaf or conifer, leaf or needles.
+- Tests: `validate.js conifers` (10 checks: sprouting by altitude, spire shape, evergreen, who outgrows whom in a rich valley and
+  on an upland, crown fire and cone seeding, a new world's treeline); `seasons` now counts broadleaf leaves only; `ui.js` sows a cone.
+- Long runs (`tools/forest.js`, 4 years): big lightning and dry-season wildfires kill most trees on main as well. Seed 7 ends
+  with 7 trees here against 6 on main, seed 99 with 5 against 5, seed 12345 with 6 against 18. The conifers hold the uplands,
+  but four years is too short to see broadleaf trees take valleys back from pioneer conifers.
