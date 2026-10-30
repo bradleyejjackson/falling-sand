@@ -1673,6 +1673,93 @@ const scenarios = {
       check('grasshoppers lay eggs in autumn, die in the frost, and hatch in spring', log[0][1] >= 10 && log[1][0] === 0 && log[1][1] >= 5 && log[2][0] >= 5);
     }
   },
+  // ---------------- N3: foxes and birds ----------------
+  predators() {
+    // a fox hunts the rabbits on a meadow and starves on an empty one; a fed fox digs a den in spring and has cubs in it; birds
+    // thin out grasshoppers, carry tree seed over water, and nest in a tall tree
+    const { RABBIT, HOPPER, FOX, BIRD, SEED, TIP } = Sim.ids;
+    const meadow = (g, x0, x1, sy, sap = 220) => { for (let x = x0; x < x1; x++) for (let k = 0; k < 2; k++) { const i = g.idx(x, sy - k); if (g.type[i] === E) { g.set(i, PLANT); g.life[i] = (sap << 8) | 1; } } };
+    const loose = (g, t, xs, sy, life) => { for (const x of xs) { let y = sy; while (g.type[g.idx(x, y)] !== E) y--; const i = g.idx(x, y); g.set(i, t); if (life !== undefined) g.life[i] = life; } };
+    const count = (g, t, x0 = 0, x1 = g.W) => { let n = 0; for (let y = 0; y < g.H; y++) for (let x = x0; x < x1; x++) { const i = g.idx(x, y); if (g.type[i] === t && !((t === HOPPER || t === BIRD) && g.life[i] & Sim.EGG) && !(t === PLANT && g.owner[i])) n++; } return n; };
+    const at = (g, p) => { g.clock = Sim.YEAR * p; g.updateClimate(); };
+    // hunting: 12 rabbits on a meadow, with a hungry fox and without, 4 min of summer (2 seeds)
+    {
+      const left = { 0: 0, 1: 0 }; let fed = 0;
+      for (const n of [0, 1]) for (const seed of [3, 4]) {
+        const W = 320, H = 60, g = plot(W, H, 30, 150, seed), sy = H - 31; at(g, 0.3); g.windHold = 0;
+        meadow(g, 0, W, sy);
+        loose(g, RABBIT, Array.from({ length: 12 }, (_, k) => 10 + k * 25), sy, 200 | (3 << 8));
+        if (n) loose(g, FOX, [160], sy, 100 | (3 << 8));
+        run(g, 4 * MIN);
+        left[n] += count(g, RABBIT);
+        if (n) for (let i = 0; i < g.type.length; i++) if (g.type[i] === FOX) fed = Math.max(fed, g.life[i] & 255);
+      }
+      console.log(`  12 rabbits on a meadow for 4 min (2 seeds): ${left[0]} left without a fox, ${left[1]} with one; the fox's energy 100 -> ${fed}`);
+      check('a fox hunts rabbits down', left[1] <= left[0] - 4 && fed > 100, `${left[1]} vs ${left[0]}`);
+    }
+    // starving: a fox on a meadow with no rabbits
+    {
+      const W = 200, H = 60, g = plot(W, H, 30, 150), sy = H - 31; at(g, 0.3); g.windHold = 0;
+      meadow(g, 0, W, sy); loose(g, FOX, [100], sy, 60 | (3 << 8));
+      run(g, 0.5 * MIN); const early = count(g, FOX);
+      run(g, 2 * MIN);
+      console.log(`  a fox with no rabbits: ${early} alive after 30 s, ${count(g, FOX)} after 150 s`);
+      check('a fox with nothing to hunt starves', early === 1 && count(g, FOX) === 0);
+    }
+    // a den: a fed grown fox on a meadow in spring digs into the dirt and has cubs there (3 seeds)
+    {
+      let dens = 0, cubs = 0;
+      for (const seed of [5, 6, 7]) {
+        const W = 160, H = 60, g = plot(W, H, 30, 150, seed), sy = H - 31; at(g, 0.15); g.windHold = 0;
+        meadow(g, 0, W, sy); loose(g, FOX, [80], sy, 250 | (4 << 8));
+        let dug = false, most = 1;
+        run(g, 1.5 * MIN, 60, () => { for (let x = 0; x < W; x++) { const t = g.type[g.idx(x, sy + 1)]; if (t === E || t === FOX) dug = true; } most = Math.max(most, count(g, FOX)); });
+        if (dug) dens++; cubs += most - 1;
+      }
+      console.log(`  a fed fox in spring (3 seeds): ${dens} dug a den, ${cubs} cubs between them`);
+      check('a fed fox digs a den in spring and has cubs in it', dens >= 2 && cubs >= 2);
+    }
+    // grasshoppers: 30 on a dry summer meadow, with 8 birds and without, 90 s (2 seeds)
+    {
+      const left = { 0: 0, 8: 0 };
+      for (const n of [0, 8]) for (const seed of [3, 4]) {
+        const W = 240, H = 80, g = plot(W, H, 30, 150, seed), sy = H - 31; at(g, 0.3); g.windHold = 0;
+        meadow(g, 0, W, sy, 120); loose(g, HOPPER, Array.from({ length: 30 }, (_, k) => 4 + k * 8), sy);
+        for (let k = 0; k < n; k++) { const i = g.idx(15 + k * 30, sy - 15); g.set(i, BIRD); g.life[i] = 120 | (2 << 8); }
+        run(g, 1.5 * MIN);
+        for (let i = 0; i < g.type.length; i++) if (g.type[i] === HOPPER) left[n]++;   // (eggs too)
+      }
+      console.log(`  30 grasshoppers on a dry meadow for 90 s (2 seeds): ${left[0]} without birds, ${left[8]} with 8 birds`);
+      check('birds keep a grasshopper plague down (by a fifth or more)', left[8] <= 0.8 * left[0], `${left[8]} vs ${left[0]}`);
+    }
+    // seed over water: tree seed on bare dirt in the west, a lake 100 wide, bare damp dirt in the east; birds in the west, 4 min of summer
+    {
+      const far = { 0: 0, 6: 0 };
+      for (const n of [0, 6]) for (const seed of [3, 4]) {
+        const W = 320, H = 80, g = plot(W, H, 30, 150, seed), sy = H - 31; at(g, 0.3); g.windHold = 0;
+        for (let x = 80; x < 180; x++) for (let y = sy - 1; y < sy + 4; y++) g.set(g.idx(x, y), WATER);
+        for (let k = 0; k < 40; k++) { const i = g.idx(5 + k * 2, sy - 1); g.set(i, SEED); g.life[i] = 255; }   // (seeds that won't sprout in the 4 min)
+        for (let k = 0; k < n; k++) { const i = g.idx(10 + k * 10, sy - 12); g.set(i, BIRD); g.life[i] = 160 | (2 << 8); }
+        run(g, 4 * MIN);
+        far[n] += count(g, SEED, 185, W) + count(g, TIP, 185, W) + g.trees.filter(t => t.x >= 185).length;
+      }
+      console.log(`  tree seed east of a lake 100 wide after 4 min (2 seeds): ${far[0]} without birds, ${far[6]} with 6 birds`);
+      check('birds carry tree seed across water', far[0] === 0 && far[6] >= 2);
+    }
+    // a nest: fed birds in a tall tree in spring lay eggs, and the eggs hatch
+    {
+      const W = 160, H = 120, g = plot(W, H, 40, 160, 5), sy = H - 41; at(g, 0.1); g.windHold = 0;
+      g.plantTree(80, sy - 1); const t = g.trees[0]; Sim.reseed(9); t.water = 200;
+      for (let n = 0; n < 160; n++) { g.sketch = true; const ok = g.growTree(t, true); g.sketch = false; if (!ok) break; }
+      g.rasterTree(t);
+      let top = sy; for (const [i] of t.cells) top = Math.min(top, (i / W) | 0);
+      for (let k = 0; k < 4; k++) { const i = g.idx(70 + k * 6, top - 2); g.set(i, BIRD); g.life[i] = 250 | (2 << 8); }
+      let eggs = 0, most = 0;
+      run(g, 4 * MIN, 300, () => { let e = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === BIRD && g.life[i] & Sim.EGG) e++; eggs = Math.max(eggs, e); most = Math.max(most, count(g, BIRD)); });
+      console.log(`  4 fed birds over a tree ${sy - top} tall in spring: up to ${eggs} eggs at once, up to ${most} birds`);
+      check('birds nest in a tall tree and the eggs hatch', sy - top >= 14 && eggs >= 1 && most >= 5);
+    }
+  },
   // ---------------- X1: devices (spout, drain, heater, cooler, fan) ----------------
   devices() {
     const { SPOUT, DRAIN, HEATER, COOLER, FAN, METAL, ICE, STEAM, SMOKE, GUNP } = Sim.ids;
