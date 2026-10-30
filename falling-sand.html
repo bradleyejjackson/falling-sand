@@ -3835,7 +3835,7 @@ function pinCell(x,y){ pinned=pinned && pinned[0]===g.ox+x && pinned[1]===y ? nu
 const pct=v=>Math.round(v*100)+'%';
 const WIND_ARROWS=['→','↘','↓','↙','←','↖','↑','↗'];
 function describe(o){
-  const p=['<i style="background:'+sw(o.t)+'"></i><b>'+o.el+'</b>', 'x '+o.x+', y '+o.y, Math.round(o.temp)+'°'];
+  const p=['<i style="background:'+sw(o.t)+'"></i><b>'+(o.t===E ? 'Air' : o.el)+'</b>', 'x '+o.x+', y '+o.y, Math.round(o.temp)+'°'];
   if (o.moisture!==undefined) p.push('moisture '+pct(o.moisture));
   if (o.nutrients!==undefined) p.push('nutrients '+o.nutrients+' (growth ×'+Sim.fert(o.nutrients).toFixed(2)+')');
   if (o.tree){ const r=o.tree; p.push('tree '+r.part+': vigour ×'+r.vigour.toFixed(2)+' (sun '+pct(r.sun)+', soil ×'+r.soil.toFixed(2)+')', 'water '+Math.round(r.water)+(r.thirst ? ', thirsty '+r.thirst : ''), r.age+' growth steps'); }
@@ -3883,7 +3883,7 @@ function drawCensus(){
   if (ccv.width!==cw || ccv.height!==ch){ ccv.width=cw; ccv.height=ch; }
   const c=cctx; c.setTransform(dpr,0,0,dpr,0,0); const w=cw/dpr, h=ch/dpr;
   c.clearRect(0,0,w,h);
-  const padL=34, padR=6, gap=10, top=14, ph=(h-top-gap)/2, x0=padL, x1=w-padR;
+  const padL=34, padR=6, gap=16, top=14, ph=(h-top-gap-6)/2, x0=padL, x1=w-padR;
   const n=census.length, first=n ? census[0].clock : g.clock, last=n ? census[n-1].clock : g.clock;
   const lo=first, hi=Math.max(last, first+Sim.YEAR/2), X=t=>x0+(t-lo)/(hi-lo)*(x1-x0);   // half a year across to begin with, then it fills and scrolls
   // the seasons behind both panels, named along the top
