@@ -13,7 +13,7 @@ function suite(threads) {
   else check('without workers the page says why it runs on one thread', pool.n === 0 && pool.why === 'no workers here', pool.why);
 
   p.run(40);
-  check('stats show the season and time', /^(Spring|Summer|Autumn|Winter), day \d+, \d\d:\d\d, [+-]?\d+°$/.test(p.els.clock.textContent), p.els.clock.textContent);
+  check('stats show the season and time', /^(Spring|Summer|Autumn|Winter)( \(dry season\))?( in an? [a-z ]+)?, day \d+, \d\d:\d\d, [+-]?\d+°$/.test(p.els.clock.textContent), p.els.clock.textContent);
   check('stats show the threads', threads ? /^\d worker threads/.test(p.els.threads.textContent) : /^1 thread/.test(p.els.threads.textContent), p.els.threads.textContent);
   const names = p.created.filter(e => e.className === 'el').map(e => e.innerHTML.replace('<i></i>', ''));
   check('Dirt and Litter are in the rack', names.includes('Dirt') && names.includes('Litter'), names.join(' '));

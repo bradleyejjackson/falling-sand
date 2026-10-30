@@ -1417,6 +1417,65 @@ const scenarios = {
     const c = new Sim.Grid(W, 320); a.massX = 2468.5; c.load(a.save());
     check('the air masses are the same wherever the window is, and a save keeps them', same && c.fronts && c.massX === 2468.5);
   },
+  years() {
+    // N8: each year has a wetness that runs on from the last (droughts and wet spells come in runs), a dry year has the longer, drier
+    // dry season, more heat waves and drier air masses; scenarios and plain grids have none of it
+    const g = new Sim.Grid(64, 64); g.fronts = true;
+    const ws = [], hw = { dry: [0, 0], wet: [0, 0] };
+    for (const seed of [1, 2, 3]) { g.worldSeed = seed; for (let k = 0; k < 150; k++) {
+      let heat = 0; for (let f = 0; f < 1; f += 0.02) { g.clock = Sim.YEAR * (k + 0.86 + f); g.updateClimate(); if (g.heat > 0.5) heat = 1; }
+      g.clock = Sim.YEAR * (k + 1.5); g.updateClimate(); ws.push(g.wet); const b = g.wet < -0.25 ? hw.dry : g.wet > 0.25 ? hw.wet : null; if (b) { b[0] += heat; b[1]++; } } }
+    const m = ws.reduce((a, b) => a + b) / ws.length, sd = Math.sqrt(ws.reduce((a, b) => a + (b - m) ** 2, 0) / ws.length);
+    let ac = 0; for (let i = 1; i < ws.length; i++) ac += (ws[i] - m) * (ws[i - 1] - m); ac /= ws.length * sd * sd;
+    let run = 1, best = 1; for (let i = 1; i < ws.length; i++) { run = Math.sign(ws[i]) === Math.sign(ws[i - 1]) ? run + 1 : 1; best = Math.max(best, run); }
+    console.log(`  450 years: wetness mean ${m.toFixed(2)}, sd ${sd.toFixed(2)}, year-to-year correlation ${ac.toFixed(2)}, longest run of one sign ${best} years; heat waves in ${hw.dry[0]}/${hw.dry[1]} dry years, ${hw.wet[0]}/${hw.wet[1]} wet ones`);
+    check('wet and dry years come in runs', Math.abs(m) < 0.15 && sd > 0.4 && sd < 0.75 && ac > 0.3 && best >= 5, `sd ${sd.toFixed(2)}, r ${ac.toFixed(2)}, run ${best}`);
+    check('heat waves come mostly in dry years', hw.dry[0] / hw.dry[1] > 2 * hw.wet[0] / Math.max(1, hw.wet[1]), `${hw.dry[0]}/${hw.dry[1]} vs ${hw.wet[0]}/${hw.wet[1]}`);
+    const season = w => { g.wetHold = w; let dry = 0, t = 0; for (let f = 0; f < 1; f += 0.01) { g.clock = Sim.YEAR * (10 + f); g.updateClimate(); if (g.dryness > 0.5) dry++; t += g.climate; } g.updateMasses(false); return { dry, t: t / 100, rh: g.massH[0] }; };
+    const d = season(-1), w = season(1); g.wetHold = null;
+    console.log(`  a drought year: dry season ${d.dry}% of the year, mean ${d.t.toFixed(1)}°, air masses at ${d.rh.toFixed(2)} humidity; a wet year: ${w.dry}%, ${w.t.toFixed(1)}°, ${w.rh.toFixed(2)}`);
+    check('a drought year is longer dry, hotter and its air drier', d.dry > w.dry + 10 && d.t > w.t + 2 && d.rh < w.rh - 0.15);
+    const p = new Sim.Grid(64, 64); let flat = true; for (let k = 0; k < 40; k++) { p.clock = Sim.YEAR * k * 0.37; p.updateClimate(); flat = flat && p.wet === 0 && p.heat === 0; }
+    check('a grid without air masses keeps every year the same', flat);
+  },
+  hail() {
+    // N8: the deepest storm clouds hail in summer; the stones fall fast, kill grasshoppers, bruise grass and then melt
+    const { HOPPER, HAIL } = Sim.ids;
+    Sim.reseed(4); const W = 200, H = 200, g = new Sim.Grid(W, H); g.windHold = 0; g.lightning = true; g.clock = Sim.YEAR * 0.4; g.updateClimate();
+    for (let y = H - 30; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 4) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (40 << 8) | 120; } }
+    for (let x = 0; x < W; x++) for (let y = H - 33; y < H - 30; y++) { const i = g.idx(x, y); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+    for (let x = 62; x < 138; x += 2) g.set(g.idx(x, H - 34), HOPPER);
+    g.initAir(); for (let y = 40; y < 90; y++) for (let x = 60; x < 140; x++) g.set(g.idx(x, y), CLOUD); g.wakeAll();
+    const lying = () => { let k = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === HAIL && i + W < g.type.length && g.type[i + W] !== E && g.type[i + W] !== HAIL && Sim.EL[g.type[i + W]].kind !== 'gas') k++; return k; };   // (on something)
+    let fast = 0, peak = 0, landed = 0; run(g, 600, 1, f => { let k = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === HAIL) { k++; if (g.vy[i] >= 2) fast++; } peak = Math.max(peak, k); if (f % 30 === 0) landed = Math.max(landed, lying()); });
+    let sap = 0, n = 0; for (let x = 60; x < 140; x++) for (let y = H - 33; y < H - 30; y++) { const i = g.idx(x, y); if (g.type[i] === PLANT) { sap += g.life[i] >> 8; n++; } }
+    console.log(`  a 50-deep cloud in summer: ${g.hailstones} hailstones in 10 s (${fast} stone-ticks falling at 2+ a tick), ${g.hailKills}/38 grasshoppers killed, grass under it at sap ${n ? (sap / n).toFixed(0) : '-'} (from 200)`);
+    check('the deepest storm clouds hail', g.hailstones >= 20 && fast > 0, `${g.hailstones} stones`);
+    check('hail kills grasshoppers and bruises grass', g.hailKills >= 3 && n && sap / n < 190, `${g.hailKills} killed, sap ${(sap / n).toFixed(0)}`);
+    for (let y = 0; y < H - 40; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (g.type[i] === CLOUD) g.set(i, E); }
+    run(g, 2 * MIN); const left = census(g, Sim.EL).Hail || 0;
+    console.log(`  hail: at most ${peak} stones at once, up to ${landed} lying on the ground; two minutes after the storm ${left} left`);
+    check('hail reaches the ground and melts in summer', landed >= 10 && left === 0, `${landed} lying, ${left} left`);
+    // and a cloud as deep in winter, or in a world with no storms, drops none
+    Sim.reseed(4); const c = new Sim.Grid(W, H); c.lightning = false; c.clock = Sim.YEAR * 0.4; c.updateClimate(); c.initAir();
+    for (let y = 40; y < 90; y++) for (let x = 60; x < 140; x++) c.set(c.idx(x, y), CLOUD); run(c, 300);
+    check('no hail where there are no storms', c.hailstones === 0);
+  },
+  aspect() {
+    // N8: the sun rises in the east (+x): snow on a ridge's west face (the afternoon sun's) goes before the snow on its east face
+    const ridge = clock => {
+      Sim.reseed(5); const W = 256, H = 160, g = new Sim.Grid(W, H); g.windHold = 0; g.fronts = true; g.lightning = false; g.wetHold = 0; g.skyY = 230; g.clock = clock; g.updateClimate(); g.resetTemp();
+      const top = x => Math.min(H - 10, 70 + Math.abs(x - 128));
+      for (let x = 0; x < W; x++) for (let y = top(x); y < H; y++) { const i = g.idx(x, y); if (y >= H - 3 || y > top(x) + 4) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (Sim.NREF << 8) | 60; } }
+      for (let x = 0; x < W; x++) g.set(g.idx(x, top(x) - 1), SNOW, -1);
+      g.initAir(); g.updateMasses(false); return g;
+    };
+    const snowOn = (g, x0, x1) => { let n = 0; for (let x = x0; x < x1; x++) { let y = 0; while (y < g.H && (g.type[g.idx(x, y)] === E || Sim.EL[g.type[g.idx(x, y)]].kind === 'gas')) y++; if (g.type[g.idx(x, y)] === SNOW) n++; } return n / (x1 - x0); };
+    const g = ridge(Sim.YEAR * 0.97); run(g, 900);
+    const west = snowOn(g, 70, 120), east = snowOn(g, 136, 186);
+    console.log(`  late winter, after a quarter day: snow left on the west face ${(west * 100).toFixed(0)}%, on the east face ${(east * 100).toFixed(0)}%`);
+    check('snow goes first from the slope facing the afternoon sun', west < east - 0.2, `${west.toFixed(2)} vs ${east.toFixed(2)}`);
+  },
   lightning() {
     // R3: a deep storm cloud strikes; the bolt goes for the highest thing within reach and for metal most of all; it lights dry
     // grass in the dry season far more often than in the wet, and it fuses sand
