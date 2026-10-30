@@ -1,6 +1,6 @@
 # Hosting on Cloudflare Pages (sand.bradleyejjackson.com)
 
-The repo builds the same static site for GitHub Pages and Cloudflare Pages: `node tools/pages.js _site` writes `_site/index.html` plus `_site/_headers`. Cloudflare reads `_headers` and sends COOP/COEP, so the page is cross-origin isolated and the sim runs on the worker pool instead of the serial main-thread path. GitHub Pages keeps working unchanged until you turn it off.
+Cloudflare builds the site with `node tools/pages.js _site`, which writes `_site/index.html` plus `_site/_headers`. Cloudflare reads `_headers` and sends COOP/COEP, so the page is cross-origin isolated and the sim runs on the worker pool instead of the serial main-thread path.
 
 ## One-time setup in the Cloudflare dashboard
 
@@ -22,8 +22,8 @@ After this, every push to `main` redeploys both sites, and every pull request ge
 
 ## Checking it worked
 
-Open https://sand.bradleyejjackson.com, open the browser console, and type `crossOriginIsolated`. It should print `true`. (On GitHub Pages it prints `false` unless the coi-serviceworker shim is in place.)
+Open https://sand.bradleyejjackson.com, open the browser console, and type `crossOriginIsolated`. It should print `true`.
 
-## Switching off GitHub Pages (optional, later)
+## GitHub Pages
 
-Once you're happy with the Cloudflare site: repo **Settings → Pages → Source → None** (or delete `.github/workflows/pages.yml`), and update the link in the README.
+The game used to be on GitHub Pages too. That was switched off on 2026-10-30 (workflow removed, repo Settings → Pages → unpublished).
