@@ -38,6 +38,14 @@ function suite(threads) {
   for (const id of ['moistview', 'heatview', 'windview', 'soilview', 'showchunks']) { p.els[id].fire('click'); p.run(3); p.els[id].fire('click'); }
   p.run(3);
   check('view toggles render without errors', true);
+  {   // Light: constant draws the frame at full brightness at midnight, and the choice is remembered
+    const c0 = g.clock; g.clock = Math.floor(g.clock / Sim.DAY) * Sim.DAY + Sim.DAY * 0.75; g.updateClimate(); p.run(1);
+    const lum = () => { let s = 0; for (const v of p.sf.px) s += (v & 255) + (v >> 8 & 255) + (v >> 16 & 255); return s; };
+    const night = lum(); p.els.lightmode.fire('click'); p.run(1); const flat = lum();
+    check('Light: constant lights the night', p.els.lightmode.textContent === 'Light: constant' && p.store['sandfall.light'] === 'constant' && flat > 2 * night, `${(flat / night).toFixed(2)}x brighter, ${p.els.lightmode.textContent}`);
+    p.els.lightmode.fire('click'); p.run(1); check('Light: day/night comes back', p.els.lightmode.textContent === 'Light: day/night' && Math.abs(lum() - night) < night * 0.05);
+    g.clock = c0; g.updateClimate();
+  }
 
   p.run(1); p.els.save.fire('click'); p.run(1); const saved = p.store['sandfall.world'];
   check('save writes a 12-part world', saved && saved.split('|').length === 12, p.els.msg.textContent);
