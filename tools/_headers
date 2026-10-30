@@ -1,0 +1,6 @@
+# Cloudflare Pages response headers (copied into the build output by tools/pages.js).
+# COOP + COEP make the page cross-origin isolated, so SharedArrayBuffer exists and the worker pool runs.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  X-Content-Type-Options: nosniff
