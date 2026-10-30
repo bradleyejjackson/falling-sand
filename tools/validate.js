@@ -1937,7 +1937,7 @@ const scenarios = {
     {
       const stand = con => { const g = hill(160, 30, 80, 3); g.clock = Sim.YEAR * 0.5; g.updateClimate(); const ts = []; for (let k = 0; k < 6; k++) ts.push(grow(g, 30 + k * 10, con, 200));
         const t0 = ts[0]; let n = 0; for (const [i, c] of t0.cells) if ((c & 1) && n++ < 12) g.set(i, FIRE); g.wakeAll();
-        run(g, 1800); const dead = ts.filter(t => t.dead || t.cones || !g.trees.includes(t)).length;
+        run(g, 1800); const dead = ts.filter(t => t.dead || t.cones || t.sprout || !g.trees.includes(t)).length;
         run(g, 2400); let seeds = 0; for (let i = 0; i < g.type.length; i++) if ((g.type[i] === SEED || g.type[i] === TIP) && (g.life[i] & Sim.CONE)) seeds++;
         return { dead, seeds: seeds + g.trees.filter(t => t.con && !ts.includes(t)).length }; };
       const c = stand(true), b = stand(false);
