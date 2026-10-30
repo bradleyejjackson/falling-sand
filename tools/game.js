@@ -4,7 +4,7 @@
 const { loadSim } = require('./load');
 const Sim = loadSim(process.env.SIMFILE);
 const { BOX, SCENARIOS, Game } = Sim;
-const { E, STONE, GUNP, FIRE, EMBER, WATER, DIRT, SEED, WOOD, SAND, CLAY, LAVA } = Sim.ids;
+const { E, STONE, GUNP, FIRE, EMBER, WATER, DIRT, SEED, WOOD, SAND, CLAY, LAVA, METAL, FOX } = Sim.ids;
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
 const byId = id => SCENARIOS.find(s => s.id === id);
@@ -63,7 +63,15 @@ const solutions = {
     300: game => { for (const x of BEDS) paintRect(game, x - 8, 70, x + 8, 77, WATER); },
     1500: game => { for (const x of BEDS) { paintRect(game, x - 4, 60, x - 3, 61, SEED); paintRect(game, x + 4, 60, x + 5, 61, SEED); } },
   },
+  hillside: { 30: game => { for (let x = 34; x < 128; x += 8) paintRect(game, x, slope(x) - 3, x + 1, slope(x) - 2, SEED); } },   // a tree every 8 columns down the slope: their roots hold it
+  rod: { 30: game => { for (const x of [108, 142, 178, 212]) paintRect(game, x, 129, x + 1, 160, METAL); } },   // a mast in the gaps between and beside the huts, standing clear of the wood
+  gorge: { 30: game => { for (let x = 120; x < 200; x++) { const t = 80 + Math.round(16 * ((x + 0.5 - 160) / 40) ** 2); paintRect(game, x, t, x + 1, t + 4, STONE); } } },   // a stone arch 4 deep, springing from the old footings
+  kiln: { 30: game => paintRect(game, 42, 140, 198, 142, CLAY) },   // the clay spread thin over the whole seep
+  plague: { 30: game => { for (const x of [50, 160, 270]) paintRect(game, x, 140, x + 1, 141, FOX); } },
+  pond: Object.fromEntries([600, 2400, 4200, 6600].map(t => [t, game => paintRect(game, 122, 120, 278, 122, WATER)])),   // a ration every half minute or so, the last one kept back for the end
+  wildfire: { 60: game => { for (const x of Sim.GROVES) { paintRect(game, x - 14, 90, x - 13, 150, METAL); paintRect(game, x + 14, 90, x + 15, 150, METAL); } } },   // a rod either side of each grove, taller than the trees
 };
+const slope = x => 45 + Math.round(1.2 * (x - 30));   // (Hold the hillside's ground)
 // Firebreak with water only: every 20 ticks, a water blob dropped just above the westmost column that is really burning
 // (three burning cells in three columns, so stray flames in the air don't draw it), the way a player chases the fire front
 function douse(game) {
@@ -79,6 +87,13 @@ const naive = {   // the obvious wrong move, where there is one
   lava: { 60: game => { paintRect(game, 122, 150, 129, 156, E); paintRect(game, 60, 112, 66, 130, E); } },
   flood: { 60: game => { paintRect(game, 196, 132, 204, 160, CLAY); paintRect(game, 186, 132, 196, 160, SAND); paintRect(game, 204, 132, 214, 160, SAND); } },   // a levee round the town alone: overtopped
   volcano: { 300: game => paintRect(game, 90, 0, 130, 50, WATER) },   // all the water at once: it crusts the top, and the lava breaks out again
+  hillside: { 30: game => paintRect(game, 130, 120, 134, 165, STONE) },   // a wall at the foot to catch the slide: the fields are spared, the hillside isn't
+  rod: { 30: game => paintRect(game, 160, 90, 161, 142, METAL) },   // one tall mast, put up through a roof: the bolt's heat sets the roof alight
+  gorge: { 30: game => paintRect(game, 110, 77, 210, 80, WOOD) },   // a plank: it sags under its own weight and snaps
+  kiln: { 30: game => paintRect(game, 110, 120, 130, 130, CLAY) },   // all the clay in one heap: only its bottom bakes
+  plague: { 30: game => { for (const x of [20, 60, 100, 140, 180, 220, 260, 300]) paintRect(game, x, 140, x + 1, 141, FOX); } },   // every fox: they kill off the rabbits
+  pond: { 60: game => paintRect(game, 122, 100, 278, 109, WATER) },   // all the water at once: it overflows and soaks away, and the sun takes the rest before the end
+  wildfire: { 60: game => { for (const x of Sim.GROVES) paintRect(game, x, 85, x + 1, 150, METAL); } },   // one rod in each grove, among the branches
   desert: {   // beds with no clay under them: the water drains into the sand
     120: game => { for (const x of BEDS) paintRect(game, x - 10, 90, x + 10, 97, DIRT); },
     300: game => { for (const x of BEDS) paintRect(game, x - 8, 70, x + 8, 77, WATER); },
@@ -149,6 +164,8 @@ tests.survive = () => {
   const back = Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), Game.start(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), byId('volcano')).save());
   check('a save keeps survive, sources and hold', back.sc.hold === 300 && back.sources.length === 1 && back.sources[0].temp === 1500 &&
     Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), Game.start(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), byId('flood')).save()).sc.survive === true);
+  const storm = Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), Game.start(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), byId('rod')).save());
+  check('a save keeps the season and the storm', storm.sc.season === 0.42 && storm.sc.storm && storm.sc.storm.every === 90 && Math.abs(storm.g.clock - Game.clockOf(byId('rod'))) < 1);
   // the desert's climate: its sun dries soil as the dry country's does, a save keeps that, and a new world goes back to its own climate
   const gd = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), dry = Game.load(gd, Game.start(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), byId('desert')).save());
   const inDesert = gd.aridity()[BOX.x];
