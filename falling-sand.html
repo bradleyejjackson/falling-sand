@@ -323,7 +323,8 @@ const Sim = (() => {
   // the heat lane: a block kept awake only by heat flowing through it (rock warming round a lava chamber, a pool cooling) steps one
   // tick in LANE, staggered over the blocks, taking LANE ticks' worth of heat at once. The step is implicit in the cell's own
   // temperature, so the big step can't overshoot whatever the conductance. Anything else that wakes the block puts it back on every tick
-  const LANE = 4;
+  const LANE = 4, LANEOK = new Uint8Array(N);   // the deep ground's materials only: on the surface the lane changed how the ground and air cool at night (more fog on the hilltops)
+  for (const t of [STONE,LAVA,SALT,GUNP,OIL,GAS]) LANEOK[t] = 1;
   const KHD = Float64Array.from(KH), CAPD = Float64Array.from(CAPT), HOLDD = Float64Array.from(HOLDT), HID = Float64Array.from(HIAT), LOD = Float64Array.from(LOAT);
   // latent heat of fusion, in heat units (capacity × degrees): what a frozen cell must soak up at 0° to melt, and what water must
   // give off at 0° to freeze into it. Ice is a cell of water: 80 water-degrees, as in life. A snow cell is mostly air, an eighth of that
@@ -586,7 +587,7 @@ const Sim = (() => {
       if (opts.buffer) return;                                           // attached: the owner of the world has set it up
       this.temp.fill(AMB);
       this.struck.fill(-STRIKE_GAP);
-      for (let y=0;y<H;y++){ const d=this.skyY-y; this.mfade[y]=Math.max(0,Math.min(1,(MASS_TOP-d)/(MASS_TOP-MASS_LOW),(d+MASS_DEEP+60)/60)); }   // (and none of it reaches down into the caves)
+      this.fadeMasses();
       this.clock=START; this.updateClimate();
       this.resetTemp(); this.initAir();
     }
@@ -601,6 +602,9 @@ const Sim = (() => {
     aridity(){   // each column's drying under its climate (1 + ARID_DRY × aridity), worked out again when the window moves
       if (this.aridOx!==this.ox || this.aridSeed!==this.worldSeed){ const a=this.aridF||(this.aridF=new Float32Array(this.W)); for (let x=0;x<this.W;x++) a[x]=1+ARID_DRY*aridAt(this.worldSeed,this.ox+x); this.aridOx=this.ox; this.aridSeed=this.worldSeed; }
       return this.aridF;
+    }
+    fadeMasses(){   // mfade by row; in a generated world none of it reaches down into the caves under the hills (cave air followed the weather, and warmed the rock round it for ever)
+      for (let y=0;y<this.H;y++){ const d=this.skyY-y; this.mfade[y]=Math.max(0,Math.min(1,(MASS_TOP-d)/(MASS_TOP-MASS_LOW),this.worldSeed ? (d+MASS_DEEP+60)/60 : 1)); }
     }
     airAt(x,y){ return this.ambRow[y]+this.massT[x>>2]*this.mfade[y]; }   // the air's usual temperature at (x,y), with the air mass over it
     rh(c){ return this.cap[c]>0 ? this.hum[c]/this.cap[c] : 1; }        // relative humidity
@@ -2777,7 +2781,7 @@ const Sim = (() => {
               let u=(v+c*d)/(1+c*s); if (u<hf) u=hf;
               q=(u-v)*CAPD[th]/LANE; temp[i]=v=u;   // (q per tick, to judge it by the same bar)
             }
-            if (q>WAKEQ[th] || q<-WAKEQ[th]){ if (th===METAL) this.wake(x,y); else this.warm(x,y); }   // heat still flowing in or out keeps it and its neighbours awake (on the heat lane, unless something else wakes them; a bar of metal carries a front along faster than the lane would)
+            if (q>WAKEQ[th] || q<-WAKEQ[th]){ if (LANEOK[th]) this.warm(x,y); else this.wake(x,y); }   // heat still flowing in or out keeps it and its neighbours awake (deep-ground materials on the heat lane, unless something else wakes them)
             if ((SLOWHEAT[th] || v>HID[th] || v<LOD[th] || (th===OIL && this.life[i])) && this.phaseHeat(x,y,i,th,v)) continue;
             const t=type[i];
             if (INERT[t]){ if (!done[i] && SPAN[t] && !(this.life[i]&1)) this.stepSupport(x,y,i,t); continue; }   // (the general path below, short-cut)
@@ -2841,12 +2845,11 @@ const Sim = (() => {
       // a save from a wider window (before the window narrowed) loads into one of that width, which hands over its left part
       // and stores the rest as regions of the world
       if (sw>this.W){ if ((sw-this.W)%REGION || this.W%REGION) throw new Error('world size mismatch'); return this.narrow(str,sw); }
-      // a save from a shorter grid loads shifted down. A generated world lines its land up with the land here (the extra sky goes on
-      // over the top, and ground it didn't have, from before the world got deeper, is filled in under it as rock); a world that isn't
-      // generated (a flat world, a scenario) lines its bottom up with the bottom of the grid.
+      // a save from a shorter grid loads shifted down, its land lined up with the land here: the extra sky goes on over the top, and
+      // ground it didn't have, from before the world got deeper, is filled in under it as rock (a flat world's ground and the
+      // scenario box sit at the same height over the land as they did, so they line up too)
       // One from a narrower window (before the window grew) loads into its left part, and the window is widened from the world
-      const made=!!stream && !JSON.parse(stream).blank, sLand=land ? +land : Math.min(sh,OLD_LAND);
-      const dy = made ? this.top-(sh-sLand) : this.H-sh, deep=this.H-dy-sh;   // deep: rows of rock added under the save
+      const sLand=land ? +land : Math.min(sh,OLD_LAND), dy=this.top-(sh-sLand), deep=this.H-dy-sh;   // deep: rows of rock added under the save
       if ((sw<this.W && (sw%REGION || this.W%REGION)) || dy<0 || deep<0 || dy%AC) throw new Error('world size mismatch');
       if (clock) { this.clock=+clock; this.updateClimate(); }
       this.clear(); let i=dy*this.W, x=0;
@@ -2864,6 +2867,7 @@ const Sim = (() => {
       this.storeLoad(stream, dy, deep);    // nor a wider world: it loads as a world the size of the window
       this.treesLoad(treeJson, dy);
       if (masses!==''){ this.fronts=true; this.massX=+masses; this.updateMasses(false); }   // (where the air masses had drifted to; older saves keep the weather they had)
+      this.fadeMasses();
       const came=sw<this.W ? this.widen(sw) : [];
       this.initAir();
       if (air){ const s=unpack(air), aw=sw/AC; for (let p=0,c=0;p<s.length;p+=2) for (let k=0;k<s[p+1];k++,c++) this.hum[(dy/AC+((c/aw)|0))*this.AW+c%aw]=s[p]/100; }
@@ -2884,7 +2888,7 @@ const Sim = (() => {
       for (const k of ['clock','ox','worldW','worldSeed','blank','treeId','fronts','massX']) this[k]=big[k];
       this.store=big.store; this.storedTrees=big.storedTrees; this.updateClimate();
       this.trees=[]; for (const t of big.trees){ const n=this.treeFrom(this.treeRecord(t,0),0); this.trees.push(n); this.rasterTree(n); }
-      if (this.fronts) this.updateMasses(false);
+      this.fadeMasses(); if (this.fronts) this.updateMasses(false);
       const hum=this.hum.slice(); this.initAir(); this.hum.set(hum);
       this.wakeAll();
     }
@@ -3071,7 +3075,7 @@ const Sim = (() => {
   function generate(g, worldSeed, worldW=g.W, ox=0){
     g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=worldSeed; g.worldW=worldW; g.ox=ox; g.blank=false;
     weatherOn(g);
-    const surf=generateColumns(g,0,g.W);
+    g.fadeMasses(); const surf=generateColumns(g,0,g.W);
     g.initAir();
     g.wakeAll();
     return surf;
@@ -3080,9 +3084,9 @@ const Sim = (() => {
   // a flat world to build in: bedrock, a layer of damp soil with grass on it, and open sky. It is one window wide (it doesn't
   // stream). Returns the surface row.
   function flat(g){
-    g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=0; g.worldW=g.W; g.ox=0; g.blank=false;
+    g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=0; g.worldW=g.W; g.ox=0; g.blank=false; g.fadeMasses();
     weatherOn(g);
-    const top=g.H-140;
+    const top=Math.min(g.H-140, g.skyY+148);   // (the same height over skyY whatever the grid's height, so the same climate; deeper ground under it)
     for (let y=top;y<g.H;y++) for (let x=0;x<g.W;x++){ const i=g.idx(x,y); if (y<top+24){ g.set(i,DIRT,g.ambAt(y)); g.life[i]=(Math.max(HUMUS_DEEP, HUMUS-(y-top)*HUMUS_STEP)<<8)|120; } else g.set(i,STONE,g.ambAt(y)); }
     for (let x=0;x<g.W;x++){ const h=1+(R()*2|0); for (let y=top-1;y>=top-h;y--){ const i=g.idx(x,y); g.set(i,PLANT,g.ambAt(y)); g.life[i]=(SAP0<<8)|1; } }
     g.initAir(); g.wakeAll();
@@ -3101,7 +3105,7 @@ const Sim = (() => {
   // A survive scenario (survive:true) is won instead by reaching the end of the clock with every goal met and no fail reached.
   // sources: [{el:'Lava', rect, from, to, rate, temp}]: from tick `from` until `to`, up to `rate` cells a tick of that element appear in
   // empty cells of the rectangle (a river in flood, a volcano's vent): fill or wall off the rectangle and it stops.
-  const BOX = {x:320, y:WORLD.H-200, w:320, h:200};
+  const BOX = {x:320, y:WORLD.H-LAND_H+280, w:320, h:200};   // (as high over the land's top as it was at the bottom of the 640-row world: the same climate)
   const SEALED = 24;   // the biggest bubble a goal counting cells "open to the air" treats as shut in
   const byName = n => { const e=EL.find(e=>e.name===n); if (!e) throw new Error('no element '+n); return e.id; };
   const ids = v => (Array.isArray(v) ? v : [v]).map(byName);
@@ -3250,9 +3254,9 @@ const Sim = (() => {
     // start a built-in scenario: an empty world the size of the grid with the box dug into stone at the bottom middle
     static start(g, sc){
       reseed(sc.seed||1);
-      g.clear(); g.worldW=g.W; g.ox=0; g.worldSeed=0; g.clock=START; g.updateClimate(); g.resetTemp();
+      g.clear(); g.worldW=g.W; g.ox=0; g.worldSeed=0; g.fadeMasses(); g.clock=START; g.updateClimate(); g.resetTemp();
       g.frame=0; Game.weather(g,sc);   // (the natural wind follows the frame count: from 0, every play of a scenario gets the same weather)
-      for (let y=BOX.y;y<g.H;y++) for (let x=0;x<g.W;x++) if (x<BOX.x || x>=BOX.x+BOX.w) g.set(g.idx(x,y),STONE,g.ambAt(y));
+      for (let y=BOX.y;y<g.H;y++) for (let x=0;x<g.W;x++) if (x<BOX.x || x>=BOX.x+BOX.w || y>=BOX.y+BOX.h) g.set(g.idx(x,y),STONE,g.ambAt(y));
       sc.build(builder(g));
       g.initAir(); if (sc.air!==undefined) for (let c=0;c<g.hum.length;c++) g.hum[c]*=sc.air;   // air: how humid, against the usual
       g.wakeAll();
