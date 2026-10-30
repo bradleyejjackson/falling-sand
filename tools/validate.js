@@ -1534,6 +1534,77 @@ const scenarios = {
     check('a soaked one slides off as a slab: 20+ columns of rock bared (on average over 4 seeds), 100+ cells moving together, the toe 12+ cells out', sum(soakeds, 'bare') >= 80 && soakeds.every(r => r.peak >= 100 && r.reach >= 12), `${sum(soakeds, 'bare')} columns over 4`);
     check('roots hold it: a third of the bare rock or less', sum(rooteds, 'bare') <= sum(soakeds, 'bare') / 3, `${sum(rooteds, 'bare')} vs ${sum(soakeds, 'bare')}`);
   },
+  floe() {
+    // N5: ice floats. A block of ice dropped into a pond comes down whole and floats with about a tenth of it out of the water; a
+    // thawing floe drifts off downwind; a floe frozen to the shore in a frost stays where it is (the wind is the same on both)
+    const { ICE } = Sim.ids;
+    const pond = (clock, sky, wind, water) => {
+      Sim.reseed(7); const W = 200, H = 120, g = new Sim.Grid(W, H); if (sky) g.skyY = sky; g.clock = clock; g.updateClimate(); g.resetTemp(); g.windHold = wind;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= 100 || x < 20 || x >= 180) { if (y >= 50) { g.set(i, STONE, 4); g.life[i] |= 1; } } else if (y >= 60) g.set(i, WATER, water); }
+      g.initAir(); return g;
+    };
+    const ice = g => { let n = 0, top = g.H, bot = 0, x0 = g.W, x1 = 0; for (let y = 0; y < g.H; y++) for (let x = 0; x < g.W; x++) if (g.type[g.idx(x, y)] === ICE) { n++; top = Math.min(top, y); bot = Math.max(bot, y); x0 = Math.min(x0, x); x1 = Math.max(x1, x); } return { n, top, bot, x0, x1 }; };
+    const level = g => { for (let y = 0; y < g.H; y++) if (g.type[g.idx(40, y)] === WATER) return y; return -1; };
+    {
+      const g = pond(Sim.YEAR * 0.62, 0, 0, 1);
+      for (let y = 30; y < 40; y++) for (let x = 95; x < 103; x++) g.lay(g.idx(x, y), ICE, -10);
+      let snow = 0, above = [];
+      run(g, 600, 30, f => { snow = Math.max(snow, census(g, Sim.EL).Snow || 0); if (f >= 300) { const b = ice(g); above.push(level(g) - b.top); } });
+      const b = ice(g), mean = above.reduce((a, v) => a + v, 0) / above.length;
+      console.log(`  block of 80 ice cells dropped into a pond: ${b.n} left, rows ${b.top}-${b.bot} (${b.bot - b.top + 1} deep), ${mean.toFixed(1)} rows out of the water on average, ${snow} snow made`);
+      check('a block of ice dropped into a pond comes down whole (no snow) and floats', snow === 0 && b.n >= 70 && b.bot - b.top <= 10 && b.bot > level(g));
+      check('with about a tenth of it out of the water (0.5 to 2 of its 10 rows)', mean >= 0.5 && mean <= 2, mean.toFixed(2));
+    }
+    {
+      const thaw = pond(Sim.YEAR * 0.62, 0, 0.6, 0.5), frost = pond(Sim.YEAR * 0.92, 400, 0.6, 0.5);
+      for (const g of [thaw, frost]) { const x0 = g === thaw ? 60 : 20; for (let y = 60; y < 63; y++) for (let x = x0; x < x0 + 12; x++) { const i = g.idx(x, y); g.set(i, ICE, g === thaw ? 0 : -8); g.life[i] = 1; } g.life[g.idx(x0 + 10, 62)] = 0; }   // floes from a pond's ice, one out on the water and one against the west shore (the water under them has moved)
+      run(thaw, 900); run(frost, 900);
+      const a = ice(thaw), b = ice(frost); let held = 0; for (let y = 60; y < 63; y++) for (let x = 20; x < 32; x++) if (frost.type[frost.idx(x, y)] === ICE) held++;
+      console.log(`  in a 0.6 wind, 15 s on: a thawing floe from x 60-71 is at x ${a.x0}-${a.x1} (${a.n} cells); one frozen against the west shore still fills ${held}/36 of its place (the pond freezing round it: ${b.n} ice cells)`);
+      check('a thawing floe drifts off downwind', a.n > 0 && a.x0 >= 66, `x0 ${a.x0}`);
+      check('a floe frozen to the shore stays put', held === 36, `${held}`);
+    }
+  },
+  cornice() {
+    // N5: a steady wind over a ridge blows the cold snow off its windward slope, piles it in the lee and builds a cornice out over the
+    // drop at the crest
+    Sim.reseed(7);
+    const W = 240, H = 160, g = new Sim.Grid(W, H); g.skyY = 400; g.clock = Sim.YEAR * 0.92; g.updateClimate(); g.resetTemp(); g.windHold = 0.8;
+    const ground = x => x < 40 ? 140 : x <= 120 ? Math.round(140 - (x - 40) * 0.6) : 140;   // a long slope up from the west to a crest, then a cliff
+    for (let x = 0; x < W; x++) { for (let y = ground(x); y < H; y++) { const i = g.idx(x, y); g.set(i, STONE, -8); g.life[i] |= 1; } for (let k = 1; k <= (x < 116 ? 6 : 0); k++) g.set(g.idx(x, ground(x) - k), SNOW, -8); }   // (snow six deep up to the crest, none on it or past it)
+    g.initAir();
+    const w0 = 56 * 6; run(g, 3600);
+    let windward = 0, lee = 0, hang = 0, packed = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (g.type[i] !== SNOW) continue; if (g.life[i] & 1) packed++; if (x >= 60 && x < 116) windward++; else if (x > 120) lee++; if (x > 120 && y < 100 && g.type[i + W] === E) hang++; }
+    console.log(`  a minute of a 0.8 wind: snow on the upper windward slope ${windward} cells (${w0} to begin with), in the lee ${lee}, ${hang} hanging over the cliff at the crest, ${packed} wind-packed`);
+    check('the wind strips the upper windward slope (under a third left) and piles some in the lee (40+ cells)', windward < w0 / 3 && lee >= 40, `${windward} / ${lee}`);
+    check('and builds a cornice out over the drop (3+ cells)', hang >= 3, `${hang}`);
+  },
+  avalanche() {
+    // N5: snow six deep on a slope of rock falling 4 in 5. Cold settled snow holds it; wind-packed snow on top of it (a wind slab)
+    // or snow in a thaw slides off as a slab and runs far out past the foot; trees through it hold it
+    const { ROOT } = Sim.ids;
+    const hill = (kind, seed) => {
+      Sim.reseed(seed);
+      const W = 320, H = 200, g = new Sim.Grid(W, H), wet = kind === 'wet'; g.skyY = wet ? 230 : 400; g.clock = Sim.YEAR * (wet ? 0.03 : 0.92); g.updateClimate(); g.resetTemp(); g.windHold = 0;
+      const floor = H - 10, rock = x => x < 60 ? floor - 100 : x < 185 ? Math.round(floor - 100 + (x - 60) * 0.8) : floor;
+      for (let x = 0; x < W; x++) { for (let y = rock(x); y < H; y++) { const i = g.idx(x, y); g.set(i, STONE, -8); g.life[i] |= 1; }
+        for (let k = 1; k <= 6; k++) { const i = g.idx(x, rock(x) - k); g.set(i, kind === 'trees' && x >= 60 && x < 185 && x % 5 === 0 && k > 1 ? ROOT : SNOW, wet ? -0.5 : -8); if ((kind === 'slab' || kind === 'trees') && k >= 5 && g.type[i] === SNOW) g.life[i] = 1; } }
+      g.initAir();
+      let peak = 0; run(g, 1800, 4, () => { let n = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === SNOW && g.vy[i] >= Sim.SLIP_TAG) n++; peak = Math.max(peak, n); });
+      let bare = 0, reach = 0; for (let x = 60; x < 185; x++) for (let y = 0; y < H; y++) { const t = g.type[g.idx(x, y)]; if (t === E || Sim.EL[t].kind === 'gas') continue; if (t === STONE) bare++; break; }
+      for (let x = 185; x < W; x++) if (g.type[g.idx(x, floor - 8)] === SNOW) reach = x - 185;   // (the floor's own snow lies 6 deep)
+      return { n: g.avalanches, bare, reach, peak };
+    };
+    const fmt = r => `${r.n} avalanches, ${r.bare}/125 columns bared, toe ${r.reach} past the foot, ${r.peak} cells moving at most`;
+    const out = {}; for (const k of ['cold', 'slab', 'wet', 'trees']) out[k] = [7, 8].map(sd => hill(k, sd));
+    for (const k in out) console.log(`  ${k}: ${out[k].map(fmt).join('; ')}`);
+    const sum = (k, f) => out[k].reduce((a, r) => a + r[f], 0);
+    check('cold settled snow on a 4 in 5 slope stands', sum('cold', 'n') === 0);
+    check('a wind slab on it avalanches: 40+ columns bared, 200+ cells moving together, the toe 30+ cells out', out.slab.every(r => r.bare >= 40 && r.peak >= 200 && r.reach >= 30), out.slab.map(fmt).join('; '));
+    check('so does snow in a thaw (40+ columns bared)', out.wet.every(r => r.bare >= 40));
+    check('trees through it hold it: a quarter of the bare rock or less', sum('trees', 'bare') <= sum('slab', 'bare') / 4, `${sum('trees', 'bare')} vs ${sum('slab', 'bare')}`);
+  },
   frost() {
     // R4: a cliff high on a hill (90 rows over the hills' base). Through an autumn and winter its face cracks in the freezes and sheds
     // rubble to its foot; the same rock under soil doesn't crack, and in summer nothing does

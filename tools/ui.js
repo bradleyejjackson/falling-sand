@@ -149,11 +149,11 @@ function suite(threads) {
   check('Send a cold front brings one in at the west of the screen', g.fronts && frontAt >= 0 && /cold front/.test(p.els.msg.textContent) && /hPa/.test(p.els.wind.textContent), `front at x ${frontAt}, ${p.els.wind.textContent}`);
   const s1 = g.strikes; g.strike(g.W >> 1, 40); p.run(3);
   check('a lightning strike draws and is counted', g.strikes === s1 + 1);
-  // the Cone brush sows a conifer's seed (a seed with Sim.CONE in its life), Seed a broadleaf's
+  // the Cone brush sows a conifer's seed (a seed with Sim.CONE in its life), Seed a broadleaf's (a frame later: a stroke made mid-step waits for the step)
   { const { SEED } = Sim.ids, cone = btn('Cone'), seed = btn('Seed'), sown = () => [...g.type].map((t, i) => t === SEED ? g.life[i] : -1).filter(l => l >= 0);
     check('there is a Cone button by Seed', !!cone && !!seed);
     const s0 = sown().length; cone.fire('click'); cv.fire('pointerdown', at(100, 20)); cv.fire('pointerup', at(100, 20));
-    const after = sown(); check('the Cone brush sows a conifer seed', after.length === s0 + 1 && after.filter(l => l & Sim.CONE).length >= 1, `${after.length - s0} sown`);
+    p.run(1); const after = sown(); check('the Cone brush sows a conifer seed', after.length === s0 + 1 && after.filter(l => l & Sim.CONE).length >= 1, `${after.length - s0} sown`);
     for (let i = 0; i < g.type.length; i++) if (g.type[i] === SEED) g.set(i, Sim.ids.E); }
   // devices: a spout pours the element chosen before it, pressing Fan again turns it
   { const { SPOUT, FAN, OIL } = Sim.ids;
