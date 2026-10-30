@@ -371,3 +371,27 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
     gunpowder in it are as cold as the rock; air masses no longer reach down into caves (`mfade` fades out `MASS_DEEP` rows
     under `skyY`). Both were heat flowing from the first tick for thousands of ticks.
 
+
+## Devices (X1)
+
+- A Devices row in the sandbox rack: Spout, Drain, Heater, Cooler and Fan. They are elements (appended after Grasshopper, so
+  old saves keep their ids) stepped by `Grid.device` in the cell pass, so they stream with the window, save with the world and
+  run on the worker threads like everything else. They stand where they are put (no support check), bear what lies on them,
+  and fire, lava, acid and explosions leave them be; only Erase removes them. Scenarios never offer them.
+- Spout: its life is the element it pours (the page sets it to the powder, liquid or gas chosen last; the button reads
+  "Spout · Water"). Each tick it puts one cell, with chance `SPOUT_P`, into an empty cell beside it: below first (above for a
+  gas), then a side. Boxed in, it lets its block sleep until something beside it moves.
+- Drain: swallows any powder, liquid or gas in its four neighbours every tick (the hole wakes whatever lies over it).
+- Heater and Cooler: hold their own temperature at 400° and -40° every tick, with metal's conductivity; the heat flowing out
+  of them keeps their blocks awake while there is anything to warm or chill.
+- Fan: its life is the way it blows (0 east, 1 up, 2 west, 3 down; pressing Fan again turns it). Only a face with no fan in
+  front of it blows: it pushes what lies ahead, up to `FAN_REACH` (24) cells or a wall, one cell a tick from the far end back,
+  a gas with chance `FAN_GAS`, a powder or liquid with `FAN_POWDER` or `FAN_LIQUID` over its density, fading with distance.
+  A powder or liquid blown sideways leaves at `FAN_THROW` cells a tick so it carries on past the reach.
+- Tests: `validate.js devices` (spout pours for ever, a drain empties a basin, sand/lava/oil/smoke spouts, a heater boils a pot
+  dry, a cooler freezes a pond, a fan blows ash and smoke, devices survive an explosion and a save, a boxed-in spout sleeps);
+  `ui.js` paints an oil spout and turns a fan through the page. `same.js` against main: worlds without devices are identical.
+- The in-game help now says the world is 6400 cells (twenty screens) wide with a 960×960 window.
+- Perf (this container, `steady.js`, alternating runs): main 9.97 / 9.04 ms, this build 11.01 / 8.85 ms (seeds 12345 / 7),
+  the same world either way and within run-to-run noise. A view with two spouts, a drain, a heater, a cooler and a fan
+  running in it: 11.41 / 10.24 ms against 10.26 / 11.51 without, again noise.
