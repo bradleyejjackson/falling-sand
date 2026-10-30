@@ -18,7 +18,7 @@ h1{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04e
 h1 span{color:var(--accent)}
 .stats{color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:16px;flex-wrap:wrap}
 .stage{position:relative;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden;
-  aspect-ratio:4/3;max-width:100%;max-height:60vh;margin:0 auto;width:100%;flex-shrink:0}
+  aspect-ratio:4/3;width:min(100%,80vh);margin:0 auto;flex-shrink:0}   /* (the width the 60vh height allows, so a resize keeps 4:3 instead of stretching) */
 canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:crosshair}
 .groups{display:flex;flex-direction:column;gap:8px}
 .group{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
@@ -317,8 +317,14 @@ const Sim = (() => {
   // the same tables widened to doubles for the cell pass (the values are the float32 ones, so nothing changes; it just skips the conversions)
   // how much heat (degrees × capacity) a cell must gain or lose in a tick to keep itself and its neighbours awake: measured as heat
   // rather than degrees, so a lava flow (capacity 25) crusting over slowly stays awake until it sets. Metal carries heat on far
-  // past where its own temperature moves fast, so a bar's warm front needs a lower bar to stay awake
-  const WAKEQ = new Float64Array(N).fill(0.3); WAKEQ[METAL] = 0.05;
+  // past where its own temperature moves fast, so a bar's warm front needs a lower bar to stay awake. Rock needs a higher one: the
+  // halo of rock round a lava chamber warms for ever (no sink), and at 0.3 it kept a ring of rock a hundred cells wide awake
+  const WAKEQ = new Float64Array(N).fill(0.3); WAKEQ[METAL] = 0.05; WAKEQ[STONE] = 1;
+  // the heat lane: a block kept awake only by heat flowing through it (rock warming round a lava chamber, a pool cooling) steps one
+  // tick in LANE, staggered over the blocks, taking LANE ticks' worth of heat at once. The step is implicit in the cell's own
+  // temperature, so the big step can't overshoot whatever the conductance. Anything else that wakes the block puts it back on every tick
+  const LANE = 4, LANEOK = new Uint8Array(N);   // the deep ground's materials only: on the surface the lane changed how the ground and air cool at night (more fog on the hilltops)
+  for (const t of [STONE,LAVA,SALT,GUNP,OIL,GAS]) LANEOK[t] = 1;
   const KHD = Float64Array.from(KH), CAPD = Float64Array.from(CAPT), HOLDD = Float64Array.from(HOLDT), HID = Float64Array.from(HIAT), LOD = Float64Array.from(LOAT);
   // latent heat of fusion, in heat units (capacity × degrees): what a frozen cell must soak up at 0° to melt, and what water must
   // give off at 0° to freeze into it. Ice is a cell of water: 80 water-degrees, as in life. A snow cell is mostly air, an eighth of that
@@ -468,7 +474,7 @@ const Sim = (() => {
   //      FRONT_SPAN coarse columns either way): FRONT_LIFT of the vapour in MASS_MIXH rows of that air a visit, times how sharp the
   //      change is, rises to its cloud base (within FRONT_REACH rows) and builds a shower cloud upward from there, up to STORM_UP
   //      rows tall when the warm sector is at full warmth and the season is warm. A warm front is too gentle to set one off. ----
-  const MASS_L = 2000, MASS_JIT = 600, MASS_T = 4, STEER = 0.25, STEER_W = 0.1, MASS_LOW = 60, MASS_TOP = 200, MASS_MIXH = 60,
+  const MASS_L = 2000, MASS_JIT = 600, MASS_T = 4, STEER = 0.25, STEER_W = 0.1, MASS_LOW = 60, MASS_TOP = 200, MASS_DEEP = 80, MASS_MIXH = 60,
         MASS_RH = 0.5, MASS_RHK = 0.25, MASS_MIX = 0.01, FRONT_COLD = 48, FRONT_WARM = 360, P0 = 1013, PRESS_K = 2.5, TROUGH = 2,
         FRONT_LIFT = 0.15, FRONT_SPAN = 3, FRONT_REACH = 160, STORM_UP = 120;
   // ---- lightning. Every LSCAN ticks each coarse column's cloud is measured; a column more than STORM_N cells deep, with its base
@@ -500,7 +506,7 @@ const Sim = (() => {
   //      to 2 cells a tick, so the flow is worked in SW_SUB steps a tick, each under one cell. Every face is worked from the same
   //      state, after the cell pass (Grid.waves): worked one at a time in the pass, each face saw what the ones before it had just
   //      moved, and that blew up whatever the constants were. ----
-  const SW_MIN = 4, SW_DEEP = 16, SW_G = 0.25, SW_SUB = 3, SW_KEEP = 0.996, SW_UMAX = 4, SW_MAXM = 6, SW_STILL = 0.03, SW_LEVEL = 0.02,
+  const SW_MIN = 4, SW_DEEP = 16, SW_G = 0.25, SW_SUB = 3, SW_KEEP = 0.996, SW_UMAX = 4, SW_MAXM = 6, SW_STILL = 0.03, SW_LEVEL = 0.02, SW_ROUGH = 0.07,
         SW_REACH = 12, SW_IN = 0.3, SW_CLIMB = 1, SW_RUN = 0.2, SW_DROP = 3, SW_SLOW = 0.05, SW_SMOOTH = 1, SW_BED = 0.2, SW_BODY = 6, SW_WIDE = 4, SW_NU = 0.3, SW_GAP = 2, SW_SHEET = 1;
   // sleeping: the cell pass skips 4×4 blocks of cells nobody woke last tick. (They were the wind's 16×16 cells: a lone moving
   // grain kept up to four of those, 1024 cells, awake; now it keeps 64.) wake() divides by SC with shifts
@@ -513,9 +519,12 @@ const Sim = (() => {
   // even/odd row) each run all their tiles at once on any number of threads, and the result is the same on one thread or eight.
   // (A two-colour checkerboard would run diagonal neighbours together, and they share a corner.)
   // The world the page plays in. The land is laid out in the bottom LAND_H rows of any grid; rows above that are extra sky,
-  // room for the weather to build and rain out over the hills (a 480-row grid has none and generates as it always did).
+  // room for the weather to build and rain out over the hills. The hills stand as they would in a SURF_H-row land (the surface
+  // SURF_H*0.32 rows below the land's top, give or take) and the ground goes on down under them to the bottom of the grid, so a
+  // 480-row grid (no extra sky, no extra depth) generates as it always did. Saves from before the world got deeper (480 rows of
+  // land) load with the extra rows filled in.
   // the page's grid: a window W×H onto a world WIDE cells across (it streams along it a REGION at a time)
-  const WORLD = {W:1280, H:640, WIDE:12800}, LAND_H = 480;
+  const WORLD = {W:960, H:960, WIDE:6400}, LAND_H = 640, SURF_H = 480, OLD_LAND = 480;
   const TILE = 64, TILE_H = TILE, REACH = TILE/2, PHASES = 4, DEFER_MAX = 32768, PUSHING = 64, PRESS_EVERY = 4, PRESS_GAP = 4, PRESS_FADE = 0.8;
   // Streaming: the grid is a window onto a wider world and moves REGION columns at a time (a multiple of the tile, chunk and air cell)
   const REGION = 320;
@@ -568,7 +577,7 @@ const Sim = (() => {
       this.fronts=false; this.massX=0; this.lightning=false; this.strikes=0; this.bolts=[];   // fronts: air masses move over, lightning: storms strike (both on in generated and flat worlds); bolts: recent strikes, for drawing
       this.hold=false;                                                    // hold stops the clock: the time of day and the season stay put
       this.top=Math.max(0,H-LAND_H);                                   // rows of sky above the land's layout
-      this.skyY=this.top+(((H-this.top)*0.4)|0);
+      this.skyY=this.top+((Math.min(H-this.top,SURF_H)*0.4)|0);         // typical ground level, for the climate (see ambAt)
       this.trees=[]; this.treeId=1; this.springs=0; this.droughtKills=0; this.slides=0; this.frostBroke=0;                       // tree entities; and a count of the water springs have let out
       this.bfsQ=new Int32Array(0); this.bfsMark=new Int32Array(W*H); this.bfsStamp=0; this.pushing=[]; this.asked=[];   // the pressure search's scratch, and the cells still pushing (main thread)
       this.ox=0; this.worldW=W; this.worldSeed=0; this.store=new Map(); this.storedTrees=new Map();   // streaming: where the window sits in a wider world
@@ -578,7 +587,7 @@ const Sim = (() => {
       if (opts.buffer) return;                                           // attached: the owner of the world has set it up
       this.temp.fill(AMB);
       this.struck.fill(-STRIKE_GAP);
-      for (let y=0;y<H;y++){ const d=this.skyY-y; this.mfade[y]=Math.max(0,Math.min(1,(MASS_TOP-d)/(MASS_TOP-MASS_LOW))); }
+      this.fadeMasses();
       this.clock=START; this.updateClimate();
       this.resetTemp(); this.initAir();
     }
@@ -594,6 +603,9 @@ const Sim = (() => {
       if (this.aridOx!==this.ox || this.aridSeed!==this.worldSeed){ const a=this.aridF||(this.aridF=new Float32Array(this.W)); for (let x=0;x<this.W;x++) a[x]=1+ARID_DRY*aridAt(this.worldSeed,this.ox+x); this.aridOx=this.ox; this.aridSeed=this.worldSeed; }
       return this.aridF;
     }
+    fadeMasses(){   // mfade by row; in a generated world none of it reaches down into the caves under the hills (cave air followed the weather, and warmed the rock round it for ever)
+      for (let y=0;y<this.H;y++){ const d=this.skyY-y; this.mfade[y]=Math.max(0,Math.min(1,(MASS_TOP-d)/(MASS_TOP-MASS_LOW),this.worldSeed ? (d+MASS_DEEP+60)/60 : 1)); }
+    }
     airAt(x,y){ return this.ambRow[y]+this.massT[x>>2]*this.mfade[y]; }   // the air's usual temperature at (x,y), with the air mass over it
     rh(c){ return this.cap[c]>0 ? this.hum[c]/this.cap[c] : 1; }        // relative humidity
     airOver(x,y){ let a=this.ac(x,Math.max(0,y)); for (let q=0;q<2 && this.cap[a]<=0 && a>=this.AW;q++) a-=this.AW; return a; }   // the air over open ground at (x,y): a coarse cell its ground half fills holds no air, so the one above
@@ -608,6 +620,15 @@ const Sim = (() => {
       next[cy0*CW+cx0]=1;
       if (cx1!==cx0) next[cy0*CW+cx1]=1;
       if (cy1!==cy0){ next[cy1*CW+cx0]=1; if (cx1!==cx0) next[cy1*CW+cx1]=1; }
+    }
+    warm(x,y){   // wake() for heat flow alone: the blocks go on the heat lane unless something else wakes them
+      const CW=this.SW, next=this.next;
+      let cx0=(x-2)>>SC_SHIFT, cx1=(x+2)>>SC_SHIFT, cy0=(y-2)>>SC_SHIFT, cy1=(y+2)>>SC_SHIFT;
+      if (cx0<0) cx0=0; if (cy0<0) cy0=0; if (cx1>=CW) cx1=CW-1; if (cy1>=this.SH) cy1=this.SH-1;
+      if (cx0>cx1 || cy0>cy1) return;
+      let b=cy0*CW+cx0; if (!next[b]) next[b]=2;
+      if (cx1!==cx0){ b=cy0*CW+cx1; if (!next[b]) next[b]=2; }
+      if (cy1!==cy0){ b=cy1*CW+cx0; if (!next[b]) next[b]=2; if (cx1!==cx0){ b=cy1*CW+cx1; if (!next[b]) next[b]=2; } }
     }
     wakeAll(){ this.next.fill(1); }
     pick(v){ return Array.isArray(v) ? v[(R()*v.length)|0] : v; }
@@ -947,7 +968,7 @@ const Sim = (() => {
     }
     stepMobile(x,y,i,t){
       const el=EL[t], liquid=KIND[t]===2;
-      if (el.lazy && R()<el.lazy){ if (t!==MUD || this.canSlump(i,x,y)) this.wake(x,y); return; }   // (mud at rest lets its chunk sleep)
+      if (el.lazy && R()<el.lazy){ if (this.VX0(i) || this.canSlump(i,x,y,t)) this.wake(x,y); return; }   // (a thick liquid or a lazy powder at rest lets its block sleep)
       const VX=this.vx, VY=this.vy, W=this.W, T=this.type, d=liquid ? this.dens(i,t) : el.density;
       if (VY[i]>=SLIP_TAG && (t===DIRT || t===SAND)){ this.slide(i,x,y,t); return; }   // soil in a landslide (see SLIP_)
       if (t===BRINE && R()<0.25) this.mixSalt(i);
@@ -1058,14 +1079,17 @@ const Sim = (() => {
       if (flow>=1 || (R()<flow && this.head(ci,cy,t, t===MUD ? 2 : t===MGLASS ? 2+((1000-this.temp[ci])/100|0) : 3+((1300-this.temp[ci])/120|0)))){
         // oil spreads into a thin film over water
         const below = cy+1<this.H ? T[ci+W] : STONE, disp = (t===OIL && (below===WATER || below===BRINE)) ? 10 : el.disperse;
+        // a cell of a liquid without surface tension (oil) lying still on its own kind, on still liquid, only moves along the surface toward somewhere lower within reach: a part-filled top row
+        // (a film one cell deep over the body) otherwise wandered for ever, and kept its block awake (water's tension already holds it)
+        const rest = !el.tension && below===t && av<0.1 && fu<SW_STILL && fu>-SW_STILL && cy+1<this.H;   // (not on a body that is flowing)
         for (let q=0;q<2;q++){
-          const dd=q?-dir:dir; let last=-1;
+          const dd=q?-dir:dir; let last=-1, drop=!rest;
           for (let s=1;s<=disp;s++){
             const nx=cx+dd*s; if(nx<this.wx0||nx>=this.wx1) break;
             const j=cy*W+nx, tj=T[j];
-            if (tj===E || KIND[tj]===3) last=j; else break;
+            if (tj===E || KIND[tj]===3){ last=j; if (!drop && this.canSink(d,j+W)) drop=true; } else break;
           }
-          if (last>=0 && R()<0.95){
+          if (last>=0 && drop && R()<0.95){
             if (thin && R()<el.tension && this.cohesion(last,ci)<2){   // surface tension: a drop won't pull away from its body, and a puddle won't thin to a film
               const near=ci+dd; if (near!==last && cy>0 && T[ci-W]===t && this.cohesion(near,ci)>=2){ this.swap(ci,near); return; }   // but water pressed on from above still advances a step at a time
               continue;
@@ -1179,9 +1203,10 @@ const Sim = (() => {
           u = u*keep*(1-SW_BED*dt/Math.max(1,d*d)) + SW_G*dh*dt;   // (the bed drags on shallow water hardest: a sheet a cell or two deep soon stops)
           if (u>SW_UMAX) u=SW_UMAX; else if (u<-SW_UMAX) u=-SW_UMAX;
           let q=q0;
-          if (slope<SW_LEVEL && slope>-SW_LEVEL && u<SW_SLOW && u>-SW_SLOW){ u*=0.5; if (u<SW_STILL && u>-SW_STILL) u=0; q=0; }   // slow water on the level is left to the cell pass
+          const lev = TENS[t] ? SW_LEVEL : SW_ROUGH;   // (a liquid without surface tension rests a cell rough: see rest in stepMobile)
+          if (slope<lev && slope>-lev && u<SW_SLOW && u>-SW_SLOW){ u*=0.5; if (u<SW_STILL && u>-SW_STILL) u=0; q=0; }   // slow water on the level is left to the cell pass
           else { q += u*Math.min(SW_DEEP, u>0 ? dl : dr)*dt; if (q>SW_MAXM) q=SW_MAXM; else if (q<-SW_MAXM) q=-SW_MAXM; }
-          plan.push(cl,y,t,u,q,slope);
+          plan.push(cl,y,t,u,q,slope<lev && slope>-lev ? 0 : slope);
         }
         // then carry the whole cells over, each from the top of the upstream column onto the top of the downstream one
         // (in index order on one step and backwards on the next: always forwards, and the faces worked first had first pick, which
@@ -1205,7 +1230,7 @@ const Sim = (() => {
             q -= q>0 ? 1 : -1;
           }
           this.surface(cl,y,t); U[cl]=u; Q[cl]=q; RW[cl] = this.sv>=0 ? this.sv : this.so>=0 ? this.so+1 : y;
-          if (sub===SW_SUB-1 && (u>SW_STILL || u<-SW_STILL || plan[k+5]>=SW_LEVEL || plan[k+5]<=-SW_LEVEL)){   // (or still sloping: it will run)
+          if (sub===SW_SUB-1 && (u>SW_STILL || u<-SW_STILL || plan[k+5]!==0)){   // (or still sloping: it will run)
             this.wake(cl,y); this.wake(cr,y); }
         }
       }
@@ -1253,14 +1278,15 @@ const Sim = (() => {
     sticky(i,y,t){   // damp sand and damp clay hold together: no sliding off diagonally (damp sand slides again under water; wet clay sticks, under water too)
       return (t===SAND && (this.life[i]&255)>=CLUMP && !(y>0 && KIND[this.type[i-this.W]]===2)) || (t===CLAY && (this.life[i]&255)>=CLAY_WET);
     }
-    canSlump(i,x,y){   // could a cell of mud move: down, diagonally down, or sideways off a heap?
-      const W=this.W, d=EL[MUD].density;
+    canSlump(i,x,y,t){   // could a cell of a thick liquid (mud, lava, molten glass) or a lazy powder move: down, diagonally down, or (a liquid) sideways off a heap?
+      const W=this.W, d=KIND[t]===2 ? this.dens(i,t) : EL[t].density;
       if (y+1>=this.wy1) return false;
       if (this.canSink(d,i+W)) return true;
-      for (const s of [-1,1]){ const nx=x+s; if (nx<this.wx0 || nx>=this.wx1) continue; if (this.canSink(d,i+W+s)) return true;
-        if ((this.type[i+s]===E || isGas(this.type[i+s])) && ((y>1 && this.type[i-W]===MUD && this.type[i-2*W]===MUD) || (nx+s>=this.wx0 && nx+s<this.wx1 && this.canSink(d,i+W+2*s)))) return true; }
+      for (let s=-1;s<=1;s+=2){ const nx=x+s; if (nx<this.wx0 || nx>=this.wx1) continue; if (this.canSink(d,i+W+s)) return true;
+        if (KIND[t]===2 && (this.type[i+s]===E || isGas(this.type[i+s])) && ((y>1 && this.type[i-W]===t && this.type[i-2*W]===t) || (nx+s>=this.wx0 && nx+s<this.wx1 && this.canSink(d,i+W+2*s)))) return true; }
       return false;
     }
+    VX0(i){ const v=this.vx[i]; return v>=0.5 || v<=-0.5 || this.vy[i]>=1; }   // still moving (a lazy cell keeps its block awake until it stops)
     head(i,y,t,need){   // is there at least `need` of the same liquid piled directly on top of cell i?
       for (let k=1;k<=need;k++){ if (y-k<0 || this.type[i-k*this.W]!==t) return false; }
       return true;
@@ -1438,10 +1464,13 @@ const Sim = (() => {
       if (up && this.gasMove(i,t,x,y-1)) return;
       const dir=R()<0.5?-1:1;
       if (R()<buoy && this.gasMove(i,t,x+dir,y-1)) return;
+      // cave gas gathered under a roof (nothing open over it, nor diagonally over it) stops wandering: it sleeps until something round it changes
+      if (t===GAS && !this.gasRoom(x,y)) return;
       if (this.gasMove(i,t,x+dir,y)) return;
       this.gasMove(i,t,x-dir,y);
       this.wake(x,y);
     }
+    gasRoom(x,y){ if (y<=0) return false; for (let dx=-1;dx<=1;dx++){ const nx=x+dx; if (nx>=0 && nx<this.W){ const tj=this.type[(y-1)*this.W+nx]; if (tj===E || KIND[tj]===2) return true; } } return false; }   // could gas at (x,y) still rise, straight up or diagonally?
     // ---- trees are entities: a skeleton of segments, re-drawn into the grid as it grows ----
     // Segments marked root grow down into the soil as Root cells: they anchor the tree, and they are how it drinks.
     plantTree(x,y){
@@ -1771,17 +1800,19 @@ const Sim = (() => {
       const regions={}; for (const [k,r] of this.store) regions[k]={type:b64(r.type), life:b64(r.life), temp:b64(r.temp), owner:b64(r.owner), hum:b64(new Uint16Array(r.hum.buffer.slice(0))), trees:r.trees};
       return JSON.stringify({ox:this.ox, worldW:this.worldW, seed:this.worldSeed, blank:this.blank||undefined, treeId:this.treeId, regions});
     }
-    storeLoad(json, dy=0){
+    storeLoad(json, dy=0, deep=0){
       this.store.clear(); this.storedTrees.clear();
       if (!json){ this.ox=0; this.worldW=this.W; this.blank=true; return; }
       const d=JSON.parse(json); this.ox=d.ox; this.worldW=d.worldW; this.worldSeed=d.seed; this.blank=!!d.blank; this.treeId=Math.max(this.treeId,d.treeId||1);
-      // (sky added over a shorter save's regions: empty air at the ambient temperature, and no vapour)
-      const pad=(rle,f)=>{ if (!dy) return rle; const a=unrle16(rle), b=new Uint16Array(a.length+REGION*dy); for (let k=0;k<REGION*dy;k++) b[k]=f((k/REGION)|0); b.set(a,REGION*dy); return rle16(b); };
-      const amb=y=>Math.round(this.ambAt(y))&0xffff, zero=()=>0;
+      // (sky added over a shorter save's regions: empty air at the ambient temperature, and no vapour; and rock under them where the
+      // world has got deeper since)
+      const pad=(rle,f,g)=>{ if (!dy && !deep) return rle; const a=unrle16(rle), b=new Uint16Array(REGION*this.H), n=REGION*dy, m=n+a.length;
+        for (let k=0;k<n;k++) b[k]=f((k/REGION)|0); b.set(a,n); for (let k=m;k<b.length;k++) b[k]=g((k/REGION)|0); return rle16(b); };
+      const amb=y=>Math.round(this.ambAt(y))&0xffff, zero=()=>0, rock=()=>STONE, rockLife=()=>EL[STONE].soil, ar=REGION/AC;
       for (const k in d.regions){
-        const r=d.regions[k], hum=new Float32Array(unb64(r.hum).buffer), h=new Float32Array(hum.length+REGION/AC*dy/AC); h.set(hum,h.length-hum.length);
+        const r=d.regions[k], hum=new Float32Array(unb64(r.hum).buffer), h=new Float32Array(ar*this.AH); h.set(hum.subarray(0,Math.min(hum.length,h.length-ar*dy/AC)),ar*dy/AC);
         for (const t of r.trees) t.y+=dy;
-        this.store.set(+k,{type:pad(unb64(r.type),zero), life:pad(unb64(r.life),zero), temp:pad(unb64(r.temp),amb), owner:pad(unb64(r.owner),zero), hum:h, trees:r.trees});
+        this.store.set(+k,{type:pad(unb64(r.type),zero,rock), life:pad(unb64(r.life),zero,rockLife), temp:pad(unb64(r.temp),amb,amb), owner:pad(unb64(r.owner),zero,zero), hum:h, trees:r.trees});
         for (const t of r.trees) this.storedTrees.set(t.id,+k);
       }
     }
@@ -1837,8 +1868,8 @@ const Sim = (() => {
       if (t!==PLANT) return;
       const v=this.life[i], bud=v&255, sap=v&0xff00;
       if (bud<3){     // drink: nearby water is absorbed and becomes growth budget (a full plant leaves it be)
-        for (const [dx,dy] of [[0,1],[-1,0],[1,0],[0,-1]]){
-          const nx=x+dx, ny=y+dy; if(!this.inb(nx,ny)) continue;
+        for (let n=0;n<4;n++){
+          const nx=x+RDX[n], ny=y+RDY[n]; if(!this.inb(nx,ny)) continue;
           const j=this.idx(nx,ny);
           if (this.type[j]===WATER && R()<0.01){ this.set(j,E); this.life[i]=(255<<8)|Math.min(3,bud+1); this.wake(x,y); break; }   // leaves bush out a little
         }
@@ -2080,7 +2111,8 @@ const Sim = (() => {
       let v=L[i], m=v&255, rich=v&0xff00; const was=m;
       // soak up water it touches: rain, puddles, lake beds (sand drinks it faster)
       if (m<=MOIST-100){
-        for (const j of [i-W, i-1, i+1, i+W]){
+        for (let n=0;n<4;n++){
+          const j=i+(n===0 ? -W : n===1 ? -1 : n===2 ? 1 : W);
           if (j<0 || j>=T.length || T[j]!==WATER || Math.abs(j%W-x)>1) continue;
           if (R()<0.5*k){ const sed=this.life[j]&255; if (sed) this.deposit(j); else this.set(j,E); m+=100; }   // the water soaks in and leaves its silt on top
           break;
@@ -2712,34 +2744,48 @@ const Sim = (() => {
       return X1>X0 && Y1>Y0 ? [X0,X1,Y0,Y1] : null;
     }
     stepTile(tile){
-      const {W,H,SW,TW,type,done,dirty,ctl,ambRow,massT,mfade}=this, temp=this.temp, W1=W-1, H1=H-1;
+      const {W,H,SW,TW,type,done,dirty,next,ctl,ambRow,massT,mfade}=this, temp=this.temp, W1=W-1, H1=H-1;
       const tx=tile%TW, ty=(tile/TW)|0, frame=ctl[C_FRAME];
       reseed(mix(ctl[C_SEED],tile));
       const [X0,X1,Y0,Y1]=this.tileRect(tx,ty);
       this.wx0=Math.max(0,X0-REACH); this.wx1=Math.min(W,X1+REACH); this.wy0=Math.max(0,Y0-REACH); this.wy1=Math.min(H,Y1+REACH);
       const ltr=(frame&1)===0, cx0=X0/SC, cx1=Math.ceil(X1/SC);
       for (let y=Y1-1;y>=Y0;y--){
-        const crow=(y>>SC_SHIFT)*SW;
+        const crow=(y>>SC_SHIFT)*SW, by=y>>SC_SHIFT;
         for (let q=cx0;q<cx1;q++){
-          const cx=ltr?q:cx1-1-(q-cx0); if (!dirty[crow+cx]) continue;   // whole sleeping blocks are skipped at once
+          const cx=ltr?q:cx1-1-(q-cx0), dv=dirty[crow+cx]; if (!dv) continue;   // whole sleeping blocks are skipped at once
+          const lane=dv===2;
+          if (lane && ((frame+cx+by)&(LANE-1))){ if (!next[crow+cx]) next[crow+cx]=2; continue; }   // on the heat lane, and not its tick: it waits (still on the lane)
           const xa=cx*SC, xb=Math.min(W,xa+SC);
           for (let k=xa;k<xb;k++){
             const x=ltr?k:xa+xb-1-k, i=y*W+x;
             // heat: diffusion to the four neighbours (air also bleeds toward the local ambient; burning things stay hot while they burn)
             const th=type[i], row=th*N, hf=HOLDD[th];
             let v=temp[i]; if (v<hf) v=hf;
-            let d=0;
-            if (x>0) d+=(temp[i-1]-v)*KHD[row+type[i-1]];
-            if (x<W1) d+=(temp[i+1]-v)*KHD[row+type[i+1]];
-            if (y>0) d+=(temp[i-W]-v)*KHD[row+type[i-W]];
-            if (y<H1) d+=(temp[i+W]-v)*KHD[row+type[i+W]];
-            if (th===E) d+=(ambRow[y]+massT[x>>2]*mfade[y]-v)*0.03;
-            d/=CAPD[th]; v+=d; if (v<hf) v=hf;
-            temp[i]=v; const q=d*CAPD[th]; if (q>WAKEQ[th] || q<-WAKEQ[th]) this.wake(x,y);   // heat still flowing in or out keeps it and its neighbours awake
+            let d=0, q;
+            if (!lane){
+              if (x>0) d+=(temp[i-1]-v)*KHD[row+type[i-1]];
+              if (x<W1) d+=(temp[i+1]-v)*KHD[row+type[i+1]];
+              if (y>0) d+=(temp[i-W]-v)*KHD[row+type[i-W]];
+              if (y<H1) d+=(temp[i+W]-v)*KHD[row+type[i+W]];
+              if (th===E) d+=(ambRow[y]+massT[x>>2]*mfade[y]-v)*0.03;
+              d/=CAPD[th]; v+=d; if (v<hf) v=hf;
+              temp[i]=v; q=d*CAPD[th];
+            } else {   // LANE ticks at once, implicit in v: v' = (v + L·Σk·T) / (1 + L·Σk) (with k over the capacity)
+              let s=0, kk, c=LANE/CAPD[th];
+              if (x>0){ kk=KHD[row+type[i-1]]; d+=temp[i-1]*kk; s+=kk; }
+              if (x<W1){ kk=KHD[row+type[i+1]]; d+=temp[i+1]*kk; s+=kk; }
+              if (y>0){ kk=KHD[row+type[i-W]]; d+=temp[i-W]*kk; s+=kk; }
+              if (y<H1){ kk=KHD[row+type[i+W]]; d+=temp[i+W]*kk; s+=kk; }
+              if (th===E){ d+=(ambRow[y]+massT[x>>2]*mfade[y])*0.03; s+=0.03; }
+              let u=(v+c*d)/(1+c*s); if (u<hf) u=hf;
+              q=(u-v)*CAPD[th]/LANE; temp[i]=v=u;   // (q per tick, to judge it by the same bar)
+            }
+            if (q>WAKEQ[th] || q<-WAKEQ[th]){ if (LANEOK[th]) this.warm(x,y); else this.wake(x,y); }   // heat still flowing in or out keeps it and its neighbours awake (deep-ground materials on the heat lane, unless something else wakes them)
             if ((SLOWHEAT[th] || v>HID[th] || v<LOD[th] || (th===OIL && this.life[i])) && this.phaseHeat(x,y,i,th,v)) continue;
             const t=type[i];
             if (INERT[t]){ if (!done[i] && SPAN[t] && !(this.life[i]&1)) this.stepSupport(x,y,i,t); continue; }   // (the general path below, short-cut)
-            if (t===E){ if (y>0 && !done[i]){ const a=i-W; if (type[a]===E && temp[i]>temp[a]+12 && R()<0.3){ const tt=temp[i]; temp[i]=temp[a]; temp[a]=tt; this.wake(x,y-1); } } continue; }
+            if (t===E){ if (y>0 && !done[i]){ const a=i-W; if (type[a]===E && temp[i]>temp[a]+12 && R()<0.3){ const tt=temp[i]; temp[i]=temp[a]; temp[a]=tt; this.warm(x,y-1); } } continue; }
             if (done[i]) continue;
             if (this.stepReactions(x,y,i)) continue;
             const tt=type[i], kd=KIND[tt];
@@ -2782,7 +2828,7 @@ const Sim = (() => {
     //      | RLE of the liquids' life (sediment, salt, acid strength) | RLE of the vapour field in hundredths
     //      | JSON of the wider world: where the window sits, its width and seed, and the regions streamed out of the window
     //      | RLE of sand moisture | RLE of plant life (grass sap and budget) | where the air masses have drifted to (empty: no fronts)
-    //      | RLE of how weathered the rock is (stone's life over its settled bit) ----
+    //      | RLE of how weathered the rock is (stone's life over its settled bit) | the rows of land under the extra sky ----
     // temps are restored from element defaults
     save(){
       const rle=(len,get,out)=>{ let run=get(0), n=0; for (let i=0;i<len;i++){ const v=get(i); if (v===run && n<65535) n++; else { out.push(run,n); run=v; n=1; } } if (len) out.push(run,n); return out; };
@@ -2790,21 +2836,27 @@ const Sim = (() => {
       const keep=[], fluid=[], sand=[], grass=[], rock=[]; for (let i=0;i<this.type.length;i++){ const t=this.type[i]; if (KEEP_LIFE.has(t)) keep.push(this.life[i]); else if (FLUID_LIFE.has(t)) fluid.push(this.life[i]); else if (t===SAND) sand.push(this.life[i]); else if (t===PLANT || WILD[t]) grass.push(this.life[i]); else if (t===STONE) rock.push(this.life[i]>>1); }
       const hum=this.hum;
       return pack(rle(this.type.length,i=>this.type[i],[this.W,this.H]))+'|'+this.treesSave()+'|'+pack(rle(keep.length,i=>keep[i],[]))+'|'+Math.round(this.clock)
-        +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]))+'|'+this.storeSave()+'|'+pack(rle(sand.length,i=>sand[i],[]))+'|'+pack(rle(grass.length,i=>grass[i],[]))+'|'+(this.fronts ? this.massX.toFixed(2) : '')+'|'+pack(rle(rock.length,i=>rock[i],[]));
+        +'|'+pack(rle(fluid.length,i=>fluid[i],[]))+'|'+pack(rle(hum.length,i=>Math.min(65535,Math.round(hum[i]*100)),[]))+'|'+this.storeSave()+'|'+pack(rle(sand.length,i=>sand[i],[]))+'|'+pack(rle(grass.length,i=>grass[i],[]))+'|'+(this.fronts ? this.massX.toFixed(2) : '')+'|'+pack(rle(rock.length,i=>rock[i],[]))+'|'+(this.H-this.top);
     }
     load(str){
-      const [rle,treeJson='',soil='',clock='',fluids='',air='',stream='',sandy='',plants='',masses='',rocks='']=str.split('|');
+      const [rle,treeJson='',soil='',clock='',fluids='',air='',stream='',sandy='',plants='',masses='',rocks='',land='']=str.split('|');
       const unpack=b64=>{ const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); return new Uint16Array(bytes.buffer); };
-      const u=unpack(rle);
-      // a save from a shorter grid of the same land (before the world had its extra sky) loads with sky added over the top;
-      // one from a narrower window (before the window grew) loads into its left part, and the window is widened from the world
-      const dy=this.H-u[1], sw=u[0];
-      if (sw>this.W || (sw<this.W && (sw%REGION || this.W%REGION)) || dy<0 || (dy && (dy%AC || Math.max(0,u[1]-LAND_H)+dy!==this.top))) throw new Error('world size mismatch');
+      const u=unpack(rle), sw=u[0], sh=u[1];
+      // a save from a wider window (before the window narrowed) loads into one of that width, which hands over its left part
+      // and stores the rest as regions of the world
+      if (sw>this.W){ if ((sw-this.W)%REGION || this.W%REGION) throw new Error('world size mismatch'); return this.narrow(str,sw); }
+      // a save from a shorter grid loads shifted down, its land lined up with the land here: the extra sky goes on over the top, and
+      // ground it didn't have, from before the world got deeper, is filled in under it as rock (a flat world's ground and the
+      // scenario box sit at the same height over the land as they did, so they line up too)
+      // One from a narrower window (before the window grew) loads into its left part, and the window is widened from the world
+      const sLand=land ? +land : Math.min(sh,OLD_LAND), dy=this.top-(sh-sLand), deep=this.H-dy-sh;   // deep: rows of rock added under the save
+      if ((sw<this.W && (sw%REGION || this.W%REGION)) || dy<0 || deep<0 || dy%AC) throw new Error('world size mismatch');
       if (clock) { this.clock=+clock; this.updateClimate(); }
       this.clear(); let i=dy*this.W, x=0;
       for (let p=2;p<u.length;p+=2){ const t=u[p], n=u[p+1]; for (let k=0;k<n;k++,i++){
         this.type[i]=t; this.temp[i]=t===E?this.ambAt((i/this.W)|0):EL[t].t0; this.shade[i]=(R()*64)|0; const l=EL[t].life; this.life[i]=l?l[0]:EL[t].soil;
         if (++x===sw){ x=0; i+=this.W-sw; } } }   // (rows of the saved width)
+      for (let y=dy+sh;y<this.H;y++) for (let x=0;x<sw;x++){ const j=y*this.W+x; this.type[j]=STONE; this.temp[j]=this.ambAt(y); this.shade[j]=(R()*64)|0; this.life[j]=EL[STONE].soil; }
       const unrle=(b64,keep)=>{ const s=unpack(b64); let p=0, left=s.length?s[1]:0;
         for (let j=0;j<this.type.length && p<s.length;j++){ if (!keep.has(this.type[j])) continue; this.life[j]=s[p]; if (--left===0){ p+=2; left=s[p+1]; } } };
       if (soil) unrle(soil,KEEP_LIFE);     // older saves have no soil section: dirt keeps its default moisture
@@ -2812,13 +2864,32 @@ const Sim = (() => {
       if (sandy) unrle(sandy,new Set([SAND]));   // nor wet sand: it loads dry
       if (plants) unrle(plants,new Set([PLANT,SHRUB,CACTUS,REED]));   // nor grass sap: grass loads green
       if (rocks){ unrle(rocks,new Set([STONE])); for (let j=0;j<this.type.length;j++) if (this.type[j]===STONE) this.life[j]<<=1; }   // nor weathered rock: it loads sound (and every rock re-checks its support, as it always has)
-      this.storeLoad(stream, dy);          // nor a wider world: it loads as a world the size of the window
+      this.storeLoad(stream, dy, deep);    // nor a wider world: it loads as a world the size of the window
       this.treesLoad(treeJson, dy);
       if (masses!==''){ this.fronts=true; this.massX=+masses; this.updateMasses(false); }   // (where the air masses had drifted to; older saves keep the weather they had)
+      this.fadeMasses();
       const came=sw<this.W ? this.widen(sw) : [];
       this.initAir();
       if (air){ const s=unpack(air), aw=sw/AC; for (let p=0,c=0;p<s.length;p+=2) for (let k=0;k<s[p+1];k++,c++) this.hum[(dy/AC+((c/aw)|0))*this.AW+c%aw]=s[p]/100; }
       for (const [x0,rec] of came) this.humIn(x0,rec.hum);
+      this.wakeAll();
+    }
+    // a save from a window sw wide (wider than this one): load it at its own width, store the regions past this window's right
+    // edge (a world that isn't generated just loses them), and take over the rest
+    narrow(str,sw){
+      const big=new Grid(sw,this.H); big.load(str);
+      const {W,H}=this;
+      if (big.blank || big.worldW<=sw) big.worldW=W;
+      else for (let x0=W;x0<sw;x0+=REGION){ const key=(big.ox+x0)/REGION; big.store.set(key,big.packRegion(x0)); }
+      this.clear();
+      for (let y=0;y<H;y++){ const a=y*sw, b=y*W;
+        for (const f of ['type','life','temp','shade','owner','fuse','vx','vy']) this[f].set(big[f].subarray(a,a+W),b); }
+      for (let ay=0;ay<this.AH;ay++) this.hum.set(big.hum.subarray(ay*big.AW,ay*big.AW+this.AW),ay*this.AW);
+      for (const k of ['clock','ox','worldW','worldSeed','blank','treeId','fronts','massX']) this[k]=big[k];
+      this.store=big.store; this.storedTrees=big.storedTrees; this.updateClimate();
+      this.trees=[]; for (const t of big.trees){ const n=this.treeFrom(this.treeRecord(t,0),0); this.trees.push(n); this.rasterTree(n); }
+      this.fadeMasses(); if (this.fronts) this.updateMasses(false);
+      const hum=this.hum.slice(); this.initAir(); this.hum.set(hum);
       this.wakeAll();
     }
     // a save from a narrower window has filled columns [0,sw): fill the rest from the world it came from. Regions the save had
@@ -2854,7 +2925,8 @@ const Sim = (() => {
     if (g.noise && g.noise.seed===g.worldSeed) return g.noise;
     const s=g.worldSeed, keep=seedNow(), nz=noise2(s), cave=noise2(s+7), ore=noise2(s+13); reseed(keep);
     const top=g.top, LH=g.H-top;
-    return g.noise={seed:s, nz, cave, ore, surf:gx=>top+((LH*0.32 + (nz(gx/90,0.5,4)-0.5)*LH*0.35)|0)};
+    const SH=Math.min(LH,SURF_H);
+    return g.noise={seed:s, nz, cave, ore, surf:gx=>top+((SH*0.32 + (nz(gx/90,0.5,4)-0.5)*SH*0.35)|0)};
   }
   const LAKE=0x1a4e, LAKE_RIM=24, LAKE_DEEP=6, TREE=0x7e3e, GRASS=0x6a55, WILDS=0x5c21, CACTI_EVERY=13, TREES_EVERY=12, ANIMALS=0x3b17, RABBITS_EVERY=40, HOPPERS_EVERY=12, COOK=12, GAP=4, CRAG_LO=1.2, CRAG_HI=1.8;
   // (a generator: it yields between slices of work, so a region can be made a little at a time in spare moments)
@@ -2883,9 +2955,9 @@ const Sim = (() => {
     for (let x=x0;x<x1;x++){ if (x>x0 && x%32===0) yield; reseed(mix(s, g.ox+x)); for (let y=0;y<H;y++){
       const gx=g.ox+x, i=g.idx(x,y), sy=surf[x-x0]; if (y<sy) continue;
       const depth=y-sy, ly=y-top, dn=ly/LH;   // (the land's noise is in its own rows, so the extra sky doesn't change it)
-      let t=STONE, frozen=false;
+      let t=STONE, frozen=0;
       const a=ar[x-x0], soil=(4+nz(gx/20,ly/20,2)*8)*keepSoil[x-x0];
-      if (depth<soil) t = sy>top+LH*0.42 || a>=ARID_DESERT || (a>=ARID_SCRUB && depth>=2) ? SAND : DIRT;   // topsoil, with sandy shores in the low valleys, sand in the desert and a skin of dirt over sand in the scrub
+      if (depth<soil) t = sy>top+Math.min(LH,SURF_H)*0.42 || a>=ARID_DESERT || (a>=ARID_SCRUB && depth>=2) ? SAND : DIRT;   // topsoil, with sandy shores in the low valleys, sand in the desert and a skin of dirt over sand in the scrub
       else {
         const c=cave(gx/48,ly/32,3), o=ore(gx/30,ly/30,3);
         if (c>0.62 && depth>8){ t=E;
@@ -2899,11 +2971,13 @@ const Sim = (() => {
         else if (o<0.21 && depth>40) t=lavaDist(x,ly)<=COOK ? STONE : GUNP;
         else if (o>0.70 && o<0.72 && depth>15) t=SALT;
         else if (c<0.3 && dn>0.5 && o>0.62) t=ICE;
-        frozen = c<0.36 && dn>0.47 && o>0.56;   // ice veins lie in a halo of frozen rock (permafrost), which keeps them frozen in the warm deep ground
+        // ice veins lie in a halo of frozen rock (permafrost), which keeps them frozen in the warm deep ground. It thaws out to the
+        // ground's own warmth over a few cells at its edge (a sharp edge was heat flowing for ever, keeping all that rock awake)
+        if (c<0.36 && dn>0.47 && o>0.56) frozen=Math.min(1,(0.36-c)/0.06)*Math.min(1,(dn-0.47)/0.03)*Math.min(1,(o-0.56)/0.06);
       }
       if (y>=H-3) t=STONE;
       if (t!==E) g.set(i,t, EL[t].t0===AMB ? g.ambAt(y) : undefined);   // the ground starts at the local ambient, so it doesn't spend its first minutes cooling
-      if (frozen && (t===STONE || t===ICE)) g.temp[i]=PERMAFROST;
+      if (frozen && t!==E && KIND[t]!==2 && KIND[t]!==3) g.temp[i]=t===ICE ? PERMAFROST : g.temp[i]+(PERMAFROST-g.temp[i])*frozen;   // (whatever else lies in it, salt and all, is as cold)
       if (t===DIRT) g.life[i]=((Math.max(HUMUS_DEEP, HUMUS-depth*HUMUS_STEP)*(1-0.6*a))<<8)|(Math.min(MOIST, 70+depth*18)*(1-0.6*a));      // damper with depth, poorer (and drier where the climate is)
       else if (t===SAND && depth<soil) g.life[i]=Math.max(Math.min(SATM-10, 20+depth*16)*(1-0.8*a), depth>=2 ? CLUMP+8 : 0);   // sandy topsoil too, damp enough under the desert's surface to hold together (sand deep in the rock is dry)
     } }
@@ -3001,7 +3075,7 @@ const Sim = (() => {
   function generate(g, worldSeed, worldW=g.W, ox=0){
     g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=worldSeed; g.worldW=worldW; g.ox=ox; g.blank=false;
     weatherOn(g);
-    const surf=generateColumns(g,0,g.W);
+    g.fadeMasses(); const surf=generateColumns(g,0,g.W);
     g.initAir();
     g.wakeAll();
     return surf;
@@ -3010,9 +3084,9 @@ const Sim = (() => {
   // a flat world to build in: bedrock, a layer of damp soil with grass on it, and open sky. It is one window wide (it doesn't
   // stream). Returns the surface row.
   function flat(g){
-    g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=0; g.worldW=g.W; g.ox=0; g.blank=false;
+    g.clock=START; g.updateClimate(); g.clear(); g.worldSeed=0; g.worldW=g.W; g.ox=0; g.blank=false; g.fadeMasses();
     weatherOn(g);
-    const top=g.H-140;
+    const top=Math.min(g.H-140, g.skyY+148);   // (the same height over skyY whatever the grid's height, so the same climate; deeper ground under it)
     for (let y=top;y<g.H;y++) for (let x=0;x<g.W;x++){ const i=g.idx(x,y); if (y<top+24){ g.set(i,DIRT,g.ambAt(y)); g.life[i]=(Math.max(HUMUS_DEEP, HUMUS-(y-top)*HUMUS_STEP)<<8)|120; } else g.set(i,STONE,g.ambAt(y)); }
     for (let x=0;x<g.W;x++){ const h=1+(R()*2|0); for (let y=top-1;y>=top-h;y--){ const i=g.idx(x,y); g.set(i,PLANT,g.ambAt(y)); g.life[i]=(SAP0<<8)|1; } }
     g.initAir(); g.wakeAll();
@@ -3031,7 +3105,7 @@ const Sim = (() => {
   // A survive scenario (survive:true) is won instead by reaching the end of the clock with every goal met and no fail reached.
   // sources: [{el:'Lava', rect, from, to, rate, temp}]: from tick `from` until `to`, up to `rate` cells a tick of that element appear in
   // empty cells of the rectangle (a river in flood, a volcano's vent): fill or wall off the rectangle and it stops.
-  const BOX = {x:320, y:WORLD.H-200, w:320, h:200};
+  const BOX = {x:320, y:WORLD.H-LAND_H+280, w:320, h:200};   // (as high over the land's top as it was at the bottom of the 640-row world: the same climate)
   const SEALED = 24;   // the biggest bubble a goal counting cells "open to the air" treats as shut in
   const byName = n => { const e=EL.find(e=>e.name===n); if (!e) throw new Error('no element '+n); return e.id; };
   const ids = v => (Array.isArray(v) ? v : [v]).map(byName);
@@ -3180,9 +3254,9 @@ const Sim = (() => {
     // start a built-in scenario: an empty world the size of the grid with the box dug into stone at the bottom middle
     static start(g, sc){
       reseed(sc.seed||1);
-      g.clear(); g.worldW=g.W; g.ox=0; g.worldSeed=0; g.clock=START; g.updateClimate(); g.resetTemp();
+      g.clear(); g.worldW=g.W; g.ox=0; g.worldSeed=0; g.fadeMasses(); g.clock=START; g.updateClimate(); g.resetTemp();
       g.frame=0; Game.weather(g,sc);   // (the natural wind follows the frame count: from 0, every play of a scenario gets the same weather)
-      for (let y=BOX.y;y<g.H;y++) for (let x=0;x<g.W;x++) if (x<BOX.x || x>=BOX.x+BOX.w) g.set(g.idx(x,y),STONE,g.ambAt(y));
+      for (let y=BOX.y;y<g.H;y++) for (let x=0;x<g.W;x++) if (x<BOX.x || x>=BOX.x+BOX.w || y>=BOX.y+BOX.h) g.set(g.idx(x,y),STONE,g.ambAt(y));
       sc.build(builder(g));
       g.initAir(); if (sc.air!==undefined) for (let c=0;c<g.hum.length;c++) g.hum[c]*=sc.air;   // air: how humid, against the usual
       g.wakeAll();
@@ -3291,7 +3365,7 @@ const Sim = (() => {
 const {WORLD,EL,Grid,CH,SC,generate,ids,REGION,BOX,SCENARIOS,Game,BOLT_T}=Sim;
 const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS,SHRUB,CACTUS,REED,RABBIT,HOPPER}=ids;
 const ERASE=255, PAN=254, CURED_SAP=Sim.CURED, MUD_DRY=190;
-const W=WORLD.W, H=WORLD.H, VW=320, VH=240, WORLD_W=WORLD.WIDE;   // the grid is a window that streams along a world ten times as wide
+const W=WORLD.W, H=WORLD.H, VW=320, VH=240, WORLD_W=WORLD.WIDE;   // the grid is a window that streams along a world nearly seven times as wide
 const canThread=Sim.canShare && typeof Worker!=='undefined' && typeof Blob!=='undefined';
 const g=new Grid(W,H,{shared:canThread});
 window.sandfall={g,Sim};   // handy for poking at the world from the console
