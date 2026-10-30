@@ -17,7 +17,7 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   support cookoff conduct melt groundwater dunes windfire channel
                               #   grass compete seasonfire ... widen (E8) ... landslide frost beams (R5)
                               #   scrub cactus reeds biomes (R6)
-                              #   nutrients (R7)
+                              #   nutrients (R7) vigour
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -26,6 +26,7 @@ node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins,
 BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
 OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
 OX=0 node tools/soil.js [seed] [seasons]   # R7: topsoil and subsoil nutrients by cover (forest, meadow, scrub, bare), each season
+node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, binned by sun and soil
 ```
 
 ## Engine (stage 4)
@@ -324,3 +325,20 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   without animals. Big summer wildfires (which hit 99 and 777 without animals too) wipe out the local population on those
   seeds: 777 keeps ~5 rabbits, 99 loses them by year 3. Tuning lessons: a mate within 6 columns was an Allee trap (the
   population drifted to zero); grasshoppers that aged out before late summer never laid eggs.
+- Tree size by sun and soil (`Grid.vigour`): each tree keeps `t.sun`, a running share of sampled crown tips (two a growth step)
+  with open sky over them by `Grid.shadedFor` (`shaded` without the tree's own leaves), and `t.soil`, a slow mean of `t.fert`
+  (seedlings learn both at once). Vigour = (`SUN_LO` + (1-`SUN_LO`)·sun) × min(`VIG_HI`, soil/`SOIL_REF`), clamped to
+  `VIG_LO`..`VIG_HI` (0.3..1.6). A segment's `max` is now its length at vigour 1: limbs grow to max·vigour (roots only shrink
+  with it), wood thickens to MAXT·vigour, leaf clumps spread up to 3.2·vigour (0.7..1.4), and past 1.3 the trunk and first
+  branches put out one more branch each. The growth gate also takes (0.5+0.5·sun). Limbs now stop at rock, walls and other
+  trees' wood (`limbRoom`), and a limb doesn't lengthen if that would push a branch it carries into one (`limbsClear`): trees
+  used to tunnel up through overhangs. Seeds leave from past a big tree's wider leaves. Shrubs set their height on rooting
+  from soil fertility (2-6 cells, was 3-4) and grass on spent soil (fert under `GRASS_POOR`) only bushes to two cells.
+  Saves carry `sun` and `soil` (older saves load at full sun on their `fert`). Measured (`validate.js vigour`, four seeds): on
+  watered plots over two days a sapling on rich soil grows 100-107 tall (trunk 71) and 84-100 wide, one on poor soil 28-34, and
+  one on rich soil under a rock overhang 21 (trunk 12-17). Generated year (`tools/trees.js`): trees spread out by place where they
+  used to come out alike. Seed 12345 after a year: heights p10 34, median 55, p90 90, max 99 (main: 49, 60, 71, 71); seed 99:
+  17, 43, 74, 78. Understory trees under a canopy average 28-36 tall, open-ground ones 50-70, and young trees on rich soil
+  in the open reach 60 by age ~60. The trees a new world grows at the start drink its fresh humus, so they come out about
+  as big as before. Perf A/B on the same year-old save: tick p50 10.8 vs 10.1 ms. `nutrients`' burnt-meadow check now sums
+  four plots: one plot passed with under a quarter of the ash left by luck (main leaves 88 of 334 over the four; this build 89).

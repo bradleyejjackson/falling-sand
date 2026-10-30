@@ -19,6 +19,23 @@ const moisture = (g, y0, y1) => { let s = 0, n = 0; for (let i = y0 * g.W; i < y
 const run = (g, n, every, fn) => { for (let f = 1; f <= n; f++) { g.step(); if (every && f % every === 0) fn(f); } };
 
 const scenarios = {
+  vigour() {
+    // a tree grows to a size set by its sun and soil together: on rich open ground a giant, on poor soil a small tree, and under
+    // an overhang (shade) a stunted one however rich the soil. The soil is kept watered so only light and nutrients differ.
+    Sim.reseed(7);
+    const W = 360, H = 200, D = 40, g = new Sim.Grid(W, H), plots = [['poor', 15, false], ['rich', 180, false], ['shaded rich', 180, true]], PW = W / plots.length;
+    for (let y = H - D; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 3) g.set(i, STONE); else { g.set(i, DIRT); g.life[i] = (plots[(x / PW) | 0][1] << 8) | 160; } }
+    g.initAir();
+    const xs = plots.map((p, k) => Math.round(PW * (k + 0.5)));
+    plots.forEach(([, , roof], k) => { g.set(g.idx(xs[k], H - D - 1), TIP); if (roof) for (let x = xs[k] - 45; x <= xs[k] + 45; x++) for (let y = H - D - 24; y <= H - D - 22; y++) { const i = g.idx(x, y); g.set(i, STONE); g.life[i] |= 1; } });   // an overhang of the hills' rock (settled, so it holds)
+    run(g, 2 * Sim.YEAR / 8, 1, f => { if (f % 64) return; for (let y = H - D; y < H - 3; y += 7) for (let x = f % 3; x < W; x += 3) { const i = g.idx(x, y); if (g.type[i] === DIRT && (g.life[i] & 255) < 120) g.life[i] = (g.life[i] & 0xff00) | 160; } });
+    const size = x => { const t = g.trees.find(t => t.x === x); if (!t) return { h: 0, w: 0, trunk: 0, sun: 0, vig: 0 }; let top = t.y, x0 = x, x1 = x; for (const [i, c] of t.cells) { if (t.segs[c >> 1].root) continue; top = Math.min(top, (i / W) | 0); x0 = Math.min(x0, i % W); x1 = Math.max(x1, i % W); } return { h: t.y - top + 1, w: x1 - x0 + 1, trunk: t.segs[0].len, sun: t.sun, vig: g.vigour(t) }; };
+    const [poor, rich, shade] = xs.map(size);
+    console.log('  ' + plots.map(([n], k) => { const s = [poor, rich, shade][k]; return `${n}: ${s.h} tall (trunk ${s.trunk.toFixed(0)}), ${s.w} wide, sun ${s.sun.toFixed(2)}, vigour ${s.vig.toFixed(2)}`; }).join('; '));
+    check('a tree on rich open ground grows half as tall again as one on poor soil', rich.h >= 1.5 * poor.h, `${rich.h} vs ${poor.h}`);
+    // (its limbs stop at the rock: one that would push a branch it carries into it stops too)
+    check('a tree on rich soil in the shade stays stunted (trunk under 0.6 of the open one)', shade.trunk > 0 && shade.trunk < 0.6 * rich.trunk && shade.h < 0.6 * rich.h && shade.sun < 0.5, `trunk ${shade.trunk.toFixed(0)} vs ${rich.trunk.toFixed(0)}, ${shade.h} vs ${rich.h} tall, sun ${shade.sun.toFixed(2)}`);
+  },
   sapling() {
     // a watered sapling on dirt grows into a tree that seeds a second generation within a few minutes; a dry one doesn't
     for (const [label, m] of [['damp', 200], ['dry', 0]]) {
@@ -1532,9 +1549,12 @@ const scenarios = {
     for (const n in tr) { tr[n].wood = Math.round(tr[n].wood); tr[n].h = Math.round(tr[n].h); }
     console.log(`  saplings after 1 min (3 seeds): on spent soil (0) trunk ${tr[0].h}, ${tr[0].wood} wood; on rich soil trunk ${tr[150].h}, ${tr[150].wood} wood`);
     check('a tree grows faster on rich soil', tr[150].wood >= 1.15 * tr[0].wood && tr[150].h >= tr[0].h + 4);
-    // slash and burn: a meadow on poor soil is burnt, rain falls on the ash, and the topsoil comes out richer
-    {
-      const W = 120, H = 60, g = plot(W, H, 30, 60), sy = H - 31; enrich(g, sy + 1, 30, 30); g.windHold = 0;
+    // slash and burn: a meadow on poor soil is burnt, rain falls on the ash, and the topsoil comes out richer (four plots summed:
+    // how much ash one fire leaves, and how much of it is left, swing with the random stream: one plot passed under a quarter left
+    // by luck, and main leaves 88 of 334 over these four)
+    let ashN = 0, leftN = 0, gain = 0;
+    for (const seed of [7, 8, 9, 10]) {
+      const W = 120, H = 60, g = plot(W, H, 30, 60, seed), sy = H - 31; enrich(g, sy + 1, 30, 30); g.windHold = 0;
       for (let x = 0; x < W; x++) for (let k = 0; k < 2; k++) { const i = g.idx(x, sy - k); g.set(i, PLANT); g.life[i] = (40 << 8) | 1; }   // dry, ready to burn
       const before = topN(g, sy + 1, 3);
       for (let x = 58; x < 62; x++) g.set(g.idx(x, sy - 2), FIRE);
@@ -1543,9 +1563,10 @@ const scenarios = {
       run(g, 1.5 * MIN, 300, () => { for (let x = 0; x < W; x += 3) { const i = g.idx(x, sy - 12); if (g.type[i] === E) g.set(i, WATER); } });
       let left = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === ASH) left++;
       const after = topN(g, sy + 1, 3);
-      console.log(`  burnt meadow: ${ash} ash after the fire, ${left} left after rain; topsoil ${before.toFixed(0)} before, ${after.toFixed(0)} after`);
-      check('a burnt meadow\'s ash feeds the soil', ash > 20 && left < ash / 4 && after > before + 15);
+      console.log(`  burnt meadow (seed ${seed}): ${ash} ash after the fire, ${left} left after rain; topsoil ${before.toFixed(0)} before, ${after.toFixed(0)} after`);
+      ashN += ash; leftN += left; gain += (after - before) / 4;
     }
+    check('a burnt meadow\'s ash feeds the soil', ashN > 80 && leftN < ashN / 3 && gain > 15, `${ashN} ash, ${leftN} left, topsoil +${gain.toFixed(0)}`);
   },
   animals() {
     // rabbits graze a meadow without stripping it and starve on bare ground; they carry grass seed across bare rock the wind's seed
