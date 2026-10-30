@@ -1673,6 +1673,92 @@ const scenarios = {
       check('grasshoppers lay eggs in autumn, die in the frost, and hatch in spring', log[0][1] >= 10 && log[1][0] === 0 && log[1][1] >= 5 && log[2][0] >= 5);
     }
   },
+  // ---------------- X1: devices (spout, drain, heater, cooler, fan) ----------------
+  devices() {
+    const { SPOUT, DRAIN, HEATER, COOLER, FAN, METAL, ICE, STEAM, SMOKE, GUNP } = Sim.ids;
+    const box = (W, H) => { const g = new Sim.Grid(W, H); for (let y = H - 4; y < H; y++) for (let x = 0; x < W; x++) g.set(g.idx(x, y), STONE, g.ambAt(y)); return g; };
+    const count = (g, t, x0 = 0, x1 = g.W) => { let n = 0; for (let y = 0; y < g.H; y++) for (let x = x0; x < x1; x++) if (g.type[g.idx(x, y)] === t) n++; return n; };
+    // a water spout over a stone basin with a drain in its floor at the far end: the spout keeps pouring, the drain keeps swallowing
+    {
+      Sim.reseed(11); const g = box(120, 100);
+      for (let y = 20; y < 96; y++) { g.set(g.idx(10, y), STONE); g.set(g.idx(110, y), STONE); }   // the basin's walls
+      for (let x = 55; x < 65; x++) g.lay(g.idx(x, 10), SPOUT, undefined, WATER);
+      run(g, 10 * 60); const filled = count(g, WATER);
+      run(g, 10 * 60); const more = count(g, WATER);
+      for (let x = 95; x < 105; x++) g.lay(g.idx(x, 95), DRAIN);   // a drain set on the floor
+      for (let x = 55; x < 65; x++) g.set(g.idx(x, 10), E);       // and the spout turned off
+      run(g, 30 * 60); const left = count(g, WATER, 11, 110);
+      console.log(`  water spout: ${filled} cells after 10 s, ${more} after 20 s; drain then left ${left}`);
+      check('a spout pours for ever', filled > 1000 && more > filled + 1000);
+      check('a drain empties the basin', left < 0.05 * more);
+      check('the spout and drain are still there', count(g, DRAIN) === 10);
+    }
+    // a sand spout heaps sand; a lava spout pours hot lava; an oil spout's oil is oil; a gas spout pours upward
+    {
+      const n = [], gs = [];
+      for (const e of [SAND, LAVA, OIL, SMOKE]) { Sim.reseed(12); const g = box(100, 80); for (let k = 0; k < 4; k++) g.lay(g.idx(48 + k, 40), SPOUT, undefined, e); run(g, 5 * 60); n.push(count(g, e)); gs.push(g); }
+      let up = 0, down = 0; for (let y = 0; y < 80; y++) for (let x = 0; x < 100; x++) if (gs[3].type[gs[3].idx(x, y)] === SMOKE) { if (y < 40) up++; else down++; }
+      let hot = 0; for (let i = 0; i < gs[1].type.length; i++) if (gs[1].type[i] === LAVA) hot = Math.max(hot, gs[1].temp[i]);
+      console.log(`  spouts after 5 s: sand ${n[0]}, lava ${n[1]} (hottest ${hot.toFixed(0)}°), oil ${n[2]}, smoke ${n[3]} (${up} above the spout, ${down} below)`);
+      check('spouts pour sand, lava and oil', n[0] > 300 && n[1] > 100 && n[2] > 300 && hot > 1000);
+      check('a smoke spout puffs upward', n[3] > 50 && up > 4 * down);
+    }
+    // a heater under a metal pot boils the water in it away; a cooler laid in a pond freezes it round itself
+    {
+      Sim.reseed(13); const g = box(100, 80);
+      for (let x = 40; x < 60; x++) for (let y = 70; y < 72; y++) g.lay(g.idx(x, y), HEATER);
+      for (let x = 38; x < 62; x++) g.lay(g.idx(x, 69), METAL);
+      for (let y = 60; y < 69; y++) { g.lay(g.idx(38, y), METAL); g.lay(g.idx(61, y), METAL); }
+      for (let y = 63; y < 69; y++) for (let x = 39; x < 61; x++) g.set(g.idx(x, y), WATER, g.ambAt(y));
+      const pot = () => { let n = 0; for (let y = 55; y < 69; y++) for (let x = 39; x < 61; x++) n += g.type[g.idx(x, y)] === WATER; return n; };   // (the steam rains out of the sky beside it)
+      const w0 = pot();
+      run(g, 30 * 60); const w30 = pot(); run(g, 30 * 60); const w1 = pot(), heat = g.temp[g.idx(50, 70)];
+      console.log(`  pot on a heater: ${w0} water -> ${w30} after 30 s, ${w1} after a minute; heater at ${heat.toFixed(0)}°`);
+      check('a heater boils a pot dry', w1 < 0.2 * w0);
+      check('a heater holds its temperature', Math.abs(heat - 400) < 1);
+      const h = box(100, 80);
+      for (let y = 56; y < 76; y++) for (let x = 0; x < 100; x++) h.set(h.idx(x, y), WATER, 15);
+      for (let x = 45; x < 55; x++) for (let y = 70; y < 72; y++) h.lay(h.idx(x, y), COOLER);
+      run(h, 30 * 60); const ice = count(h, ICE);
+      console.log(`  cooler in a 15° pond: ${ice} ice cells after 30 s; cooler at ${h.temp[h.idx(50, 70)].toFixed(0)}°`);
+      check('a cooler freezes the water round it', ice > 40);
+    }
+    // a fan blowing east carries smoke east, and blows a heap of ash downwind; turned up, it holds ash up in the air
+    {
+      Sim.reseed(14); const g = box(160, 80); g.windHold = 0;
+      for (let y = 60; y < 76; y++) g.lay(g.idx(20, y), FAN, undefined, 0);
+      for (let y = 60; y < 76; y++) for (let x = 22; x < 30; x++) g.set(g.idx(x, y), ASH);
+      run(g, 5 * 60);
+      let sx = 0, n = 0; for (let y = 0; y < g.H; y++) for (let x = 0; x < g.W; x++) if (g.type[g.idx(x, y)] === ASH) { sx += x; n++; }
+      console.log(`  fan → over a heap of ash at x 22-29: mean x ${(sx / n).toFixed(1)} after 5 s (${n} cells)`);
+      check('a fan blows a heap of light powder downwind', sx / n > 34);
+      const s = box(160, 80); s.windHold = 0;
+      for (let y = 60; y < 76; y++) s.lay(s.idx(150, y), FAN, undefined, 2);   // blowing west
+      for (let k = 0; k < 120; k++) s.set(s.idx(135 + k % 12, 62 + (k / 12 | 0)), SMOKE, 20);
+      run(s, 2 * 60);
+      let mx = 0, m = 0; for (let y = 0; y < s.H; y++) for (let x = 0; x < s.W; x++) if (s.type[s.idx(x, y)] === SMOKE) { mx += x; m++; }
+      console.log(`  fan ← into smoke at x 135-146: mean x ${(mx / m).toFixed(1)} after 2 s`);
+      check('a fan blows smoke along', mx / m < 132);
+    }
+    // devices stand through an explosion, keep what they pour and which way they blow through a save, and a boxed-in spout sleeps
+    {
+      Sim.reseed(15); const g = box(80, 60);
+      for (let x = 30; x < 50; x++) { g.lay(g.idx(x, 40), SPOUT, undefined, SAND); g.lay(g.idx(x, 30), FAN, undefined, 3); }
+      g.set(g.idx(40, 35), GUNP); g.temp[g.idx(40, 35)] = 300;
+      g.step(); g.step();
+      const stood = count(g, SPOUT) === 20 && count(g, FAN) === 20;
+      const h = new Sim.Grid(80, 60); h.load(g.save());
+      let keep = true; for (let x = 30; x < 50; x++) keep = keep && h.type[h.idx(x, 40)] === SPOUT && h.life[h.idx(x, 40)] === SAND && h.life[h.idx(x, 30)] === 3;
+      check('devices stand through an explosion', stood);
+      check('a save keeps what a spout pours and which way a fan blows', keep);
+      const b = box(128, 64);
+      for (let y = 20; y < 30; y++) for (let x = 20; x < 30; x++) b.set(b.idx(x, y), STONE);
+      b.lay(b.idx(25, 25), SPOUT, undefined, WATER);   // shut inside a block of rock
+      run(b, 120); let awake = 0; for (let k = 0; k < 20; k++) { b.step(); awake += b.awakeTiles; }
+      console.log(`  a spout shut in rock: ${awake / 20} tiles awake`);
+      check('a boxed-in spout lets its block sleep', awake === 0);
+    }
+  },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
 

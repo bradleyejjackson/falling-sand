@@ -141,9 +141,23 @@ function suite(threads) {
   check('Send a cold front brings one in at the west of the screen', g.fronts && frontAt >= 0 && /cold front/.test(p.els.msg.textContent) && /hPa/.test(p.els.wind.textContent), `front at x ${frontAt}, ${p.els.wind.textContent}`);
   const s1 = g.strikes; g.strike(g.W >> 1, 40); p.run(3);
   check('a lightning strike draws and is counted', g.strikes === s1 + 1);
+  // devices: a spout pours the element chosen before it, pressing Fan again turns it
+  { const { SPOUT, FAN, OIL } = Sim.ids;
+    btn('Oil').fire('click'); const sp = btn('Spout · Oil');
+    check('the Spout button names the element chosen last', !!sp);
+    p.els.brush.value = '2'; p.els.brush.fire('input'); sp.fire('click');
+    cv.fire('pointerdown', at(60, 40)); cv.fire('pointerup', at(60, 40)); p.run(60);
+    const spouts = [...g.type].filter(t => t === SPOUT).length, oil = census(g, Sim.EL).Oil || 0;
+    check('a painted spout pours that element', spouts > 5 && oil > 40 && [...g.type].every((t, i) => t !== SPOUT || g.life[i] === OIL), `${spouts} spout cells, ${oil} oil`);
+    btn('Fan →').fire('click'); btn('Fan →').fire('click');
+    const up = btn('Fan ↑');
+    cv.fire('pointerdown', at(250, 60)); cv.fire('pointerup', at(250, 60)); p.run(2);
+    check('pressing Fan again turns it, and paints it that way', !!up && [...g.type].some((t, i) => t === FAN && g.life[i] === 1) && [...g.type].every((t, i) => t !== FAN || g.life[i] === 1));
+    btn('Sand').fire('click'); btn('Stone').fire('click'); check('choosing a solid leaves the spout on the last powder, liquid or gas', !!btn('Spout · Sand')); }
   p.els.heatview.fire('click'); p.run(2); p.els.heatview.fire('click');
   scn('Irrigation').fire('click'); p.run(2);
   check('a scenario puts the wind and clock back to natural', g.windHold === null && !g.hold && /natural/.test(p.els.windset.textContent));
+  check('a scenario hides the devices', p.created.find(e => e.className === 'el' && e.innerHTML.includes('Spout')).style.display === 'none');
   check('and has one air mass and no lightning', !g.fronts && !g.lightning && g.massT.every(v => v === 0));
   p.els.leave.fire('click'); p.run(2);
   p.close();
