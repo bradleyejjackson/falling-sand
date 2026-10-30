@@ -36,7 +36,7 @@ function quench(game) {
     paintRect(game, x - 4, y - 12, x + 4, y - 8, WATER); return;
   }
 }
-const BEDS = [30, 80, 130, 180, 230, 280];
+const BEDS = [30, 80, 130, 180, 230, 280];   // (the desert's pans)
 const solutions = {
   irrigate: { 30: game => paintRect(game, 60, 112, 70, 130, E) },
   lava: {
@@ -58,7 +58,7 @@ const solutions = {
   flood: { 60: game => { paintRect(game, 102, 90, 110, 125, CLAY); paintRect(game, 110, 90, 124, 130, SAND); } },   // a dam with a clay core across the hillside: the river backs up into the quarry
   volcano: Object.fromEntries(Array.from({ length: 190 }, (_, k) => [300 + 30 * k, quench])),
   desert: {
-    30: game => { for (const x of BEDS) paintRect(game, x - 10, 100, x + 10, 103, CLAY); },   // clay pans, dropped onto the dunes
+    30: game => { for (const x of BEDS) paintRect(game, x - 10, 100, x + 10, 103, CLAY); },   // clay, dropped into the flat pans between the dunes
     120: game => { for (const x of BEDS) paintRect(game, x - 10, 90, x + 10, 97, DIRT); },
     300: game => { for (const x of BEDS) paintRect(game, x - 8, 70, x + 8, 77, WATER); },
     1500: game => { for (const x of BEDS) { paintRect(game, x - 4, 60, x - 3, 61, SEED); paintRect(game, x + 4, 60, x + 5, 61, SEED); } },
@@ -149,6 +149,11 @@ tests.survive = () => {
   const back = Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), Game.start(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), byId('volcano')).save());
   check('a save keeps survive, sources and hold', back.sc.hold === 300 && back.sources.length === 1 && back.sources[0].temp === 1500 &&
     Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), Game.start(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), byId('flood')).save()).sc.survive === true);
+  // the desert's climate: its sun dries soil as the dry country's does, a save keeps that, and a new world goes back to its own climate
+  const gd = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), dry = Game.load(gd, Game.start(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), byId('desert')).save());
+  const inDesert = gd.aridity()[BOX.x];
+  Sim.generate(gd, 12345, Sim.WORLD.WIDE, 0);
+  check('a save keeps the desert\'s aridity, and a new world drops it', dry.sc.arid === 1 && inDesert === 4 && Math.abs(gd.aridity()[0] - (1 + 3 * Sim.aridAt(12345, 0))) < 1e-5, `drying x${inDesert} in the desert, x${gd.aridity()[0].toFixed(2)} in a new world`);
 };
 tests.unlocks = () => {
   const none = Sim.unlocked({}), one = Sim.unlocked({ best: { irrigate: 1500 } });

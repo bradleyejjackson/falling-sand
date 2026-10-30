@@ -573,7 +573,7 @@ const Sim = (() => {
       for (const name in L.at){ const [off,n,A]=L.at[name]; this[name]=new A(this.buffer,off,n); }
       this.CW=L.CW; this.CHh=L.CHh; this.SW=L.SW; this.SH=L.SH; this.AW=L.AW; this.AH=L.AH; this.TW=L.TW; this.TH=L.TH;
       this.wx0=0; this.wx1=W; this.wy0=0; this.wy1=H;                    // the window the current tile may touch
-      this.frame=0; this.wind=0.3; this.windHold=null;                   // windHold pins the prevailing wind (tests, the sandbox)
+      this.frame=0; this.wind=0.3; this.windHold=null; this.aridHold=null;   // windHold pins the prevailing wind (tests, the sandbox)
       this.fronts=false; this.massX=0; this.lightning=false; this.strikes=0; this.bolts=[];   // fronts: air masses move over, lightning: storms strike (both on in generated and flat worlds); bolts: recent strikes, for drawing
       this.hold=false;                                                    // hold stops the clock: the time of day and the season stay put
       this.top=Math.max(0,H-LAND_H);                                   // rows of sky above the land's layout
@@ -599,8 +599,8 @@ const Sim = (() => {
     ac(x,y){ return (y>>2)*this.AW+(x>>2); }                          // the coarse air cell holding (x,y)
     wc(x,y){ return (y>>4)*this.CW+(x>>4); }                          // the wind cell holding (x,y)
     windAt(x,y){ let w=this.wc(x,y); if (this.wsolid[w] && w>=this.CW) w-=this.CW; return this.uc[w]; }   // the sideways wind at (x,y): near the ground, that of the open cell above
-    aridity(){   // each column's drying under its climate (1 + ARID_DRY × aridity), worked out again when the window moves
-      if (this.aridOx!==this.ox || this.aridSeed!==this.worldSeed){ const a=this.aridF||(this.aridF=new Float32Array(this.W)); for (let x=0;x<this.W;x++) a[x]=1+ARID_DRY*aridAt(this.worldSeed,this.ox+x); this.aridOx=this.ox; this.aridSeed=this.worldSeed; }
+    aridity(){   // each column's drying under its climate (1 + ARID_DRY × aridity), worked out again when the window moves (aridHold: one aridity everywhere, a scenario's)
+      if (this.aridOx!==this.ox || this.aridSeed!==this.worldSeed || this.aridWas!==this.aridHold){ const a=this.aridF||(this.aridF=new Float32Array(this.W)), h=this.aridHold; for (let x=0;x<this.W;x++) a[x]=1+ARID_DRY*(h===null ? aridAt(this.worldSeed,this.ox+x) : h); this.aridOx=this.ox; this.aridSeed=this.worldSeed; this.aridWas=h; }
       return this.aridF;
     }
     fadeMasses(){   // mfade by row; in a generated world none of it reaches down into the caves under the hills (cave air followed the weather, and warmed the rock round it for ever)
@@ -793,7 +793,7 @@ const Sim = (() => {
     }
     clear(){   // empties the whole world, the parts streamed out of the window included; regions not yet visited come in empty too
       this.type.fill(0); this.life.fill(0); this.resetTemp(); this.fuse.fill(0); this.vx.fill(0); this.vy.fill(0); this.swu.fill(0); this.swq.fill(0); this.swp.fill(0); this.owner.fill(0); this.trees=[]; this.massT.fill(0); this.massH.fill(0); this.struck.fill(-STRIKE_GAP); this.charge.fill(0); this.bolts=[]; this.initAir(); this.wakeAll();
-      this.store.clear(); this.storedTrees.clear(); this.pushing=[]; this.asked=[]; this.blank=true; this.epoch=(this.epoch||0)+1; this.job=null;
+      this.store.clear(); this.storedTrees.clear(); this.pushing=[]; this.asked=[]; this.blank=true; this.aridHold=null; this.epoch=(this.epoch||0)+1; this.job=null;
     }
     // density of the cell itself: muddy water, brine and acid get heavier with what they carry
     dens(i,t){ return t===WATER ? 1+(this.life[i]&255)*0.002 : t===BRINE ? 1+this.life[i]*0.001 : t===ACID ? 1+this.life[i]*0.0004 : EL[t].density; }
@@ -3133,6 +3133,7 @@ const Sim = (() => {
   }
   const DAMP = (NREF<<8)|200, DRY = (NREF<<8)|15;   // (soil at NREF, so scenarios play as they did before nutrients)
   const TOWN = [200,120,320,162], VILLAGE = [152,100,232,124], WOOD_LEFT = 230;   // (the huts hold 3×(16×18-12×16)=288 wood)
+  const PAN_Y = 150, PAN_HALF = 13;   // Desert bloom's pans: centred on columns 30, 80 ... 280, each 2*PAN_HALF+1 wide at row PAN_Y
   const SCENARIOS = [
     { id:'irrigate', name:'Irrigation', seed:11, time:60*60,
       brief:'The basin on the right is dry. Open the reservoir and fill the basin with water.',
@@ -3225,13 +3226,14 @@ const Sim = (() => {
         for (const x0 of [156,184,212]){ b.rect(x0,106,x0+16,124,WOOD); b.rect(x0+2,108,x0+14,124,E); }   // the village on a terrace below the crater: wooden huts
       } },
     { id:'desert', name:'Desert bloom', seed:18, time:120*60,
-      brief:'Water sinks straight through desert sand and the air is dry. Line beds with clay to hold the water, cover them with soil, and grow six trees.',
-      budget:{Clay:360, Dirt:900, Water:700, Seed:12}, unlocks:[], air:0.15,
+      brief:'Water sinks straight through desert sand, and the sun dries soil four times as fast as in the hills. Line beds in the flat pans between the dunes with clay to hold the water, cover them with soil, and grow six trees.',
+      budget:{Clay:360, Dirt:900, Water:700, Seed:12}, unlocks:[], air:0.15, arid:1,
       goals:[{label:'Trees 20+ cells tall', trees:true, tall:20, rect:[0,0,320,200], min:6}],
       fails:[],
       build(b){
         b.rect(0,170,320,200,STONE);
-        for (let x=0;x<320;x++){ const top=140-Math.round(10*Math.sin(x/23)+6*Math.sin(x/9+1)); b.rect(x,top,x+1,170,SAND,0); }   // dry dunes
+        // dry dunes: a ridge every 50 columns, no steeper than dry sand stands, with a flat pan in each hollow between them
+        for (let x=0;x<320;x++){ const d=25-Math.abs(((x+20)%50)-25), rise=Math.max(0,d-PAN_HALF), top=PAN_Y-Math.round(rise*(1+0.15*Math.sin(x/17))); b.rect(x,top,x+1,170,SAND,0); }
       } },
   ];
 
@@ -3239,7 +3241,7 @@ const Sim = (() => {
   function unlocked(progress){ const s=new Set(STARTER); for (const sc of SCENARIOS) if (progress.best && progress.best[sc.id]!==undefined) for (const n of sc.unlocks) s.add(n); return s; }
   function scenarioOpen(progress,k){ return k===0 || !!(progress.best && progress.best[SCENARIOS[k-1].id]!==undefined); }
   // a scenario's data without its build function: what a save carries
-  const defOf = sc => ({id:sc.id, name:sc.name, brief:sc.brief, time:sc.time, budget:sc.budget, goals:sc.goals, fails:sc.fails, unlocks:sc.unlocks||[], survive:!!sc.survive, sources:sc.sources||[], hold:sc.hold, wind:sc.wind});
+  const defOf = sc => ({id:sc.id, name:sc.name, brief:sc.brief, time:sc.time, budget:sc.budget, goals:sc.goals, fails:sc.fails, unlocks:sc.unlocks||[], survive:!!sc.survive, sources:sc.sources||[], hold:sc.hold, wind:sc.wind, arid:sc.arid});
 
   class Game {
     constructor(g, sc){
@@ -3262,8 +3264,8 @@ const Sim = (() => {
       g.wakeAll();
       return new Game(g, sc);
     }
-    static weather(g, sc){   // a scenario may pin the prevailing wind; its air stays the one air mass, with no lightning
-      g.windHold = sc.wind===undefined ? null : sc.wind;
+    static weather(g, sc){   // a scenario may pin the prevailing wind and its climate's aridity (0..1, as aridAt); its air stays the one air mass, with no lightning
+      g.windHold = sc.wind===undefined ? null : sc.wind; g.aridHold = sc.arid===undefined ? null : sc.arid;
       g.fronts=false; g.lightning=false; g.massT.fill(0); g.massH.fill(0); g.charge.fill(0); g.bolts=[];
     }
     prep(c){ return Object.assign({}, c, {ids: c.count ? ids(c.count) : c.made ? ids(c.made) : c.open ? ids(c.open) : null, value:0}); }
