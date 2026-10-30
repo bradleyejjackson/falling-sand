@@ -28,7 +28,10 @@ function stubElement(id) {
     addEventListener(t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); },
     fire(t, e = {}) { for (const f of this.listeners[t] || []) f(Object.assign({ target: el, preventDefault() {} }, e)); },
     setPointerCapture() {}, getBoundingClientRect() { return { left: 0, top: 0, width: 320, height: 200 }; },
-    getContext() { return { createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }; },
+    getContext() {   // (drawing calls other than the frame's own image are no-ops)
+      const ctx = { createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {}, calls: 0 };
+      return new Proxy(ctx, { get: (o, k) => k in o ? o[k] : () => { o.calls++; }, set: (o, k, v) => { o[k] = v; return true; } });
+    },
   };
   return el;
 }

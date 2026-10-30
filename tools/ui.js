@@ -161,12 +161,29 @@ function suite(threads) {
     const up = btn('Fan ↑');
     cv.fire('pointerdown', at(250, 60)); cv.fire('pointerup', at(250, 60)); p.run(2);
     check('pressing Fan again turns it, and paints it that way', !!up && [...g.type].some((t, i) => t === FAN && g.life[i] === 1) && [...g.type].every((t, i) => t !== FAN || g.life[i] === 1));
-    btn('Sand').fire('click'); btn('Stone').fire('click'); check('choosing a solid leaves the spout on the last powder, liquid or gas', !!btn('Spout · Sand')); }
+    btn('Sand').fire('click'); btn('Stone').fire('click'); check('choosing a solid leaves the spout on the last powder, liquid or gas', !!btn('Spout · Sand'));
+  // the inspector reads the cell under the pointer; the Inspect tool pins one without painting
+    cv.fire('pointermove', at(60, 40));
+    check('pointing at a cell reads it out', /Spout/.test(p.els.probe.innerHTML) && /pours Oil/.test(p.els.probe.innerHTML) && /°/.test(p.els.probe.innerHTML), p.els.probe.innerHTML.replace(/<[^>]+>/g, ''));
+    const before = [...g.type].filter(t => t === SPOUT).length;
+    btn('Inspect').fire('click'); cv.fire('pointerdown', at(60, 40)); cv.fire('pointerup', at(60, 40)); cv.fire('pointerleave'); p.run(10);
+    check('the Inspect tool pins a cell and paints nothing', /Pinned/.test(p.els.probe.innerHTML) && /Spout/.test(p.els.probe.innerHTML) && [...g.type].filter(t => t === SPOUT).length === before, p.els.probe.innerHTML.replace(/<[^>]+>/g, ''));
+    cv.fire('pointerdown', at(60, 40)); cv.fire('pointerup', at(60, 40));
+    check('clicking it again lets it go', !/Pinned/.test(p.els.probe.innerHTML));
+    btn('Sand').fire('click'); }
+  // the census chart samples the window eight times a day and names each series with its value
+  { p.run(Sim.DAY / 8 + 5);
+    const legend = p.els.legend.innerHTML.replace(/<[^>]+>/g, ' ');
+    check('the census chart is shown and samples the window', p.els.census.classList.contains('on') && /Rabbits\s+\d+/.test(legend) && /Forest\s+\d+/.test(legend) && /day \d+ of year \d+/.test(legend), legend.replace(/\s+/g, ' '));
+    const c = g.census(); check('the census sorts every column into one cover', c.forest + c.meadow + c.scrub + c.desert + c.reeds + c.water + c.bare === g.W, JSON.stringify(c));
+    p.els.censusbtn.fire('click'); check('the Census button hides it', !p.els.census.classList.contains('on') && p.els.censusbtn.getAttribute('aria-pressed') === 'false');
+    p.els.censusbtn.fire('click'); }
   p.els.heatview.fire('click'); p.run(2); p.els.heatview.fire('click');
   scn('Irrigation').fire('click'); p.run(2);
   check('a scenario puts the wind and clock back to natural', g.windHold === null && !g.hold && /natural/.test(p.els.windset.textContent));
   check('a scenario hides the devices', p.created.find(e => e.className === 'el' && e.innerHTML.includes('Spout')).style.display === 'none');
   check('and has one air mass and no lightning', !g.fronts && !g.lightning && g.massT.every(v => v === 0));
+  check('a scenario hides the census but keeps the Inspect tool', !p.els.census.classList.contains('on') && btn('Inspect').style.display !== 'none');
   p.els.leave.fire('click'); p.run(2);
   p.close();
 }
