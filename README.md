@@ -1,10 +1,8 @@
 # Sandfall
 
-A falling-sand simulation prototyped as a single HTML file (`falling-sand.html`), headed for a Godot port once the design settles. Published as a Claude artifact, on GitHub Pages at https://bradleyejjackson.github.io/falling-sand/ , and (once set up) on Cloudflare Pages at https://sand.bradleyejjackson.com .
+A falling-sand simulation prototyped as a single HTML file (`falling-sand.html`), headed for a Godot port once the design settles. Play it at https://sand.bradleyejjackson.com (Cloudflare Pages); also published as a Claude artifact.
 
-GitHub Pages: `.github/workflows/pages.yml` runs `node tools/pages.js`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`, and deploys it on every push to main. Repo Settings → Pages → Source must be "GitHub Actions". Pages can't send COOP/COEP headers, so the page isn't cross-origin isolated and the sim runs on the main thread (the serial path, same results as the worker pool).
-
-Cloudflare Pages: builds with the same `node tools/pages.js _site`; `tools/_headers` is copied into the output and makes Cloudflare send COOP/COEP, so the worker pool runs there. Setup steps: `docs/cloudflare-pages.md`.
+Hosting: Cloudflare Pages builds every push to main with `node tools/pages.js _site`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`; `tools/_headers` is copied into the output and makes Cloudflare send COOP/COEP, so the worker pool runs there. Setup steps: `docs/cloudflare-pages.md`.
 
 The script has two blocks: `Sim` (pure rules, no DOM; this is what ports to Godot) and the render/input block.
 

@@ -1,4 +1,4 @@
-// Build the static site (GitHub Pages and Cloudflare Pages): wrap falling-sand.html (which has no doctype/head of its own) into a complete _site/index.html.
+// Build the Cloudflare Pages site: wrap falling-sand.html (which has no doctype/head of its own) into a complete _site/index.html.
 // No <body> tag: the parser hoists the leading <title>/<meta>/<link>/<style> into <head> and opens <body> at <header>.
 // Usage: node tools/pages.js [outDir]
 const fs = require('fs'), path = require('path');
@@ -10,7 +10,6 @@ const page = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\
   + body + '\n</html>\n';
 fs.mkdirSync(out, { recursive: true });
 fs.writeFileSync(path.join(out, 'index.html'), page);
-fs.writeFileSync(path.join(out, '.nojekyll'), '');
-// Cloudflare Pages reads _headers for COOP/COEP; GitHub Pages ignores it (just serves it as a file).
+// Cloudflare Pages reads _headers and sends COOP/COEP, so the worker pool runs.
 fs.copyFileSync(path.join(__dirname, '_headers'), path.join(out, '_headers'));
 console.log('wrote ' + path.join(out, 'index.html') + ' (' + page.length + ' bytes)');
