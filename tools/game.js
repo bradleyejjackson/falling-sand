@@ -67,7 +67,7 @@ const solutions = {
   rod: { 30: game => { for (const x of [108, 142, 178, 212]) paintRect(game, x, 129, x + 1, 160, METAL); } },   // a mast in the gaps between and beside the huts, standing clear of the wood
   gorge: { 30: game => { for (let x = 120; x < 200; x++) { const t = 80 + Math.round(16 * ((x + 0.5 - 160) / 40) ** 2); paintRect(game, x, t, x + 1, t + 4, STONE); } } },   // a stone arch 4 deep, springing from the old footings
   kiln: { 30: game => paintRect(game, 42, 140, 198, 142, CLAY) },   // the clay spread thin over the whole seep
-  plague: { 30: game => { for (const x of [50, 160, 270]) paintRect(game, x, 140, x + 1, 141, FOX); } },
+  plague: { 30: game => { for (const x of [80, 240]) paintRect(game, x, 140, x + 1, 141, FOX); } },   // two foxes: three won only half the time across seeds (SEED=1..6), killing the rabbits off
   pond: Object.fromEntries([600, 2400, 4200, 6600].map(t => [t, game => paintRect(game, 122, 120, 278, 122, WATER)])),   // a ration every half minute or so, the last one kept back for the end
   wildfire: { 60: game => { for (const x of Sim.GROVES) { paintRect(game, x - 14, 90, x - 13, 150, METAL); paintRect(game, x + 14, 90, x + 15, 150, METAL); } } },   // a rod either side of each grove, taller than the trees
 };
