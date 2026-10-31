@@ -1108,8 +1108,10 @@ const scenarios = {
       }
       return z;
     };
-    const e = tally(640), w = tally(0), f = o => JSON.stringify(o);
-    console.log(`  cells by climate, east of the start: desert ${f(e.desert)}, scrub ${f(e.scrub)}; at the start, wet country ${f(w.wet)}`);
+    // (the wet country at the start and two windows west of it: the start's own is mostly river valley now, bare sand and a pond)
+    const e = tally(640), w = tally(0), w2 = tally(-1920), f = o => JSON.stringify(o);
+    for (const [k, n] of Object.entries(w2.wet)) w.wet[k] = (w.wet[k] || 0) + n;
+    console.log(`  cells by climate, east of the start: desert ${f(e.desert)}, scrub ${f(e.scrub)}; at the start and west of it, wet country ${f(w.wet)}`);
     check('the desert has cacti and no grass or trees', (e.desert.Cactus || 0) >= 50 && !e.desert.Plant && !e.desert.Tree);
     check('the scrub is shrubs', (e.scrub.Shrub || 0) >= 100 && (e.scrub.Shrub || 0) > 3 * ((e.scrub.Plant || 0) + (e.scrub.Tree || 0)));
     check('the wet country has meadow, forest and reeds', (w.wet.Plant || 0) >= 100 && (w.wet.Tree || 0) >= 500 && (w.wet.Reed || 0) >= 10);

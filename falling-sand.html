@@ -3629,7 +3629,7 @@ const Sim = (() => {
   //     up to RIVER_SPILL_D rows under the surface). A pond losing water only to the air filled its whole valley in two years, and
   //     one sinking away into its floor as well (by its depth) ran dry. So the pond stands brim full while the river runs, and
   //     shrinks only when the stream gives out.
-  const RIVER=0x2b9d, RIVER_EVERY=1600, RIVER_P=0.6, RIVER_LEN=[300,480], RIVER_GMIN=1/16, RIVER_GMAX=1/8, RIVER_BACK=70, RIVER_HILL=0.5,
+  const RIVER=0x2b9d, RIVER_EVERY=1600, RIVER_P=0.6, RIVER_LEN=[240,380], RIVER_GMIN=1/16, RIVER_GMAX=1/8, RIVER_BACK=70, RIVER_HILL=0.5,
         RIVER_POND=[70,110], RIVER_DEEP=10, RIVER_RIM=0.6, RIVER_BLEND=50,
         RIVER_SAND=1, RIVER_CLAY=4, RIVER_SPRING=3, RIVER_FLOW=0.6, RIVER_EVAP=0.25, RIVER_HEAD=6, RIVER_LOOK=40, RIVER_T=9, RIVER_WETK=0.5, RIVER_MELT=1.2, RIVER_MELT_END=0.3, RIVER_SUMMER=0.6, RIVER_SPILL_D=40, RIVER_ROOF=40;
   function riversOf(seed, worldW, hills, top, SH){
