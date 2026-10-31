@@ -198,6 +198,17 @@ tests.saveload = () => {
   check('a hand-written scenario loads', m.sc.name === 'Mine' && m.left('Water') === 50 && m.goals[0].value > 0);
 };
 
+// the scenario editor (X4): a built-in staged without its game, laid out again from its definition, plays the same; and stars
+tests.editor = () => {
+  const sc = SCENARIOS[0], g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), g2 = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H);
+  Game.stage(g, sc); const a = Game.start(g2, sc);
+  let same = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === g2.type[i]) same++;
+  check('staging a scenario lays out the same box as starting it', same === g.type.length, `${same}/${g.type.length}`);
+  const d = Sim.defOf(sc), b = Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), JSON.stringify({ sandfall: 'scenario', v: 1, def: d, world: g.save() }));
+  check('its definition round-trips through the editor\'s JSON', b.sc.name === sc.name && b.goals.length === a.goals.length && Object.keys(b.sc.budget).every(k => b.left(k) === a.left(k)));
+  check('one star for a win, three for a high score', Sim.stars(sc, 0) === 0 && Sim.stars(sc, 1000) === 1 && Sim.stars(sc, 1500) === 2 && Sim.stars(sc, 1800) === 3 && Sim.stars({ survive: true }, 1600) === 3);
+};
+
 const pick = process.argv.slice(2);
 for (const [name, fn] of Object.entries(tests)) { if (pick.length && !pick.includes(name)) continue; console.log(`# ${name}`); fn(); }
 if (failed) { console.log(`${failed} check(s) failed`); process.exit(1); }

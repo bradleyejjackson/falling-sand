@@ -62,6 +62,17 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 .mission .nums strong{color:var(--fg);font-weight:500}
 .mission .acts{display:flex;gap:8px;margin-left:auto}
 .lab{width:min(100%,80vh);margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.minimap{width:100%;height:44px;display:block;background:var(--panel);border:1px solid var(--line);border-radius:4px;cursor:pointer;image-rendering:auto}
+.seed{font-family:var(--mono);font-size:12px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:5px 8px;width:9ch}
+.editor{display:none;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px;color:var(--muted)}
+.editor.on{display:flex}
+.editor .erow{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center}
+.editor h4{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 4px;color:var(--muted)}
+.editor input,.editor select:not(.btn){font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:4px 6px}
+.editor input[type=number]{width:7ch}
+.editor input.wide{width:min(60ch,70vw)}
+.editor .item{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+.editor .item .rect{width:16ch}
 .probe{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 10px;min-height:2.9em;line-height:1.45;color:var(--muted);font-variant-numeric:tabular-nums}
 .probe b{font-family:var(--display);font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--fg)}
 .probe i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
@@ -69,6 +80,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 .census{display:none;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
 .census.on{display:flex}
 .census canvas{width:100%;height:240px;cursor:crosshair;image-rendering:auto}
+.census canvas.history{height:40px;cursor:default}
 .legend{display:flex;flex-wrap:wrap;gap:4px 14px;color:var(--muted);font-variant-numeric:tabular-nums}
 .legend span{display:flex;align-items:center;gap:6px}
 .legend i{width:12px;height:3px;border-radius:2px;display:inline-block}
@@ -81,6 +93,11 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 .banner p{margin:0;color:var(--muted)}
 .banner .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.btn.step{padding:2px 8px;font-size:14px}
+.keys{color:var(--muted);margin:0;font-size:12px}
+.keys kbd{font-family:var(--mono);border:1px solid var(--line);border-radius:3px;padding:0 4px;color:var(--fg)}
+/* a touch screen: bigger targets, and a brush slider a thumb can work */
+@media (pointer:coarse){ .btn{padding:10px 14px} .btn.step{padding:8px 16px;font-size:18px} .el{min-height:40px} input[type=range]{width:200px;height:32px} }
 </style>
 
 <header>
@@ -93,9 +110,11 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 </div>
 
 <div class="lab">
+  <canvas class="minimap" id="minimap" aria-label="Map of the whole world: click to go there"></canvas>
   <div class="probe" id="probe">Point at the world to read a cell (the Inspect tool pins one).</div>
   <div class="census" id="census" role="img" aria-label="Census of the simulated window over the seasons">
     <canvas id="censusc"></canvas>
+    <canvas id="historyc" class="history" aria-label="Land cover over the years, a day a column"></canvas>
     <div class="legend" id="legend"></div>
   </div>
 </div>
@@ -110,11 +129,18 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 <div class="groups" id="groups"></div>
 
 <div class="ctl">
-  <label>Brush <input type="range" id="brush" min="1" max="24" value="4"><span id="brushv">4</span></label>
+  <label>Brush <button class="btn step" id="brushdn" aria-label="Smaller brush">−</button><input type="range" id="brush" min="1" max="24" value="4"><button class="btn step" id="brushup" aria-label="Bigger brush">+</button><span id="brushv">4</span></label>
   <button class="btn" id="pause">Pause</button>
   <button class="btn" id="speed" aria-label="Simulation speed">Speed ×1</button>
+  <button class="btn" id="timelapse" aria-pressed="false">Time-lapse</button>
+  <button class="btn" id="zoom" aria-label="Zoom">Zoom ×1</button>
+  <select class="btn" id="shape" aria-label="Brush shape"><option value="free">Brush: free</option><option value="line">Brush: line</option><option value="box">Brush: box</option><option value="fill">Brush: fill</option></select>
+  <button class="btn" id="undo">Undo</button>
   <button class="btn" id="newworld">New world</button>
   <select class="btn" id="biome" aria-label="What kind of country New world makes"><option value="temperate">Temperate</option><option value="alpine">Alpine</option><option value="wetland">Wetland</option><option value="island">Volcanic island</option><option value="scrub">Scrubland</option><option value="coast">Coast</option></select>
+  <label>Seed <input class="seed" id="seedin" type="text" inputmode="numeric" autocomplete="off" aria-label="World seed"></label>
+  <button class="btn" id="goseed">Open seed</button>
+  <button class="btn" id="sharelink">Share link</button>
   <button class="btn" id="clear">Clear</button>
   <button class="btn" id="save">Save</button>
   <button class="btn" id="load">Load</button>
@@ -126,6 +152,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <button class="btn" id="soilview" aria-pressed="false">Soil view</button>
   <button class="btn" id="lightmode" aria-pressed="false">Light: day/night</button>
   <button class="btn" id="censusbtn" aria-pressed="false">Census</button>
+  <button class="btn" id="sound" aria-pressed="false">Sound: off</button>
   <span class="msg" id="msg"></span>
 </div>
 <div class="ctl" id="sbox">
@@ -135,7 +162,23 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <button class="btn" id="hold" aria-pressed="false">Hold time</button>
   <button class="btn" id="windset">Wind: natural</button>
   <button class="btn" id="front">Send a cold front</button>
+  <button class="btn" id="editbtn" aria-pressed="false">Scenario editor</button>
 </div>
+<div class="editor" id="editor">
+  <div class="erow"><label>Name <input id="ed-name" value="My scenario"></label><label>Time (s) <input id="ed-time" type="number" min="10" value="90"></label>
+    <label>Season <select id="ed-season"><option value="0">Spring</option><option value="0.25">Summer</option><option value="0.5">Autumn</option><option value="0.75">Winter</option></select></label>
+    <label>Wind <select id="ed-wind"><option value="">natural</option><option value="0">calm</option><option value="0.5">east</option><option value="-0.5">west</option></select></label>
+    <label><input type="checkbox" id="ed-survive"> Survive to the end</label></div>
+  <label class="erow">Brief <input id="ed-brief" class="wide" value="Meet every goal before the time runs out."></label>
+  <div class="esec"><h4>Budget</h4><div id="ed-budget"></div><button class="btn" id="ed-addb">+ Element</button></div>
+  <div class="esec"><h4>Goals</h4><div id="ed-goals"></div><button class="btn" id="ed-addg">+ Goal</button></div>
+  <div class="esec"><h4>Lose if</h4><div id="ed-fails"></div><button class="btn" id="ed-addf">+ Fail</button></div>
+  <div class="esec"><h4>Sources</h4><div id="ed-sources"></div><button class="btn" id="ed-adds">+ Source</button></div>
+  <div class="erow"><select class="btn" id="ed-from" aria-label="Lay out from"></select><button class="btn" id="ed-layout">Lay out</button>
+    <button class="btn primary" id="ed-play">Play it</button><button class="btn" id="ed-share">Share link</button><button class="btn" id="ed-export">Export</button></div>
+  <p class="hint">Lay out opens the scenario's box (empty, or a built-in's) with time stopped: paint it with any element, then set the goals. A rectangle is x0,y0,x1,y1 in the box (320 by 200, from its top left): press Pick and drag it out on the box. Play it starts the scenario; Share link puts the whole thing (layout and all) in a link.</p>
+</div>
+<p class="keys" id="keys"><kbd>Q</kbd>/<kbd>E</kbd> previous/next element, <kbd>1</kbd>–<kbd>9</kbd> the elements of its row, <kbd>[</kbd>/<kbd>]</kbd> brush size, <kbd>Space</kbd> pause, <kbd>X</kbd> erase, <kbd>I</kbd> inspect, <kbd>Z</kbd> zoom, <kbd>B</kbd> brush shape, <kbd>T</kbd> time-lapse, <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo, arrows or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pan.</p>
 <div class="io" id="io">
   <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
   <button class="btn" id="import">Import</button>
@@ -618,9 +661,10 @@ const Sim = (() => {
   // so an overgrazed meadow in a drought blows away and feeds the land downwind. Dust still up at the end of its life is lost.
   const PEAT_P = 0.004, PEAT_DRY = 60, PEAT_WET = 120, PEAT_LIT = 240, PEAT_T = 200, PEAT_FIRE = 255, PEAT_BURN = 0.3, PEAT_SPREAD = 0.006, PEAT_SMOKE = 0.1, PEAT_FLARE = 0.004,
         COAL_D = 30, COAL_SEAMS = 3, COAL_THICK = 6, DUST_DRY = 10, DUST_U = 0.05, DUST_K = 0.1, DUST_LIFT = 6, DUST_MIX = 0.15, DUST_SINK = 0.05, DUST_LAND = 0.1, DUST_N = 30;
-  // fire needs air (N11). A flame or an ember lights fuel only while a cell of open air (Empty) touches it (its 8 neighbours), and it
-  // uses that air up as it does: AIR_USE of the time the air it drew on turns to smoke. A flame that dies under cover (no open sky
-  // over it) leaves smoke, not air, and smoke under cover is stale air: at the end of its life it lingers on (SMOKE_STALE of the time).
+  // fire needs air (N11). Under a roof (anything solid over it within 30 rows: plants, litter and embers let air through, POROUS),
+  // a flame or an ember lights fuel only while there is open air (Empty, or a flame) within AIR_R cells of it, and it uses that air up
+  // as it does: AIR_USE of the time the air it drew on turns to smoke. A flame that dies under a roof leaves smoke, not air, and smoke
+  // under a roof is stale air: at the end of its life it lingers on (SMOKE_STALE of the time). Under the open sky air comes in freely.
   // So a fire in a sealed room burns the room's air into smoke and stops spreading, and an ember with no air or flame beside it is
   // snuffed to charcoal (CHOKE_EMBER a tick): a buried seam or the heart of a log burns only from its open face. Fuel heated past
   // its kindling point with no air beside it doesn't catch: it chars (to charcoal, the way a charcoal kiln works).
@@ -638,7 +682,8 @@ const Sim = (() => {
   // left a decade, a world grows its own soil on its bare rock. Moss dries out and dies (MOSS_DRY a visit) in parched air (under
   // MOSS_PARCH), it burns, and it falls away when the rock under it goes.
   const MOSS_RH = 0.75, MOSS_P = 0.0004, MOSS_NEAR = 20, MOSS_AGE = 0.06, MOSS_SOIL = 120, MOSS_N = 30, MOSS_DRY = 0.002, MOSS_PARCH = 0.3;
-  const AIR_USE = 0.5, SMOKE_STALE = 0.98, CHOKE_EMBER = 0.004, SMOKE_HURT = 0.05, SMOKE_WILT = 0.02, SMOKE_SAP = 8,
+  const POROUS = new Uint8Array(N); for (const t of [PLANT,SHRUB,CACTUS,REED,LITTER,SEED,EMBER,ASH,MOSS,TIP,RABBIT,HOPPER,FOX,BIRD]) POROUS[t]=1;
+  const AIR_R = 2, AIR_USE = 0.5, SMOKE_STALE = 0.98, CHOKE_EMBER = 0.004, SMOKE_HURT = 0.05, SMOKE_WILT = 0.02, SMOKE_SAP = 8,
         VENT_FUMES = 0.4, SOUR = 2, ACID_RAIN = 20, RAIN_LEAF = 0.3, RAIN_SAP = 40, RAIN_SOUR = 6, RAIN_NEUTRAL = 0.05;
   const OIL_EAT = 0.03, OIL_FLAME = 0.3, SPATTER = 0.3;   // burning oil: chance a surface cell is used up a tick, that it sends a flame up, that water touching it flashes
   // wind-blown sand (saltation): dry sand (moisture under BLOW_DRY) on the surface hops downwind where the wind near the ground is
@@ -1283,13 +1328,19 @@ const Sim = (() => {
     // a fire lights the fuel around it, and the wind leans it: on a windy day fuel downwind catches faster and fuel upwind slower, so
     // a fire races off downwind and only creeps back into the wind. (The lean follows the prevailing wind, not the local flow, which
     // near a fire is mostly its own inflow and would hold it back on every side.) Embers also throw sparks downwind, so a fire can jump a gap
-    airNear(x,y){ for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){ const nx=x+dx, ny=y+dy; if ((dx||dy) && nx>=0 && nx<this.W && ny>=0 && ny<this.H && this.type[ny*this.W+nx]===E) return true; } return false; }   // (see AIR_USE)
+    airNear(x,y){ return this.airCell(x,y)>=0 || !this.roofed(x,y); }
+    roofed(x,y){ for (let k=1;k<=30;k++){ if (y-k<0) return false; const t=this.type[(y-k)*this.W+x]; if (t!==E && !isGas(t) && !POROUS[t]) return true; } return false; }   // a solid roof over (x,y) (plants, litter and embers let the air through)
+    airCell(x,y){   // a cell of air (or a flame: air burning) within AIR_R of (x,y), the nearest ring first: its index, or -1 (see AIR_USE)
+      const W=this.W, H=this.H, T=this.type;
+      for (let r=1;r<=AIR_R;r++) for (let dy=-r;dy<=r;dy++){ const ny=y+dy; if (ny<0 || ny>=H) continue; const st=dy===-r || dy===r ? 1 : 2*r;
+        for (let dx=-r;dx<=r;dx+=st){ const nx=x+dx; if (nx<0 || nx>=W) continue; const j=ny*W+nx, t=T[j]; if (t===E || t===FIRE) return j; } }
+      return -1;
+    }
     ignite(x,y){
       const i0=this.idx(x,y), t0=this.type[i0];
-      let air=-1;   // (see AIR_USE: a flame or an ember needs air beside it; lava doesn't)
-      if (t0!==LAVA){ let lit=false;
-        for (let dy=-1;dy<=1 && air<0;dy++) for (let dx=-1;dx<=1;dx++){ if (!dx&&!dy) continue; const nx=x+dx, ny=y+dy; if (!this.inb(nx,ny)) continue; const tj=this.type[this.idx(nx,ny)]; if (tj===E){ air=this.idx(nx,ny); break; } if (tj===FIRE) lit=true; }
-        if (air<0){ if (t0===EMBER && !lit && R()<CHOKE_EMBER) this.set(i0,CHAR,Math.min(this.temp[i0],380)); return; }
+      let air=-1;   // (see AIR_USE: a flame or an ember needs air near it; lava doesn't)
+      if (t0!==LAVA){ air=this.airCell(x,y);
+        if (air<0 && this.roofed(x,y)){ if (t0===EMBER && R()<CHOKE_EMBER) this.set(i0,CHAR,Math.min(this.temp[i0],380)); return; }   // (under the open sky the air comes in through whatever burns)
       }
       const u=0.25*this.wind, lean=Math.min(1, Math.abs(u)*FIRE_LEAN), s=u<0?-1:1;
       for (let dy=-1;dy<=1;dy++) for (let dx=-1;dx<=1;dx++){
@@ -1301,7 +1352,7 @@ const Sim = (() => {
         if (!p || R()>=p*(dx*s>0 ? 1+2*lean : dx ? 1-0.9*lean : 1) || (f.to===EMBER && this.soaked(nx,ny,false))) continue;
         if (tj===OIL){ this.life[j]=1; this.wake(nx,ny); continue; }   // (it burns at its surface: burnOil)
         if (f.to==='explode') this.explode(nx,ny,f.r); else this.set(j,f.to);
-        if (air>=0 && this.type[air]===E && R()<AIR_USE) this.set(air,SMOKE,Math.max(AMB,this.temp[air]));   // (the air it burnt in)
+        if (air>=0 && this.type[air]===E && R()<AIR_USE){ this.set(air,SMOKE,Math.max(AMB,this.temp[air])); air=this.airCell(x,y); if (air<0) break; }   // (the air it burnt in)
       }
       if (lean>0 && this.type[this.idx(x,y)]===EMBER && Math.abs(u)>SPARK_U && R()<(Math.abs(u)-SPARK_U)*SPARK_K) this.spark(x,y,s,Math.abs(u));
     }
@@ -2766,8 +2817,8 @@ const Sim = (() => {
     stepLife(i,t){
       const el=EL[t]; if(!el.life || t===PLANT || t===SEED) return false;
       if (this.life[i]>0 && --this.life[i]>0){ this.wake(i%this.W,(i/this.W)|0); return false; }
-      if (t===FIRE){ const x=i%this.W; this.set(i, R()<0.35 || !this.openSky(x,(i-x)/this.W) ? SMOKE : E, 150); return true; }   // (under cover a flame leaves smoke, not air: see AIR_USE)
-      if (t===SMOKE && R()<SMOKE_STALE){ const x=i%this.W, y=(i-x)/this.W; if (!this.openSky(x,y)){ this.life[i]=120+((R()*120)|0); this.wake(x,y); return false; } }   // stale air under cover
+      if (t===FIRE){ const x=i%this.W; this.set(i, R()<0.35 || this.roofed(x,(i-x)/this.W) ? SMOKE : E, 150); return true; }   // (under a roof a flame leaves smoke, not air: see AIR_USE)
+      if (t===SMOKE && R()<SMOKE_STALE){ const x=i%this.W, y=(i-x)/this.W; if (this.roofed(x,y)){ this.life[i]=120+((R()*120)|0); this.wake(x,y); return false; } }   // stale air under cover
       if (el.decay==='burnout'){ const r=R(); this.set(i, r<0.4?CHAR : r<0.7?ASH : SMOKE, this.temp[i]); if (this.type[i]===CHAR) this.temp[i]=Math.min(this.temp[i],380); return true; }
       this.set(i, this.pick(el.decay), this.temp[i]); return true;
     }
@@ -4543,15 +4594,15 @@ const Sim = (() => {
       this.evaluate();
     }
     // start a built-in scenario: an empty world the size of the grid with the box dug into stone at the bottom middle
-    static start(g, sc){
+    static start(g, sc){ Game.stage(g, sc); return new Game(g, sc); }
+    static stage(g, sc){   // the world a scenario opens on, without the game (the editor lays a scenario out on it)
       reseed(sc.seed||1);
       g.clear(); g.worldW=g.W; g.ox=0; g.worldSeed=0; g.biome=0; g.fadeMasses(); g.clock=Game.clockOf(sc); g.updateClimate(); g.resetTemp();
       g.frame=0; Game.weather(g,sc);   // (the natural wind follows the frame count: from 0, every play of a scenario gets the same weather)
       for (let y=BOX.y;y<g.H;y++) for (let x=0;x<g.W;x++) if (x<BOX.x || x>=BOX.x+BOX.w || y>=BOX.y+BOX.h) g.set(g.idx(x,y),STONE,g.ambAt(y));
-      sc.build(builder(g));
+      if (sc.build) sc.build(builder(g));
       g.initAir(); if (sc.air!==undefined) for (let c=0;c<g.hum.length;c++) g.hum[c]*=sc.air;   // air: how humid, against the usual
       g.wakeAll();
-      return new Game(g, sc);
     }
     // when in the year a scenario opens: season is the share of the year gone (0 the first morning of spring, 0.25 of summer), on that day's morning
     static clockOf(sc){ return sc.season===undefined ? START : Math.round(sc.season*YEAR/DAY)*DAY+START%DAY; }
@@ -4646,10 +4697,14 @@ const Sim = (() => {
       game.evaluate(); return game;
     }
   }
+  // stars for a winning score (X4): one for the win, two past STARS[0] and three past STARS[1] (a survive scenario's time is a flat
+  // 250, so its bars are lower). A win scores 1000, up to 500 for time left and 500 for material left, and the reaction points
+  const STARS = [1400, 1700], STARS_SURVIVE = [1300, 1550];
+  const stars = (sc, score) => !score ? 0 : 1 + (score>=(sc.survive ? STARS_SURVIVE : STARS)[0]) + (score>=(sc.survive ? STARS_SURVIVE : STARS)[1]);
   // is a piece of saved text a scenario (rather than a plain world)?
   const isScenario = text => /^\s*\{/.test(text);
 
-  return {BIOMES,homeOf,EGG,CONE,NREF,fert,WORLD,EL,N,CH,SC,AMB,DAY,YEAR,aridAt,ARID_DESERT,ARID_SCRUB,SLIP_TAG,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,BOLT_T,MASS_L,canShare,Grid,generate,flat,terrainOf:terrain,reseed,R,BOX,GROVES,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS,SHRUB,CACTUS,REED,RABBIT,HOPPER,SPOUT,DRAIN,HEATER,COOLER,FAN,FOX,BIRD,HAIL,PEAT,COAL,FISH,MOSS,FUMES,DUST}};
+  return {BIOMES,homeOf,EGG,CONE,NREF,fert,WORLD,EL,N,CH,SC,AMB,DAY,YEAR,aridAt,ARID_DESERT,ARID_SCRUB,SLIP_TAG,CURED,AC,SAT,TILE,REACH,REGION,FIELDS,BOLT_T,MASS_L,canShare,Grid,generate,flat,terrainOf:terrain,reseed,R,BOX,GROVES,SCENARIOS,STARTER,VALUE,Game,unlocked,scenarioOpen,isScenario,stars,defOf,ids:{E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS,SHRUB,CACTUS,REED,RABBIT,HOPPER,SPOUT,DRAIN,HEATER,COOLER,FAN,FOX,BIRD,HAIL,PEAT,COAL,FISH,MOSS,FUMES,DUST}};
 })();
 
 // ============================================================================
@@ -4659,7 +4714,7 @@ const Sim = (() => {
 const {WORLD,EL,Grid,CH,SC,generate,ids,REGION,BOX,SCENARIOS,Game,BOLT_T}=Sim;
 const {E,SAND,WATER,STONE,WOOD,OIL,FIRE,SMOKE,ACID,STEAM,EMBER,LAVA,ICE,GUNP,SEED,PLANT,SALT,BRINE,GLASS,GAS,TIP,CLOUD,SNOW,RUBBLE,CHAR,ASH,DIRT,LITTER,ROOT,METAL,MUD,CLAY,BRICK,RUST,MGLASS,SHRUB,CACTUS,REED,RABBIT,HOPPER,SPOUT,DRAIN,HEATER,COOLER,FAN,FOX,BIRD,HAIL,PEAT,COAL,FISH,MOSS,FUMES,DUST}=ids;
 const ERASE=255, PAN=254, INSPECT=253, CONE_T=252, CURED_SAP=Sim.CURED, MUD_DRY=190;   // (CONE_T: the Cone brush, a seed of a conifer)
-const W=WORLD.W, H=WORLD.H, VW=320, VH=240, WORLD_W=WORLD.WIDE;   // the grid is a window that streams along a world nearly seven times as wide
+const W=WORLD.W, H=WORLD.H, WORLD_W=WORLD.WIDE; let VW=320, VH=240;   // (the view: Zoom changes it, see ZOOMS)   // the grid is a window that streams along a world nearly seven times as wide
 const canThread=Sim.canShare && typeof Worker!=='undefined' && typeof Blob!=='undefined';
 const g=new Grid(W,H,{shared:canThread});
 window.sandfall={g,Sim};   // handy for poking at the world from the console
@@ -4686,13 +4741,13 @@ window.addEventListener('pagehide',()=>{ if (pool.n) stopWorkers('stopped'); });
 
 const cv=document.getElementById('c'), ctx=cv.getContext('2d');
 cv.width=VW; cv.height=VH;
-const img=ctx.createImageData(VW,VH), px=new Uint32Array(img.data.buffer);
+let img=ctx.createImageData(VW,VH), px=new Uint32Array(img.data.buffer);
 window.sandfall.px=px;   // the frame as drawn (tests compare it)
 const dims=()=>{ document.getElementById('dims').textContent='world '+g.worldW+'×'+H; };
 const msg=s=>{ document.getElementById('msg').textContent=s; };
 
 // --- lighting: sky from above + emitters, two relaxation sweeps over the viewport ---
-const light=new Float32Array(VW*VH);
+let light=new Float32Array(VW*VH);
 window.sandfall.light=light;   // (tests measure it)
 // per element: how much direct sky light gets through a cell (opaque 0, liquid 0.93, cloud 0.9), its glow, and how fast light fades past it.
 // Cloud and water also scatter: however deep they are, the light under them doesn't fall below SCATTER of the sky (an overcast
@@ -4703,7 +4758,7 @@ const KEEP_AIR=0.982, KEEP_SOLID=0.7;
 const PASS=new Float64Array(EL.length), SCATTER=new Float64Array(EL.length), GLOW=new Float64Array(EL.length), FADE=new Float64Array(EL.length);
 for (const e of EL){ PASS[e.id]=e.opaque ? 0 : e.kind==='liquid' ? 0.93 : e.id===CLOUD ? 0.9 : 1; SCATTER[e.id]=e.opaque ? 0 : e.kind==='liquid' ? 0.3 : e.id===CLOUD ? 0.55 : 1; GLOW[e.id]=e.glow; FADE[e.id]=e.opaque ? KEEP_SOLID : KEEP_AIR; }
 PASS[DUST]=0.96; SCATTER[DUST]=0.5; PASS[SMOKE]=0.97;   // (a dust storm or a pall of smoke darkens the day under it)
-const fade=new Float64Array(VW*VH);
+let fade=new Float64Array(VW*VH);
 let constLight=false;   // Light: constant draws everything in full daylight (no night, no shadow); the sim's day and night go on as before
 try{ constLight=localStorage.getItem('sandfall.light')==='constant'; }catch(e){}
 function computeLight(){
@@ -4825,6 +4880,17 @@ function render(){
       for (let k=0;k<=len;k++){ const vx=Math.round(x0+u/sp*k), vy=Math.round(y0+v/sp*k); if (vx>=0&&vx<VW&&vy>=0&&vy<VH) px[vy*VW+vx]= k<2 ? C(255,255,255) : C(240,178,74); }
     }
   }
+  if (designing && edEl.classList.contains('on')){   // the editor's areas on the box: goals amber, fails red, sources blue
+    const box=(r,col)=>{ const x0=BOX.x+r[0]-camX, y0=BOX.y+r[1]-camY, x1=BOX.x+r[2]-1-camX, y1=BOX.y+r[3]-1-camY;
+      for (let x=x0;x<=x1;x++) for (const y of [y0,y1]) if (x>=0&&x<VW&&y>=0&&y<VH && ((x+y)&1)) px[y*VW+x]=col;
+      for (let y=y0;y<=y1;y++) for (const x of [x0,x1]) if (x>=0&&x<VW&&y>=0&&y<VH && ((x+y)&1)) px[y*VW+x]=col; };
+    for (const [id,col] of [['ed-goals',C(240,178,74)],['ed-fails',C(224,96,74)],['ed-sources',C(90,160,240)]]) for (const d of items(id)){ const k=q(d,'.kind'); if (k && k.value==='made') continue; const r=q(d,'.rect'); if (r) box(rectOf(r.value),col); }
+  }
+  if (shapeFrom && shapeTo){   // the shape being dragged out
+    const [ax,ay]=shapeFrom, [bx,by]=shapeTo, dot=(x,y)=>{ const vx=x-camX, vy=y-camY; if (vx>=0&&vx<VW&&vy>=0&&vy<VH) px[vy*VW+vx]=C(240,178,74); };
+    if (shape==='line'){ const n=Math.max(Math.abs(bx-ax),Math.abs(by-ay),1); for (let k=0;k<=n;k++) dot(Math.round(ax+(bx-ax)*k/n),Math.round(ay+(by-ay)*k/n)); }
+    else { const x0=Math.min(ax,bx), x1=Math.max(ax,bx), y0=Math.min(ay,by), y1=Math.max(ay,by); for (let x=x0;x<=x1;x++){ dot(x,y0); dot(x,y1); } for (let y=y0;y<=y1;y++){ dot(x0,y); dot(x1,y); } }
+  }
   if (showChunks){
     for (let vy=0;vy<VH;vy++) for (let vx=0;vx<VW;vx++){
       const x=camX+vx, y=camY+vy;
@@ -4844,7 +4910,7 @@ const GROUPS=[
   ['Devices',[SPOUT,DRAIN,HEATER,COOLER,FAN]],
   ['Tools',  [ERASE,PAN,INSPECT]],
 ];
-let current=SAND, brush=4, game=null;
+let current=SAND, brush=4, game=null, designing=false;   // designing: laying out a scenario in the editor (X4)
 // a spout pours the powder, liquid or gas chosen last; pressing Fan again while it is chosen turns the way it blows (its life: 0 → 1 ↑ 2 ← 3 ↓)
 let spoutEl=WATER, fanDir=0;
 const ARROWS=['→','↑','←','↓'];
@@ -4906,7 +4972,7 @@ function refreshRack(){
     const on = sc ? game && game.sc.id===sc.id : !game, best=sc && progress.best[sc.id];
     const avail=!sc || progress.all || Sim.scenarioOpen(progress,k);
     b.disabled=!avail; b.setAttribute('aria-pressed',!!on);
-    b.innerHTML=(sc ? (k+1)+'. '+sc.name : 'Sandbox')+'<small>'+(!sc ? 'free play' : !avail ? 'locked' : best!==undefined ? 'best '+best : 'not won yet')+'</small>';
+    b.innerHTML=(sc ? (k+1)+'. '+sc.name : 'Sandbox')+'<small>'+(!sc ? 'free play' : !avail ? 'locked' : best!==undefined ? 'best '+best+' '+starText(Sim.stars(sc,best)) : 'not won yet')+'</small>';
   }
   unlockAll.textContent=progress.all ? 'Use progress' : 'Unlock all';
   unlockAll.setAttribute('aria-pressed',!!progress.all);
@@ -4917,8 +4983,9 @@ function refreshRack(){
 function paint(cx,cy){
   const r=brush, t=current===ERASE?E:current===CONE_T?SEED:current, cone=current===CONE_T;
   if (current===PAN || current===INSPECT || (game && game.state!=='play')) return;
+  if (designing && (cx<BOX.x || cx>=BOX.x+BOX.w || cy<BOX.y || cy>=BOX.y+BOX.h)) return;   // (the editor paints in the box)
   const arg=t===SPOUT ? spoutEl : t===FAN ? fanDir : undefined;
-  const put=(i,t)=>{ if (game) return game.paint(i,t); g.lay(i,t,undefined,arg); return true; };   // in a scenario the brush draws on its budget
+  const put=(i,t)=>{ if (game) return game.paint(i,t); note(i); g.lay(i,t,undefined,arg); return true; };   // in a scenario the brush draws on its budget
   // solids fill the circle; powders and liquids fill it too, so a held brush is a steady spout; gases puff
   if (t===TIP){ const i=g.idx(cx,cy); if (g.inb(cx,cy) && g.type[i]===E && !g.nearTip(cx,cy)) put(i,t); return; }   // one sapling at a time
   if (t===SEED){   // seeds are sown one per click, or one every brush radius along a drag (a heap of seeds only grows one tree)
@@ -4936,8 +5003,41 @@ function paint(cx,cy){
   }
 }
 let drawing=false,panning=false,lastX=-1,lastY=-1,panPX=0,panPY=0,sownAt=null;   // sownAt: where this stroke last sowed a seed
+// --- brush shapes and undo (X5). Line and box draw from where the press started to where it ends (shown as an outline while you
+//     drag); fill pours the element into the patch of whatever was clicked (joined cells of the same kind, in view). Each stroke or
+//     shape in the sandbox can be undone: the cells it changed are noted as they were (UNDO_MAX strokes back), and moving the window
+//     or changing the world forgets them.
+const UNDO_MAX=30, FILL_MAX=40000; const undos=[]; let rec=null, shape='free', shapeFrom=null, shapeTo=null;
+const undoEl=document.getElementById('undo');
+const showUndo=()=>{ undoEl.disabled=!undos.length || !!game; };
+const beginUndo=()=>{ if (!game && !rec) rec=new Map(); };
+function note(i){ if (rec && !rec.has(i)) rec.set(i,[g.type[i],g.life[i],g.temp[i],g.owner[i]]); }
+const endUndo=()=>{ if (rec && rec.size){ undos.push(rec); if (undos.length>UNDO_MAX) undos.shift(); } rec=null; showUndo(); };
+const clearUndo=()=>{ undos.length=0; rec=null; showUndo(); };
+function undo(){ whenIdle(()=>{ const r=undos.pop(); showUndo(); if (!r || game){ msg('Nothing to undo'); return; }
+  for (const [i,[t,l,tp,o]] of r){ g.set(i,t,tp); g.life[i]=l; g.owner[i]=o; g.vx[i]=0; g.vy[i]=0; g.wakeCell(i); g.unsettle(i%W,(i/W)|0); }
+  msg('Undone ('+r.size+' cells)'); }); }
+undoEl.addEventListener('click',undo);
+const shapeEl=document.getElementById('shape'); shapeEl.addEventListener('change',()=>{ shape=shapeEl.value; });
+function putCell(i,t,arg){ if (game) return game.paint(i,t); if (t===E){ if (g.type[i]===E) return false; } else if (g.type[i]!==E && !(t===FISH && (g.type[i]===WATER || g.type[i]===BRINE))) return false; note(i); g.lay(i,t,undefined,arg); if (EL[t].kind!=='static' && EL[t].kind!=='gas') g.vy[i]=1; return true; }
+function drawShape(a,b){   // (when no cell pass is running)
+  const t=current===ERASE?E:current===CONE_T?SEED:current, arg=t===SPOUT ? spoutEl : t===FAN ? fanDir : undefined;
+  if (current===PAN || current===INSPECT || (game && game.state!=='play')) return;
+  beginUndo();
+  if (shape==='line'){ const n=Math.max(Math.abs(b[0]-a[0]),Math.abs(b[1]-a[1]),1); sownAt=null; for (let k=0;k<=n;k++) paint(Math.round(a[0]+(b[0]-a[0])*k/n), Math.round(a[1]+(b[1]-a[1])*k/n)); }
+  else if (shape==='box'){ const x0=Math.max(0,Math.min(a[0],b[0])), x1=Math.min(W-1,Math.max(a[0],b[0])), y0=Math.max(0,Math.min(a[1],b[1])), y1=Math.min(H-1,Math.max(a[1],b[1]));
+    for (let y=y0;y<=y1;y++) for (let x=x0;x<=x1;x++) putCell(g.idx(x,y),t,arg); }
+  else if (shape==='fill' && g.inb(a[0],a[1])){   // the joined patch of what was clicked, within the view
+    const i0=g.idx(a[0],a[1]), from=g.type[i0]; if (from===t){ endUndo(); return; }
+    const seen=new Uint8Array(VW*VH), q=[i0], vx0=camX, vy0=camY; seen[(a[1]-vy0)*VW+a[0]-vx0]=1;
+    for (let k=0;k<q.length && k<FILL_MAX;k++){ const c=q[k], x=c%W, y=(c-x)/W;
+      if (t===E) putCell(c,E); else { if (from!==E && !(t===FISH && (from===WATER || from===BRINE))){ if (game) continue; note(c); g.set(c,E); } putCell(c,t,arg); }
+      for (const [nx,ny] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]){ if (nx<vx0 || nx>=vx0+VW || ny<vy0 || ny>=vy0+VH) continue; const s=(ny-vy0)*VW+nx-vx0; if (seen[s]) continue; seen[s]=1; const j=ny*W+nx; if (g.type[j]===from) q.push(j); } }
+  }
+  endUndo();
+}
 // (in a scenario the camera sits on the box, with the sky over it)
-const clampCam=()=>{ if (game){ camX=BOX.x; camY=BOX.y+BOX.h-VH; return; } camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
+const clampCam=()=>{ if (game || designing){ camX=BOX.x; camY=BOX.y+BOX.h-VH; return; } camX=Math.max(0,Math.min(W-VW,camX|0)); camY=Math.max(0,Math.min(H-VH,camY|0)); };
 const pos=e=>{ const r=cv.getBoundingClientRect(); return [camX+((e.clientX-r.left)/r.width*VW)|0, camY+((e.clientY-r.top)/r.height*VH)|0]; };
 function stroke(e){
   const [x,y]=pos(e), x0=lastX, y0=lastY;
@@ -4953,18 +5053,22 @@ cv.addEventListener('pointerdown',e=>{
   cv.setPointerCapture(e.pointerId);
   if (e.button===2 || current===PAN){ if (game) return; panning=true; const r=cv.getBoundingClientRect(); panPX=e.clientX; panPY=e.clientY; return; }
   if (current===INSPECT){ const [x,y]=pos(e); pinCell(x,y); return; }
-  drawing=true; lastX=-1; sownAt=null; stroke(e);
+  if (pickInput || (shape!=='free' && current!==PAN)){ shapeFrom=shapeTo=pos(e); if (pickInput) return; if (shape==='fill'){ const a=shapeFrom; shapeFrom=null; whenIdle(()=>drawShape(a,a)); } return; }
+  drawing=true; lastX=-1; sownAt=null; whenIdle(beginUndo); stroke(e);
 });
 cv.addEventListener('pointermove',e=>{
   if (panning){ const r=cv.getBoundingClientRect(); camX-=(e.clientX-panPX)/r.width*VW; camY-=(e.clientY-panPY)/r.height*VH; panPX=e.clientX; panPY=e.clientY; clampCam(); return; }
   if (drawing) stroke(e);
+  if (shapeFrom) shapeTo=pos(e);
   hover=pos(e); showProbe();
 });
-const stop=()=>{drawing=false; panning=false; lastX=-1;};
+const stop=e=>{ if (drawing) whenIdle(endUndo); if (shapeFrom){ const a=shapeFrom, b=e && e.clientX!==undefined ? pos(e) : shapeTo; shapeFrom=null; if (!pickRect(a,b)) whenIdle(()=>drawShape(a,b)); } drawing=false; panning=false; lastX=-1; };
 cv.addEventListener('pointerup',stop); cv.addEventListener('pointercancel',stop);
 cv.addEventListener('pointerleave',()=>{ hover=null; showProbe(); });
 const keys=new Set();
-window.addEventListener('keydown',e=>{ if (e.target.tagName==='TEXTAREA') return; keys.add(e.key.toLowerCase()); if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault(); });
+window.addEventListener('keydown',e=>{ if (e.target.tagName==='TEXTAREA' || e.target.tagName==='INPUT') return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); return; }
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && rackKey(e.key.toLowerCase())){ e.preventDefault(); return; } keys.add(e.key.toLowerCase()); if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault(); });
 window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 function keyPan(){
   if (game) return;
@@ -4975,23 +5079,81 @@ function keyPan(){
 // --- controls ---
 const brushEl=document.getElementById('brush'), brushV=document.getElementById('brushv');
 brushEl.addEventListener('input',()=>{brush=+brushEl.value; brushV.textContent=brush;});
+const setBrush=n=>{ brush=Math.max(1,Math.min(24,n)); brushEl.value=brush; brushV.textContent=brush; };
+document.getElementById('brushdn').addEventListener('click',()=>setBrush(brush-1)); document.getElementById('brushup').addEventListener('click',()=>setBrush(brush+1));
+// keyboard shortcuts for the rack and the controls (X8)
+function rackKey(k){
+  const live=buttons.filter(r=>r.b.style.display!=='none' && !r.b.disabled);
+  if (k==='q' || k==='e'){ const at=live.findIndex(r=>r.t===current), n=live.length; if (n) choose(live[((at<0?0:at)+(k==='e'?1:-1)+n)%n].t); return true; }
+  if (k>='1' && k<='9'){ const row=rows.find(r=>r.list.includes(current)) || rows[0], list=row.list.filter(t=>live.some(r=>r.t===t)), t=list[+k-1]; if (t!==undefined) choose(t); return true; }
+  if (k==='['){ setBrush(brush-1); return true; } if (k===']'){ setBrush(brush+1); return true; }
+  if (k===' '){ togglePause(); return true; }
+  if (k==='x'){ choose(ERASE); return true; } if (k==='i'){ choose(INSPECT); return true; }
+  if (k==='z'){ if (!game && !designing) setZoom((zoomK+1)%ZOOMS.length); return true; }
+  if (k==='b'){ shapeEl.selectedIndex=(shapeEl.selectedIndex+1)%4; shape=shapeEl.value; msg(shapeEl.options[shapeEl.selectedIndex].textContent); return true; }
+  if (k==='t'){ toggleTimelapse(); return true; }
+  return false;
+}
+// ambient sound (X8): three loops of noise through filters, rain (a hiss), fire (a crackling band) and wind (a low rush), each as loud
+// as there is of it in view; off until it is switched on (browsers start sound only from a click)
+const snd={ctx:null, on:false}, soundEl=document.getElementById('sound');
+function startSound(){
+  const A=typeof window!=='undefined' && (window.AudioContext || window.webkitAudioContext); if (!A){ msg('No sound in this browser'); return false; }
+  const c=new A(), len=c.sampleRate*2, buf=c.createBuffer(1,len,c.sampleRate), d=buf.getChannelData(0); for (let k=0;k<len;k++) d[k]=Math.random()*2-1;
+  const loop=(type,f,q)=>{ const s=c.createBufferSource(); s.buffer=buf; s.loop=true; const fl=c.createBiquadFilter(); fl.type=type; fl.frequency.value=f; fl.Q.value=q; const gn=c.createGain(); gn.gain.value=0; s.connect(fl); fl.connect(gn); gn.connect(c.destination); s.start(); return gn; };
+  snd.rain=loop('highpass',3000,0.5); snd.fire=loop('bandpass',800,0.9); snd.wind=loop('lowpass',260,0.8); snd.ctx=c; return true;
+}
+soundEl.addEventListener('click',()=>{
+  if (!snd.ctx && !startSound()) return;
+  snd.on=!snd.on; soundEl.textContent='Sound: '+(snd.on?'on':'off'); soundEl.setAttribute('aria-pressed',snd.on);
+  try{ if (snd.on) snd.ctx.resume(); else snd.ctx.suspend(); }catch(e){}
+});
+function soundTick(){   // (every few frames) how much rain, fire and wind is in view, sampled on every other cell
+  if (!snd.on) return;
+  let rain=0, fire=0; const T=g.type;
+  for (let vy=0;vy<VH;vy+=2){ const row=(camY+vy)*W+camX; for (let vx=0;vx<VW;vx+=2){ const i=row+vx, t=T[i];
+    if (t===FIRE || t===EMBER || (t===OIL && g.life[i])) fire++; else if ((t===WATER || t===SNOW || t===HAIL) && i+W<T.length && T[i+W]===E && i>=W && T[i-W]===E) rain++; } }
+  const now=snd.ctx.currentTime, k=4*1600/(VW*VH);   // (counts per 320×240 view)
+  snd.rain.gain.setTargetAtTime(Math.min(0.25,rain*k/300),now,0.3);
+  snd.fire.gain.setTargetAtTime(Math.min(0.35,fire*k/250)*(0.55+0.45*Math.random()),now,0.05);
+  snd.wind.gain.setTargetAtTime(Math.min(0.3,Math.abs(g.wind)*0.35+(g.storming ? 0.1 : 0)),now,0.5);
+}
 let paused=false, speed=1;
-document.getElementById('pause').addEventListener('click',e=>{paused=!paused; e.target.textContent=paused?'Resume':'Pause';});
-document.getElementById('speed').addEventListener('click',e=>{ speed=speed>=4 ? 1 : speed*2; e.target.textContent='Speed ×'+speed; });   // ticks a frame (a scenario's clock counts ticks, so it is fair)
+const togglePause=()=>{ paused=!paused; document.getElementById('pause').textContent=paused?'Resume':'Pause'; };
+document.getElementById('pause').addEventListener('click',togglePause);
+const speedEl=document.getElementById('speed'), tlEl=document.getElementById('timelapse');
+speedEl.addEventListener('click',e=>{ setTimelapse(false); speed=speed>=4 ? 1 : speed*2; speedEl.textContent='Speed ×'+speed; });
+// time-lapse (X7): TIMELAPSE ticks a frame, drawing only every TL_DRAW frames, so years go by in minutes (the sandbox only: a scenario
+// keeps to ×4); the clock shows the year, and the history ribbon under the census fills in
+const TIMELAPSE=16, TL_DRAW=4; let timelapse=false;
+function setTimelapse(on){ timelapse=on && !game && !designing; tlEl.setAttribute('aria-pressed',timelapse); if (timelapse){ speed=TIMELAPSE; speedEl.textContent='Speed ×'+speed; } else if (speed>4){ speed=1; speedEl.textContent='Speed ×1'; } }
+const toggleTimelapse=()=>{ setTimelapse(!timelapse); if (timelapse && !censusOn) setCensus(true); msg(timelapse ? 'Time-lapse: '+TIMELAPSE+' ticks a frame' : 'Time-lapse off'); };
+tlEl.addEventListener('click',toggleTimelapse);   // ticks a frame (a scenario's clock counts ticks, so it is fair)
+// zoom: the view is 320×240 cells; ×2 shows a quarter of that, bigger, and ×½ four times as much (a scenario always plays at ×1)
+const ZOOMS=[[320,240,'×1'],[160,120,'×2'],[640,480,'×½']]; let zoomK=0; const zoomEl=document.getElementById('zoom');
+function setZoom(k){
+  zoomK=k; const [w,h]=game || designing ? ZOOMS[0] : ZOOMS[k]; zoomEl.textContent='Zoom '+ZOOMS[k][2]; zoomEl.disabled=!!(game || designing);
+  if (w===VW) return;
+  const mx=camX+VW/2, my=camY+VH/2; VW=w; VH=h; cv.width=VW; cv.height=VH;
+  img=ctx.createImageData(VW,VH); px=new Uint32Array(img.data.buffer); light=new Float32Array(VW*VH); fade=new Float64Array(VW*VH);
+  window.sandfall.px=px; window.sandfall.light=light;
+  camX=Math.round(mx-VW/2); camY=Math.round(my-VH/2); clampCam();
+}
+zoomEl.addEventListener('click',()=>setZoom((zoomK+1)%ZOOMS.length));
 // sandbox tools: a flat world to build on, the calendar, and the wind
 const sbox=document.getElementById('sbox'), holdEl=document.getElementById('hold'), windEl=document.getElementById('windset');
 const WINDS=[['natural',null],['calm',0],['east',0.5],['west',-0.5]]; let windK=0;
 const setWind=k=>{ windK=k; g.windHold=WINDS[k][1]; windEl.textContent='Wind: '+WINDS[k][0]; };
 const setHold=on=>{ g.hold=on; holdEl.setAttribute('aria-pressed',on); };
 document.getElementById('flatworld').addEventListener('click',()=>whenIdle(()=>{
-  if (game) leaveScenario(true);
-  const top=Sim.flat(g); resetCensus(); camX=(W-VW)/2|0; camY=Math.max(0,top-VH*0.7|0); clampCam(); dims(); msg('Flat world');
+  if (game) leaveScenario(true); designing=false;
+  const top=Sim.flat(g); resetCensus(); clearUndo(); camX=(W-VW)/2|0; camY=Math.max(0,top-VH*0.7|0); clampCam(); dims(); msg('Flat world');
 }));
 document.getElementById('season').addEventListener('click',()=>whenIdle(()=>{ g.nextSeason(); msg(g.seasonName); }));
 holdEl.addEventListener('click',()=>setHold(!g.hold));
 windEl.addEventListener('click',()=>setWind((windK+1)%WINDS.length));
 document.getElementById('front').addEventListener('click',()=>whenIdle(()=>{ g.sendFront(Math.max(0,camX-120)); msg('A cold front is coming in from the west: watch the pressure'); }));
-document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ if (game) leaveScenario(true); g.clear(); resetCensus(); msg('Cleared'); }));
+document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ if (game) leaveScenario(true); beginUndo(); for (let i=0;i<g.type.length;i++) if (g.type[i]!==E) note(i); endUndo(); g.clear(); resetCensus(); msg('Cleared (Undo brings it back)'); }));
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
 document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
 document.getElementById('moistview').addEventListener('click',e=>{moistView=!moistView; e.target.setAttribute('aria-pressed',moistView);});
@@ -5007,20 +5169,65 @@ const biomeEl=document.getElementById('biome');
 try{ const v=localStorage.getItem('sandfall.biome'); if (v && Sim.BIOMES.some(b=>b.id===v)) biomeEl.value=v; }catch(e){}
 const biomeK=()=>Math.max(0,Sim.BIOMES.findIndex(b=>b.id===biomeEl.value));
 function newWorld(seedN){
-  if (game) leaveScenario(true);
+  if (game) leaveScenario(true); designing=false;
   const bio=biomeK(), ox=Sim.homeOf(WORLD_W,bio);   // (the middle of the world, or its west end for a coast)
-  resetCensus(); worldSeed=seedN; const surf=generate(g,worldSeed,WORLD_W,ox,bio), T=g.noise;
+  resetCensus(); clearUndo(); worldSeed=seedN; seedEl.value=worldSeed; const surf=generate(g,worldSeed,WORLD_W,ox,bio), T=g.noise;
   const at=T.volc ? (T.sea.shore+T.volc.x)/2 : Sim.BIOMES[bio].home==='coast' && T.sea ? T.sea.shore+VW/4 : ox+W/2;   // open on the volcano's seaward flank, the shore, or the middle
-  camX=Math.round(at-ox-VW/2); clampCam(); camY=Math.max(0,surf[Math.min(W-1,Math.max(0,camX+VW/2|0))]-VH*0.7|0); clampCam(); dims();
+  camX=Math.min(Math.round(at-ox-VW/2),W-REGION-1-(VW>>1)); clampCam();   // (short of the east region, or the window streams on at once) camY=Math.max(0,surf[Math.min(W-1,Math.max(0,camX+VW/2|0))]-VH*0.7|0); clampCam(); dims();
   msg('World #'+worldSeed+(bio ? ' · '+Sim.BIOMES[bio].name : ''));
 }
 document.getElementById('newworld').addEventListener('click',()=>whenIdle(()=>newWorld((Math.random()*1e9)|0)));
+// --- world navigation (X5): open a world by its seed, share a link to it (or to the scenario being played), and the minimap ---
+const seedEl=document.getElementById('seedin');
+const openSeed=()=>{ const v=parseInt(String(seedEl.value).replace(/[^0-9-]/g,''),10); if (!isFinite(v)){ msg('A seed is a whole number'); return; } whenIdle(()=>newWorld(v|0)); };
+document.getElementById('goseed').addEventListener('click',openSeed);
+seedEl.addEventListener('keydown',e=>{ if (e.key==='Enter') openSeed(); });
+function readHash(){ const h=(typeof location!=='undefined' && location.hash||'').slice(1), o={}; for (const kv of h.split('&')){ const k=kv.indexOf('='); if (k>0) o[kv.slice(0,k)]=decodeURIComponent(kv.slice(k+1)); } return o; }
+function shareLink(frag){
+  let url='#'+frag; try{ url=location.href.split('#')[0]+'#'+frag; history.replaceState(null,'',url); }catch(e){}
+  const show=()=>{ io.classList.add('open'); iotext.value=url; msg('Link ready to copy below'); };
+  try{ navigator.clipboard.writeText(url).then(()=>msg('Link copied ('+(url.length/1024).toFixed(1)+' KB)'),show); }catch(e){ show(); }
+}
+document.getElementById('sharelink').addEventListener('click',()=>whenIdle(()=>{
+  if (game){ if (SCENARIOS.some(s=>s.id===game.sc.id) && !game.sc.custom) shareLink('play='+game.sc.id); else shareScenario(); return; }
+  if (!g.worldSeed){ msg('Only a generated world has a seed to share (this one is '+(g.worldW>W ? 'loaded' : 'flat or cleared')+')'); return; }
+  shareLink('world='+g.worldSeed+'&biome='+Sim.BIOMES[g.biome||0].id);
+}));
+const mm=document.getElementById('minimap'), mctx=mm.getContext('2d'); let mmKey='', mmProf=null;
+function drawMinimap(){
+  const show=!game && !designing && g.worldW>W && !!g.worldSeed; mm.style.display=show ? '' : 'none'; if (!show) return;
+  const dpr=(typeof devicePixelRatio!=='undefined' && devicePixelRatio)||1, cw=Math.round((mm.clientWidth||600)*dpr), ch=Math.round((mm.clientHeight||44)*dpr);
+  if (mm.width!==cw || mm.height!==ch){ mm.width=cw; mm.height=ch; mmKey=''; }
+  const key=g.worldSeed+':'+g.biome+':'+g.worldW+':'+cw;
+  if (key!==mmKey){   // the world's land as it was made (the generator's own profile), a column of pixels at a time
+    mmKey=key; const T=Sim.terrainOf(g), n=cw, s=new Int16Array(n), sea=new Uint8Array(n), ar=new Float32Array(n); let lo=1e9, hi=-1e9;
+    for (let k=0;k<n;k++){ const gx=Math.floor((k+0.5)/n*g.worldW); s[k]=T.surf(gx); sea[k]=T.sea && gx<T.sea.end && s[k]>T.sea.y ? 1 : 0; ar[k]=Sim.aridAt(g.worldSeed,gx,g.biome); lo=Math.min(lo,s[k]); hi=Math.max(hi,s[k]); }
+    mmProf={s,sea,ar,lo:lo-12,hi:Math.max(hi,T.sea ? T.sea.y : hi)+6};
+  }
+  const c=mctx, p=mmProf, Y=r=>(r-p.lo)/(p.hi-p.lo)*ch;
+  c.fillStyle='#161a22'; c.fillRect(0,0,cw,ch);
+  for (let k=0;k<cw;k++){ const y=Y(p.s[k]), a=p.ar[k];
+    if (p.sea[k]){ c.fillStyle='#2f6fb0'; c.fillRect(k,Y(T_SEA(p)),1,ch); }
+    c.fillStyle=a>=Sim.ARID_DESERT ? '#c9a45c' : a>=Sim.ARID_SCRUB ? '#8a8a4a' : '#4f8a4a'; c.fillRect(k,y,1,3*dpr);
+    c.fillStyle='#5f6470'; c.fillRect(k,y+3*dpr,1,ch); }
+  const X=gx=>gx/g.worldW*cw;
+  c.strokeStyle='#8b92a3'; c.lineWidth=dpr; c.strokeRect(X(g.ox)+0.5,0.5,X(W)-1,ch-1);   // the simulated window
+  c.fillStyle='rgba(240,178,74,.35)'; c.fillRect(X(g.ox+camX),0,Math.max(2,X(VW)),ch); c.fillStyle='#f0b24a'; c.fillRect(X(g.ox+camX),0,Math.max(2,X(VW)),2*dpr);   // the view
+}
+const T_SEA=p=>{ const T=Sim.terrainOf(g); return T.sea ? T.sea.y : p.hi; };
+function jumpTo(gx){ whenIdle(()=>{
+  const target=Math.max(0,Math.min(g.worldW-W, Math.round((gx-W/2)/REGION)*REGION)); let n=0;
+  while (g.ox<target && n++<64 && g.shift(1)); while (g.ox>target && n++<64 && g.shift(-1));
+  clearUndo(); camX=Math.round(gx-g.ox-VW/2); clampCam();
+  const cx=Math.min(W-1,camX+VW/2|0); let y=0; while (y<H-1 && (g.type[g.idx(cx,y)]===E || EL[g.type[g.idx(cx,y)]].kind==='gas')) y++;
+  camY=Math.max(0,y-VH*0.6|0); clampCam(); drawMinimap(); msg('x '+(g.ox+camX)); }); }
+mm.addEventListener('click',e=>{ if (game || designing) return; const r=mm.getBoundingClientRect(); jumpTo(Math.round((e.clientX-r.left)/r.width*g.worldW)); });
 biomeEl.addEventListener('change',()=>{ try{ localStorage.setItem('sandfall.biome',biomeEl.value); }catch(e){} whenIdle(()=>newWorld((Math.random()*1e9)|0)); });
 // a save is a plain world, or (in a scenario) the scenario with its goals and progress as JSON
 const saveText=()=>game ? game.save() : g.save();
 function loadText(s){
   if (Sim.isScenario(s)){ game=Game.load(g,s); enterScenario(); return 'scenario'; }
-  if (game) leaveScenario(true);
+  if (game) leaveScenario(true); designing=false; clearUndo();
   g.load(s); resetCensus(); return 'world';
 }
 document.getElementById('save').addEventListener('click',()=>whenIdle(()=>{ try{ localStorage.setItem('sandfall.world',saveText()); localStorage.setItem('sandfall.cam',camX+','+camY); msg(game ? 'Scenario saved to this browser' : 'Saved to this browser'); }catch(e){ msg('Could not save in this browser (the world may be too big for its storage: try Export)'); } }));
@@ -5073,18 +5280,35 @@ const PANELS=[
 ];
 const SEASON_TINT=['rgba(80,170,90,.10)','rgba(240,178,74,.10)','rgba(200,110,50,.10)','rgba(120,150,220,.10)'];
 let census=[], censusOn=true, censusAt=-1, censusHover=-1;
+// the history ribbon (X7): a sample a day for as long as the world runs (HISTORY_KEEP days, fifty years), the land cover stacked by share of the window
+const HISTORY_KEEP=50*8, hcv=document.getElementById('historyc'), hctx=hcv.getContext('2d');
+const COVER=[['forest','#199e70'],['meadow','#c98500'],['scrub','#d55181'],['desert','#9085e9'],['reeds','#5fa04f'],['water','#2f6fb0'],['bare','#5f6470']];
+let history=[];
 const censusBtn=document.getElementById('censusbtn');
 const setCensus=on=>{ censusOn=on; censusBtn.setAttribute('aria-pressed',on); censusBox.classList[on && !game ? 'add' : 'remove']('on'); if (on) drawCensus(); };
 censusBtn.addEventListener('click',()=>setCensus(!censusOn));
-function resetCensus(){ census=[]; censusAt=-1; censusHover=-1; drawCensus(); }
+function resetCensus(){ census=[]; history=[]; censusAt=-1; censusHover=-1; drawCensus(); }
 function sampleCensus(){   // (only when no cell pass is running, so it reads a finished tick)
   const k=Math.floor(g.clock/CENSUS_EVERY);
   if (k===censusAt) return;
   if (k<censusAt) census=[];   // the clock went back: another world
   censusAt=k; const c=g.census(); c.clock=g.clock; census.push(c); if (census.length>CENSUS_KEEP) census.shift();
-  if (censusOn && !game) drawCensus();
+  if (k%8===0){ history.push(c); if (history.length>HISTORY_KEEP) history.shift(); }
+  if (censusOn && !game && !(timelapse && k%8)) drawCensus();
+}
+function drawHistory(){
+  const dpr=(typeof devicePixelRatio!=='undefined' && devicePixelRatio)||1, cw=Math.round((hcv.clientWidth||600)*dpr), ch=Math.round((hcv.clientHeight||40)*dpr);
+  if (hcv.width!==cw || hcv.height!==ch){ hcv.width=cw; hcv.height=ch; }
+  const c=hctx; c.setTransform(1,0,0,1,0,0); c.clearRect(0,0,cw,ch); const n=history.length; if (!n) return;
+  const per=Math.max(1,Math.min(6*dpr,cw/Math.max(n,8*4)));   // (a few pixels a day, squeezing in as the years go by)
+  const x0=Math.max(0,cw-n*per);
+  for (let k=0;k<n;k++){ const h=history[k]; let tot=0; for (const [key] of COVER) tot+=h[key]||0; let y=ch;
+    for (const [key,col] of COVER){ const v=(h[key]||0)/(tot||1)*ch; if (v<=0) continue; c.fillStyle=col; c.fillRect(x0+k*per,y-v,Math.ceil(per),v); y-=v; } }
+  c.fillStyle='rgba(13,15,20,.8)'; c.font=(10*dpr)+'px '+getComputedStyleFont(); c.textBaseline='top';
+  for (let k=0;k<n;k++) if (history[k].clock%Sim.YEAR<Sim.DAY){ const x=x0+k*per; c.fillRect(x,0,dpr,ch); c.fillText('Y'+(Math.floor(history[k].clock/Sim.YEAR)+1),x+2*dpr,1); }
 }
 function drawCensus(){
+  drawHistory();
   const dpr=(typeof devicePixelRatio!=='undefined' && devicePixelRatio)||1, cw=Math.round((ccv.clientWidth||600)*dpr), ch=Math.round((ccv.clientHeight||240)*dpr);
   if (ccv.width!==cw || ccv.height!==ch){ ccv.width=cw; ccv.height=ch; }
   const c=cctx; c.setTransform(dpr,0,0,dpr,0,0); const w=cw/dpr, h=ch/dpr;
@@ -5129,20 +5353,23 @@ ccv.addEventListener('pointerleave',()=>{ censusHover=-1; drawCensus(); });
 
 // --- scenarios ---
 const mission=document.getElementById('mission'), banner=document.getElementById('banner');
+const starText=n=>n ? '★'.repeat(n)+'☆'.repeat(3-n) : '';
 const fmt=t=>{ const s=Math.ceil(t/60); return (s/60|0)+':'+String(s%60).padStart(2,'0'); };
 function startScenario(sc){ game=Game.start(g,sc); enterScenario(); msg(sc.name); }
 function enterScenario(){
+  setTimelapse(false); if (speed>4){ speed=4; speedEl.textContent='Speed ×4'; }
+  designing=false; setZoom(zoomK); drawMinimap(); clearUndo();
   setHold(false); setWind(0); Game.weather(g,game.sc); sbox.classList.add('off');   // a scenario runs on its own clock and weather
   clampCam(); dims(); shown=null; banner.classList.remove('on');
   document.getElementById('mname').textContent=game.sc.name; document.getElementById('mbrief').textContent=game.sc.brief;
   mission.classList.add('on'); setCensus(censusOn); refreshRack(); showMission();
 }
 function leaveScenario(keepWorld){
-  game=null; mission.classList.remove('on'); banner.classList.remove('on'); shown=null; sbox.classList.remove('off');
+  game=null; designing=false; setZoom(zoomK); mission.classList.remove('on'); banner.classList.remove('on'); shown=null; sbox.classList.remove('off');
   if (!keepWorld) newWorld((Math.random()*1e9)|0);
   setCensus(censusOn); refreshRack();
 }
-document.getElementById('restart').addEventListener('click',()=>whenIdle(()=>{ if (game){ const sc=SCENARIOS.find(s=>s.id===game.sc.id); if (sc) startScenario(sc); else msg('A loaded scenario restarts from Load'); } }));
+document.getElementById('restart').addEventListener('click',()=>whenIdle(()=>{ if (game){ const sc=SCENARIOS.find(s=>s.id===game.sc.id); if (sc && !game.sc.custom) startScenario(sc); else if (game.sc.custom && lastCustom) playCustom(lastCustom); else msg('A loaded scenario restarts from Load'); } }));
 document.getElementById('leave').addEventListener('click',()=>whenIdle(()=>leaveScenario()));
 let shown=null;
 function showMission(){
@@ -5165,15 +5392,90 @@ function finished(){
     if (first) unlockedNow=sc.unlocks.filter(n=>!before.has(n));
   }
   document.getElementById('bannerh').textContent=won ? 'Scenario won' : 'Scenario lost';
-  document.getElementById('bannerp').textContent=won ? 'Score '+game.score+' ('+Math.round(game.points)+' from reactions)'+(unlockedNow.length ? '. Unlocked in the sandbox: '+unlockedNow.join(', ') : '') : game.why;
+  document.getElementById('bannerp').textContent=won ? 'Score '+game.score+' '+starText(Sim.stars(sc,game.score))+' ('+Math.round(game.points)+' from reactions)'+(unlockedNow.length ? '. Unlocked in the sandbox: '+unlockedNow.join(', ') : '') : game.why;
   const acts=document.getElementById('banneracts'); acts.innerHTML=''; 
   const add=(label,f,primary)=>{ const b=document.createElement('button'); b.className='btn'+(primary?' primary':''); b.type='button'; b.textContent=label; b.addEventListener('click',()=>whenIdle(f)); acts.appendChild(b); };
   if (won && k>=0 && k+1<SCENARIOS.length) add('Next: '+SCENARIOS[k+1].name,()=>startScenario(SCENARIOS[k+1]),true);
   if (k>=0) add(won?'Play again':'Try again',()=>startScenario(SCENARIOS[k]),!won);
+  else if (sc.custom && lastCustom){ add(won?'Play again':'Try again',()=>playCustom(lastCustom),!won); add('Edit',()=>editCustom(lastCustom)); }
   add('Sandbox',()=>leaveScenario());
   banner.classList.add('on'); refreshRack();
 }
 
+// --- scenario editor (X4): a form for a scenario's goals, fails, budget and sources, laid out on a box painted freely with time
+//     stopped; Play it starts it, and Share link carries it whole (layout and all) in the address. Built-in scenarios share by name. ---
+const edEl=document.getElementById('editor'), edBtn=document.getElementById('editbtn'), $=id=>document.getElementById(id);
+const NAMES=EL.slice(1).filter(e=>!e.name.startsWith('Sapling') && e.name!=='Root').map(e=>e.name);
+const KINDS=[['count','Count in area'],['made','Made by reactions'],['open','Open to the air in area'],['trees','Trees in area']];
+let lastCustom=null, pickInput=null;
+const opt=(list,v)=>list.map(o=>{ const [val,lab]=Array.isArray(o)?o:[o,o]; return '<option value="'+val+'"'+(String(val)===String(v)?' selected':'')+'>'+lab+'</option>'; }).join('');
+function edItem(box, html, fill){
+  const d=document.createElement('div'); d.className='item'; d.innerHTML=html+'<button class="btn" data-x>×</button>'; box.appendChild(d);
+  d.querySelector && d.querySelector('[data-x]') && d.querySelector('[data-x]').addEventListener('click',()=>d.remove());
+  if (d.querySelector){ const p=d.querySelector('[data-pick]'); if (p) p.addEventListener('click',()=>{ pickInput=d.querySelector('.rect'); msg('Drag out the area on the box'); }); }
+  if (fill) fill(d); return d;
+}
+const rectStr=r=>(r||[0,0,BOX.w,BOX.h]).join(',');
+const addBudget=(n='Sand',c=100)=>edItem($('ed-budget'),'<select>'+opt(['Erase',...NAMES],n)+'</select><input type="number" min="0" value="'+c+'">');
+const addCond=(box,c={count:'Water',min:100})=>{ const kind=c.made?'made':c.open?'open':c.trees?'trees':'count', el=[].concat(c.count||c.made||c.open||'Water')[0];
+  return edItem(box,'<input class="lab" value="'+(c.label||'')+'" placeholder="label" size="16"><select class="kind">'+opt(KINDS,kind)+'</select><select class="el">'+opt(NAMES,el)+'</select>'
+    +'<label>min <input class="min" type="number" value="'+(c.min??'')+'"></label><label>max <input class="max" type="number" value="'+(c.max??'')+'"></label>'
+    +'<input class="rect" value="'+rectStr(c.rect)+'"><button class="btn" data-pick>Pick</button>'); };
+const addSource=(s={el:'Water',rect:[0,0,40,4],rate:2,from:0,to:60*60})=>edItem($('ed-sources'),'<select class="el">'+opt(NAMES,s.el)+'</select><input class="rect" value="'+rectStr(s.rect)+'"><button class="btn" data-pick>Pick</button>'
+  +'<label>rate <input class="rate" type="number" min="1" value="'+s.rate+'"></label><label>from s <input class="from" type="number" min="0" value="'+Math.round(s.from/60)+'"></label><label>to s <input class="to" type="number" min="0" value="'+Math.round(Math.min(s.to,1e7)/60)+'"></label>');
+$('ed-addb').addEventListener('click',()=>addBudget()); $('ed-addg').addEventListener('click',()=>addCond($('ed-goals')));
+$('ed-addf').addEventListener('click',()=>addCond($('ed-fails'),{label:'',count:'Fire',max:500})); $('ed-adds').addEventListener('click',()=>addSource());
+$('ed-from').innerHTML='<option value="-1">Empty box</option>'+SCENARIOS.map((s,k)=>'<option value="'+k+'">'+s.name+'</option>').join('');
+const rectOf=s=>{ const r=String(s).split(',').map(v=>Math.round(+v)); return r.length===4 && r.every(isFinite) ? [Math.max(0,Math.min(r[0],r[2])),Math.max(0,Math.min(r[1],r[3])),Math.min(BOX.w,Math.max(r[0],r[2])),Math.min(BOX.h,Math.max(r[1],r[3]))] : [0,0,BOX.w,BOX.h]; };
+const items=id=>Array.from($(id).children||[]);
+const q=(d,s)=>d.querySelector ? d.querySelector(s) : null;
+function readEditor(){   // the form as a scenario definition (defOf's shape)
+  const cond=d=>{ const k=q(d,'.kind').value, el=q(d,'.el').value, c={label:q(d,'.lab').value || (KINDS.find(o=>o[0]===k)||[])[1]+': '+el};
+    if (k==='trees'){ c.trees=true; c.rect=rectOf(q(d,'.rect').value); } else { c[k]=el; if (k!=='made') c.rect=rectOf(q(d,'.rect').value); }
+    const mn=q(d,'.min').value, mx=q(d,'.max').value; if (mn!=='') c.min=+mn; if (mx!=='') c.max=+mx; if (c.min===undefined && c.max===undefined) c.min=1; return c; };
+  const budget={}; for (const d of items('ed-budget')){ const [s,n]=[d.querySelector('select'),d.querySelector('input')]; if (s && n && +n.value>0) budget[s.value]=Math.round(+n.value); }
+  const wind=$('ed-wind').value;
+  return { id:'custom-'+(Date.now()%1e9), custom:true, name:$('ed-name').value||'My scenario', brief:$('ed-brief').value||'', time:Math.max(10,+$('ed-time').value||90)*60,
+    season:+$('ed-season').value, wind:wind==='' ? undefined : +wind, survive:$('ed-survive').checked, budget, unlocks:[],
+    goals:items('ed-goals').map(cond), fails:items('ed-fails').map(cond),
+    sources:items('ed-sources').map(d=>({el:q(d,'.el').value, rect:rectOf(q(d,'.rect').value), rate:Math.max(1,+q(d,'.rate').value||1), from:Math.max(0,+q(d,'.from').value||0)*60, to:Math.max(0,+q(d,'.to').value||0)*60})) };
+}
+function fillEditor(def){
+  $('ed-name').value=def.name||''; $('ed-brief').value=def.brief||''; $('ed-time').value=Math.round((def.time||5400)/60); $('ed-survive').checked=!!def.survive;
+  $('ed-season').value=String([0,0.25,0.5,0.75].reduce((a,b)=>Math.abs(b-(def.season||0))<Math.abs(a-(def.season||0))?b:a)); $('ed-wind').value=def.wind===undefined||def.wind===null ? '' : String(def.wind>0.2?0.5:def.wind<-0.2?-0.5:0);
+  for (const id of ['ed-budget','ed-goals','ed-fails','ed-sources']){ const el=$(id); el.innerHTML=''; if (Array.isArray(el.children)) el.children.length=0; }
+  for (const n in def.budget||{}) addBudget(n,def.budget[n]);
+  for (const c of def.goals||[]) addCond($('ed-goals'),c); for (const c of def.fails||[]) addCond($('ed-fails'),c); for (const s of def.sources||[]) addSource(s);
+}
+const setEditor=on=>{ edEl.classList[on?'add':'remove']('on'); edBtn.setAttribute('aria-pressed',on); };
+edBtn.addEventListener('click',()=>{ const on=!edEl.classList.contains('on'); setEditor(on); if (on && !items('ed-goals').length && !designing) fillEditor({name:'My scenario', brief:'Fill the basin with water.', time:90*60, budget:{Water:400,Erase:100}, goals:[{label:'Water in the basin', count:'Water', rect:[120,160,200,190], min:200}]}); });
+function design(from){   // lay out a box: empty, or a built-in's, with time stopped
+  if (game) leaveScenario(true);
+  const sc=from>=0 ? SCENARIOS[from] : {seed:1, season:+$('ed-season').value, build(b){ b.rect(0,190,BOX.w,BOX.h,STONE); }};
+  Game.stage(g,sc); Game.weather(g,sc); designing=true; paused=true; $('pause').textContent='Resume'; clearUndo(); resetCensus();
+  if (from>=0) fillEditor(Sim.defOf(sc));
+  setZoom(zoomK); clampCam(); dims(); refreshRack(); drawMinimap(); msg('Laying out: paint the box, then Play it (time is stopped: Resume lets it settle)');
+}
+$('ed-layout').addEventListener('click',()=>whenIdle(()=>design(+$('ed-from').value)));
+function scenarioText(){ const def=readEditor(); if (!def.goals.length) throw new Error('give it at least one goal'); return JSON.stringify({sandfall:'scenario', v:1, def, world:g.save()}); }
+function playCustom(text){ lastCustom=text; designing=false; paused=false; $('pause').textContent='Pause'; game=Game.load(g,text); game.sc.custom=true; enterScenario(); msg(game.sc.name); }
+function editCustom(text){ const d=JSON.parse(text); if (game) leaveScenario(true); g.load(d.world); Game.weather(g,d.def); fillEditor(d.def); designing=true; paused=true; $('pause').textContent='Resume'; setEditor(true); setZoom(zoomK); clampCam(); refreshRack(); drawMinimap(); msg('Back to the layout'); }
+$('ed-play').addEventListener('click',()=>whenIdle(()=>{ if (!designing){ msg('Lay out the box first'); return; } try{ playCustom(scenarioText()); }catch(e){ msg('Can\'t play it yet: '+e.message); } }));
+$('ed-export').addEventListener('click',()=>whenIdle(()=>{ try{ io.classList.add('open'); iotext.value=designing ? scenarioText() : lastCustom || (game ? game.save() : ''); msg('Scenario text ready to copy (Import loads it)'); }catch(e){ msg(e.message); } }));
+// a scenario in a link: its JSON, deflated where the browser can (CompressionStream), as URL-safe base64 after 'scenario=z' (or 'j': plain)
+const b64u=bytes=>{ let s=''; for (let k=0;k<bytes.length;k+=8192) s+=String.fromCharCode.apply(null,bytes.subarray(k,k+8192)); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+const unb64u=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+async function packScenario(text){ const raw=new TextEncoder().encode(text);
+  if (typeof CompressionStream==='undefined') return 'j'+b64u(raw);
+  const buf=await new Response(new Response(raw).body.pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer(); return 'z'+b64u(new Uint8Array(buf)); }
+async function unpackScenario(s){ const bytes=unb64u(s.slice(1));
+  if (s[0]==='j') return new TextDecoder().decode(bytes);
+  const buf=await new Response(new Response(bytes).body.pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer(); return new TextDecoder().decode(buf); }
+function shareScenario(){ let text; try{ text=designing ? scenarioText() : lastCustom || (game && game.save()); }catch(e){ msg(e.message); return; } if (!text) return;
+  packScenario(text).then(p=>shareLink('scenario='+p), e=>msg('Could not pack it: '+e.message)); }
+$('ed-share').addEventListener('click',()=>whenIdle(shareScenario));
+// picking a rectangle on the box for a goal, fail or source
+function pickRect(a,b){ if (!pickInput) return false; const r=[a[0]-BOX.x,a[1]-BOX.y,b[0]-BOX.x+1,b[1]-BOX.y+1]; pickInput.value=rectOf(r.join(',')).join(','); pickInput=null; msg('Area set'); return true; }
 // --- loop ---
 // With workers, a tick's cell pass runs while this thread renders; the tick is finished at the start of the next frame.
 // Anything that changes the world (painting, buttons, streaming) waits for a moment when no cell pass is running.
@@ -5182,8 +5484,8 @@ function whenIdle(f){ if (busy) later.push(f); else f(); }
 function stream(){   // keep the camera in the middle region of the window
   if (game) return;
   const mid=camX+VW/2;
-  if (mid>=W-REGION && g.shift(1)) camX-=REGION;
-  else if (mid<REGION && g.shift(-1)) camX+=REGION;
+  if (mid>=W-REGION && g.shift(1)){ camX-=REGION; clearUndo(); }
+  else if (mid<REGION && g.shift(-1)){ camX+=REGION; clearUndo(); }
 }
 function tick(){
   g.beginStep();
@@ -5204,8 +5506,10 @@ function loop(now){
       for (let k=1;k<speed;k++){ g.step(); if (game) game.tick(); steps++; }   // extra ticks on this thread, then the usual one
       tick(); stepMs+=performance.now()-t; steps++; }
   }
-  render(); frames++;
-  if (frames%10===0) showProbe();   // (the readout follows the cell as it changes)
+  if (!timelapse || frames%TL_DRAW===0) render(); frames++;
+  if (frames%10===0) showProbe();
+  if (frames%15===0) drawMinimap();
+  if (frames%6===0) soundTick();   // (the readout follows the cell as it changes)
   g.prefetch();   // make the land just past the window ahead of time, a slice a frame (it never touches the shared world)
   if (now-fpsT>500){
     fpsEl.textContent=Math.round(frames*1000/(now-fpsT))+' fps'; fpsT=now; frames=0;
@@ -5218,19 +5522,24 @@ function loop(now){
     document.getElementById('wind').textContent='wind '+(g.wind<0?'←':'→')+' '+Math.abs(g.wind).toFixed(2)+', '+Math.round(p)+' hPa'+trend+(g.strikes ? ', '+g.strikes+' lightning strikes' : '');
     const hr=(g.dayPhase*24+6)%24;   // the day starts at sunrise, 06:00
     const deg=Math.round(g.climate);
-    const yn=g.yearName(); document.getElementById('clock').textContent=g.seasonName+(g.dryness>0.5?' (dry season)':'')+(yn?' in '+yn:'')+', day '+(((g.clock%Sim.YEAR)/Sim.DAY|0)+1)+', '+String(hr|0).padStart(2,'0')+':'+String((hr%1)*60|0).padStart(2,'0')+', '+(deg>0?'+':'')+deg+'°';
+    const yn=g.yearName(); document.getElementById('clock').textContent='Year '+(Math.floor(g.clock/Sim.YEAR)+1)+', '+g.seasonName+(g.dryness>0.5?' (dry season)':'')+(yn?' in '+yn:'')+', day '+(((g.clock%Sim.YEAR)/Sim.DAY|0)+1)+', '+String(hr|0).padStart(2,'0')+':'+String((hr%1)*60|0).padStart(2,'0')+', '+(deg>0?'+':'')+deg+'°';
   }
   requestAnimationFrame(loop);
 }
 function start(data){
-  refreshRack(); setCensus(censusOn);
+  refreshRack(); setCensus(censusOn); showUndo(); setZoom(0);
+  const h=readHash();   // a shared link: a world by its seed, a built-in scenario by name, or a whole scenario
   if (data && data.world){ try{ if (loadText(data.world)==='world'){ camX=data.camX; camY=data.camY; } clampCam(); dims(); }catch(e){ newWorld(worldSeed); } }
+  else if (h.world && isFinite(parseInt(h.world,10))){ if (h.biome && Sim.BIOMES.some(b=>b.id===h.biome)) biomeEl.value=h.biome; newWorld(parseInt(h.world,10)|0); }
+  else if (h.play && SCENARIOS.some(s=>s.id===h.play)){ newWorld(worldSeed); startScenario(SCENARIOS.find(s=>s.id===h.play)); }
+  else if (h.scenario){ newWorld(worldSeed); unpackScenario(h.scenario).then(t=>whenIdle(()=>playCustom(t)), e=>msg('Could not open the scenario in the link: '+e.message)); }
   else newWorld(worldSeed);
   startWorkers();
   requestAnimationFrame(loop);
 }
 window.claude?.hot?.snapshot?.(()=>({world:saveText(),camX,camY}));
 window.sandfall.cam=()=>({x:camX,y:camY}); window.sandfall.game=()=>game; window.sandfall.progress=()=>progress;
+window.sandfall.ui={zoom:()=>[VW,VH,zoomK], timelapse:()=>[timelapse,speed], undos:()=>undos.length, packScenario, unpackScenario, playCustom, design, jumpTo, current:()=>current};
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
 </script>

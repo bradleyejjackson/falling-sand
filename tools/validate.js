@@ -74,7 +74,7 @@ const scenarios = {
     };
     const shut = room(false), open = room(true);
     console.log(`  sealed: ${shut.ash} ash, ${shut.char} charcoal, ${shut.fire} flames and embers, ${shut.smoke} smoke; open: ${open.ash} ash, ${open.char} charcoal, ${open.fire} flames and embers, ${open.smoke} smoke`);
-    check('a sealed cave\'s fire chokes: less burns to ash than in the open pit, more chars, it goes out, and the cave stays full of smoke', shut.ash < open.ash && shut.char > open.char && shut.fire <= 10 && shut.smoke >= 80 && open.smoke < 50);
+    check('a sealed cave\'s fire chokes: most of what it reaches chars instead of burning to ash (in the open pit it burns), it goes out, and the cave stays full of smoke', shut.char > shut.ash && open.ash > 5 * open.char && shut.fire <= 10 && shut.smoke >= 80 && open.smoke < 50);
   },
   smokehurt() {
     // smoke pooled under a roof kills the grass and the rabbits under it; out in the open it rises away and they live
