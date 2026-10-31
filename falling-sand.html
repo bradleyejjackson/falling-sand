@@ -375,7 +375,8 @@ const Sim = (() => {
   //   In a generated world (Grid.migrate, once a day) a fox wanders in at the window's edge, half the time, when there is none in it
   //   and at least FOX_MIGRATE rabbits, and a bird flies in when there are fewer than BIRD_MIGRATE (BIRD_SEEDED of them with a tree seed in it): the land outside has them too.
   //   In the growing season a rabbit wanders in when there are fewer than RAB_MIGRATE, and in spring, with no grasshoppers or eggs left, HOP_MIGRATE come on
-  //   the wind and land on grass anywhere, so a fire or a hard year thins the animals out but never ends them for good.
+  //   the wind and land on grass anywhere, and with fewer than FISH_MIGRATE fish a fish comes down a stream to water FISH_DEEP deep,
+  //   so a fire or a hard year thins the animals out but never ends them for good.
   //  Bird: flies. In the air it keeps its heading (vx) and an aim (vy: -1 climbing, 0 level, 1 coming down); with chance BIRD_LOOK a
   //   tick it looks BIRD_SCAN columns either way and BIRD_SEE rows down: under BIRD_HUNGRY for food to dive on (a grasshopper (egg pods lie
   //   buried), or a fallen tree seed; failing those, grass to forage in, but for the dead of winter), at dusk or tired for a tree to
@@ -396,7 +397,7 @@ const Sim = (() => {
   const AGE_FOX = 0.0004, FOX_E0 = 180, FOX_BURN = 0.012, FOX_REST = 0.5, FOX_LOOK = 0.1, FOX_SCENT = 24, FOX_ROWS = 10, FOX_PROWL = 0.3, FOX_MOVE = 0.15, FOX_CHASE = 0.8,
         FOX_RUN = 3, FOX_STEP = 4, FOX_SPRING = 6, FOX_PAST = 4, FOX_STUCK = 30, FOX_JUMP = 8, FOX_MIGRATE = 20, FOX_CLIMB = 0.15, FOX_LEAP = 0.25, FOX_LEAP_UP = 5, RAB_NOSE = 3, FOX_CATCH = 0.3, FOX_GAIN = 120, FOX_SNACK = 6, FOX_SNACK_P = 0.2, FOX_BREED = 170, FOX_ADULT = 2, FOX_DIG = 0.02, FOX_KIT_P = 0.0015, FOX_LITTER = 2,
         FOX_KIT_E = 120, FOX_NEAR = 24, FOX_CROWD = 2, RAB_WARY = 8,
-        AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, RAB_MIGRATE = 6, HOP_MIGRATE = 6, BIRD_THRU = 5, BIRD_SWITCH = 4,
+        AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, RAB_MIGRATE = 6, HOP_MIGRATE = 6, FISH_MIGRATE = 4, BIRD_THRU = 5, BIRD_SWITCH = 4,
         BIRD_LOW = 10, BIRD_HIGH = 26, BIRD_HUNGRY = 200, BIRD_MOVE = 0.6, BIRD_WIND = 3, BIRD_EAT = 0.2, BIRD_FULL = 250, BIRD_GAIN = 5, BIRD_SEED_E = 10, BIRD_GRAIN = 3, BIRD_PECK = 0.1, BIRD_FLY = 0.01,
         BIRD_DROP = 0.0008, BIRD_BREED = 190, NEST_H = 10, BIRD_NEAR = 24, BIRD_CROWD = 4, BIRD_LAY = 0.002, BIRD_HATCH = 0.0006, BIRD_EGG_DIE = 0.0005;
   //  Fish (N12): lives in open water, fresh or salt. It swims (FISH_MOVE a tick, keeping its heading, turning at the shore, drifting up
@@ -409,7 +410,7 @@ const Sim = (() => {
   //   a bog, its peat). Birds take fish at the surface. A generated world has fish in its ponds, rivers and the sea, one in FISH_EVERY
   //   columns of water at least FISH_DEEP deep.
   const AGE_FISH = 0.0006, FISH_E0 = 160, FISH_MOVE = 0.25, FISH_TURN = 0.02, FISH_BURN = 0.012, FISH_REST = 0.3, FISH_GRAZE = 0.014, FISH_WEED = 0.05, FISH_GAIN = 30,
-        FISH_GASP = 0.01, FISH_BREED = 170, FISH_SPAWN = 0.002, FISH_NEAR = 12, FISH_CROWD = 5, FISH_HATCH = 0.0008, FISH_EGG_DIE = 0.0004, FISH_EVERY = 10, FISH_DEEP = 3, BIRD_FISH = 30;
+        FISH_GASP = 0.01, FISH_BREED = 170, FISH_SPAWN = 0.002, FISH_NEAR = 12, FISH_CROWD = 5, FISH_HATCH = 0.0008, FISH_EGG_DIE = 0.0004, FISH_EVERY = 10, FISH_DEEP = 3, BIRD_FISH = 30, FISH_FLOP = 2;
   // climate: some stretches of a generated world are arid (aridAt: 0..1 by world column, from slow noise in the world seed). The
   // sun dries ground and water there up to 1+ARID_DRY times as fast, and the land is laid out to match: past ARID_DESERT the
   // topsoil is deep sand (a desert), from ARID_SCRUB a thin layer of dirt over sand that drains it (scrub), and no lakes. One desert
@@ -707,6 +708,7 @@ const Sim = (() => {
   const FALLS_AS = {[STONE]:RUBBLE,[GLASS]:RUBBLE,[ICE]:SNOW,[CHAR]:ASH,[BRICK]:RUBBLE,[WOOD]:LITTER};
   // ecology: a day is a minute at 60 fps and a year is eight days; the soil pass visits each row once every SLOW ticks
   const ROOT_DRY = 20;   // tree roots drink soil down to this (deeper and tougher than grass, which needs GRASS_DRINK): a tree outlasts a dry spell that browns the meadow
+  const CRUST = 60;   // open ground holding less moisture than this dries more slowly, in proportion: its dry crust shelters the soil under it, so a burn or a bare slope doesn't lose its water all the way down
   const THIRST = 450, THIRST_OLD = 2, ROOT_REACH = 2, SPROUT_AGE = 110, SPROUT_WET = 60;   // growth-season tree steps (TREE_TICK ticks each, so two days) a sapling survives without water (it wilts at half that); a grown one, past MATURE steps,
                                                        // up to 1+THIRST_OLD times as long. A root drinks the soil up to ROOT_REACH cells round it (its fine roots), so a tree doesn't drink its root cells' neighbours dry and die beside damp soil
   const TREE_WET = 1.2;   // root water to tree water (it was 1+richness/255, from before nutrients counted for growth)
@@ -2853,8 +2855,8 @@ const Sim = (() => {
       return -1;
     }
     migrate(){   // the world outside the window has foxes and birds too: one wanders in at its edge when the window has run out of them
-      const T=this.type, W=this.W; let fox=0, bird=0, rab=0, hop=0;
-      for (let i=0;i<T.length;i++){ const t=T[i]; if (t===FOX) fox++; else if (t===BIRD) bird++; else if (t===RABBIT) rab++; else if (t===HOPPER) hop++; }
+      const T=this.type, W=this.W; let fox=0, bird=0, rab=0, hop=0, fish=0;
+      for (let i=0;i<T.length;i++){ const t=T[i]; if (t===FOX) fox++; else if (t===BIRD) bird++; else if (t===RABBIT) rab++; else if (t===HOPPER) hop++; else if (t===FISH) fish++; }
       const edge=(t,life,up)=>{ const s=R()<0.5 ? -1 : 1, x=s<0 ? 2 : W-3; let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;
         if (y<up+2 || KIND[T[y*W+x]]===2) return; const i=(y-1-up)*W+x; this.set(i,t,this.ambRow[y-1-up]); this.life[i]=life; this.vx[i]=-s; };
       if (!fox && rab>=FOX_MIGRATE && R()<0.5) edge(FOX,FOX_E0|(FOX_ADULT<<8),0);
@@ -2863,6 +2865,9 @@ const Sim = (() => {
         if (rab<RAB_MIGRATE && R()<0.5) edge(RABBIT,RAB_E0|(RAB_ADULT<<8),0);
         if (!hop && this.yearPhase<0.4) for (let n=0;n<HOP_MIGRATE;n++){ const x=1+((R()*(W-2))|0); let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;   // (they come on the wind, so anywhere)
           if (y>=2 && (T[y*W+x]===PLANT || T[y*W+x]===SHRUB) && !this.owner[y*W+x]){ const i=(y-1)*W+x; this.set(i,HOPPER,this.ambRow[y-1]); this.life[i]=HOP_E0; } }
+        if (fish<FISH_MIGRATE) for (let n=0;n<40;n++){ const x=1+((R()*(W-2))|0); let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;   // and a fish comes down a stream (or as spawn on a bird's feet) to water deep enough for it
+          let d=0; while (y+d<this.H && T[(y+d)*W+x]===WATER) d++; if (d<FISH_DEEP) continue;
+          const i=(y+1)*W+x; this.set(i,FISH,this.temp[i]); this.life[i]=FISH_E0|(1<<8); this.vx[i]=R()<0.5 ? -1 : 1; break; }
       }
     }
     pounce(i,x,d){   // a fox at i catches a rabbit beside it (ahead first, level or a step up or down) or under it, with chance FOX_CATCH
@@ -2954,7 +2959,9 @@ const Sim = (() => {
         return; }
       let en=v&255, age=(v>>8)&31, j=i;
       const g=this.gf[GF_GROWTH], b=y+1<H ? T[i+W] : STONE;
-      if (!wet){ if (b===E || KIND[b]===3){ this.swap(i,i+W); j=i+W; } else if (R()<FISH_GASP) en=0; }   // out of water: it falls, flops and dies
+      if (!wet){ if (b===E || KIND[b]===3){ this.swap(i,i+W); j=i+W; }   // out of water: it falls, flops (back into water within FISH_FLOP cells, if there is any) and dies
+        else { let m=-1; for (let dx=-FISH_FLOP;dx<=FISH_FLOP && m<0;dx++) for (let dy=-1;dy<=1;dy++){ const nx=x+dx, ny=y+dy; if (nx<0 || nx>=W || ny<0 || ny>=H) continue; const c=ny*W+nx; if (AQUA[T[c]]){ m=c; break; } }
+          if (m>=0 && R()<0.2){ this.swap(i,m); j=m; wet=1; } else if (R()<FISH_GASP) en=0; } }
       if (R()<FISH_BURN*(FISH_REST+(1-FISH_REST)*g)) en--;
       if (R()<AGE_FISH && ++age>AGE_MAX) en=0;
       if (en<=0){ this.set(j,LITTER,this.temp[j]); return; }
@@ -3206,7 +3213,7 @@ const Sim = (() => {
       // open to the air: dry out into it (100 moisture is one water cell of vapour), or gather dew when it is saturated
       else if (up===E || isGas(up)){
         const a=this.airOver(x,y-1), rh=this.rh(a);
-        if (rh<1){ if (m>0 && R()<dry*(1-rh)){ m--; this.hum[a]+=0.01; } }
+        if (rh<1){ if (m>0 && R()<dry*(1-rh)*Math.min(1,m/CRUST)){ m--; this.hum[a]+=0.01; } }   // (drying ground forms a crust that slows it: under CRUST it dries in proportion)
         else if (m<25 && this.hum[a]>0.02 && R()<0.25){ m++; this.hum[a]-=0.01; }   // dew dampens dry ground, but never soaks it
       }
       if (this.temp[i]>60) m=Math.max(0,m-6);

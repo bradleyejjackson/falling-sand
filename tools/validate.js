@@ -85,11 +85,14 @@ const scenarios = {
       if (roof) { for (let x = 10; x < 150; x++) for (let y = 50; y < 52; y++){ const i = g.idx(x, y); g.set(i, STONE); g.life[i] = 1; } for (let y = 50; y < 70; y++) for (const x of [10, 11, 148, 149]) { const i = g.idx(x, y); g.set(i, STONE); g.life[i] = 1; } }
       for (let x = 30; x < 130; x += 20) { const i = g.idx(x, 68); g.set(i, RABBIT); g.life[i] = 200; }
       for (let f = 0; f < MIN; f++) { g.step(); if (f % 10 === 0) for (let x = 40; x < 120; x += 8) { const i = g.idx(x, 55); if (g.type[i] === E) g.set(i, SMOKE, 30); } }
-      const c = census(g, Sim.EL); return { grass: c.Plant || 0, rabbits: c.Rabbit || 0 };
+      const c = census(g, Sim.EL); let fed = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === RABBIT) fed += g.life[i] & 255;
+      return { grass: c.Plant || 0, rabbits: c.Rabbit || 0, fed };
     };
+    // (the rabbits are only printed: in that minute they breed and the smoke takes ~10% of their energy, so whether fewer are
+    // left under the roof is a coin flip on the seed, on main too: seeds 3, 5 and 6 left as many or more under it)
     const under = yard(true), out = yard(false);
-    console.log(`  under a roof: ${under.grass} grass, ${under.rabbits} rabbits left; in the open: ${out.grass} grass, ${out.rabbits} rabbits`);
-    check('smoke trapped under a roof kills grass and rabbits that live in the open', under.grass < 0.5 * out.grass && under.rabbits < out.rabbits && out.rabbits >= 4);
+    console.log(`  under a roof: ${under.grass} grass, ${under.rabbits} rabbits left with ${under.fed} energy; in the open: ${out.grass} grass, ${out.rabbits} rabbits with ${out.fed}`);
+    check('smoke trapped under a roof kills the grass under it; in the open it lives', under.grass < 0.5 * out.grass && out.rabbits >= 4);
   },
   acidrain() {
     // a volcano's fumes sour the clouds they reach, and sour rain burns leaves and grass and leaches the soil it falls on; plain rain doesn't
@@ -163,12 +166,12 @@ const scenarios = {
     const { COAL } = Sim.ids;
     const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345, Sim.WORLD.WIDE, 2560);
     let coal = 0, shallow = 0; for (let x = 0; x < g.W; x++) { let s = 0; while (s < g.H && (g.type[g.idx(x, s)] === E || Sim.EL[g.type[g.idx(x, s)]].kind === 'gas')) s++; for (let y = s; y < g.H; y++) if (g.type[g.idx(x, y)] === COAL) { coal++; if (y - s < 30) shallow++; } }
-    const h = new Sim.Grid(40, 40); for (let y = 20; y < 40; y++) for (let x = 0; x < 40; x++) h.set(h.idx(x, y), COAL); h.initAir();
+    Sim.reseed(3); const h = new Sim.Grid(40, 40); for (let y = 20; y < 40; y++) for (let x = 0; x < 40; x++) h.set(h.idx(x, y), COAL); h.initAir();
     for (let x = 10; x < 30; x++) h.set(h.idx(x, 19), FIRE); for (let f = 0; f < 600; f++) { h.step(); if (f % 30 === 0) for (let x = 10; x < 30; x++) if (h.type[h.idx(x, 19)] === E) h.set(h.idx(x, 19), FIRE); }
     const burnt = 800 - (census(h, Sim.EL).Coal || 0);
     console.log(`  ${coal} cells of coal in the window (${shallow} within 30 of the surface); ${burnt} of 800 caught in 10 s of fire`);
     check('coal seams lie deep in a generated world', coal >= 1000 && shallow === 0);
-    check('coal catches from a fire, slowly', burnt >= 3 && burnt <= 200);
+    check('coal catches from a fire, slowly', burnt >= 3 && burnt <= 320);   // (reseeded: it followed the generator's random stream, and seeds 1-5 burn 168-246, so the old cap of 200 was a coin flip)
   },
   vigour() {
     // a tree grows to a size set by its sun and soil together: on rich open ground a giant, on poor soil a small tree, and under
@@ -384,18 +387,19 @@ const scenarios = {
   },
   dew() {
     // dry topsoil under saturated night air gathers dew; under dry air it doesn't
-    // (dew is a few cells' worth, so it is averaged over four plots: one plot ranges 0.4-6 on the same build)
+    // (dew is a few cells' worth, so it is averaged over eight plots: one plot ranges 0.4-6 on the same build. Since dry ground
+    // crusts over (CRUST) the humid plots average ~2 rather than ~3: four plots were a coin flip on a threshold of 2)
     const got = { humid: 0, dry: 0 };
-    for (const seed of [7, 8, 9, 10]) for (const [label, rh] of [['humid', 1.05], ['dry', 0.3]]) {
+    for (const seed of [7, 8, 9, 10, 11, 12, 13, 14]) for (const [label, rh] of [['humid', 1.05], ['dry', 0.3]]) {
       const g = plot(120, 100, 30, 0, seed); g.clock = Sim.DAY * 2.6; g.updateClimate(); g.windHold = 0;
       for (let x = 0; x < 120; x++) { const i = g.idx(x, 70); g.life[i] = (40 << 8) | 10; }
       g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c] * rh;
       const total = () => moisture(g, 70, 97) * 27 * 120 / 100;   // in water cells
       const m0 = total(); run(g, 900); const m = total();
       console.log(`  plot ${seed}, ${label} night air: the soil holds ${m0.toFixed(1)} -> ${m.toFixed(1)} water cells' worth`);
-      got[label] += (m - m0) / 4;
+      got[label] += (m - m0) / 8;
     }
-    check('dew wets dry soil overnight, and dry air does not', got.humid > 2 && got.dry <= 0, `${got.humid.toFixed(1)} vs ${got.dry.toFixed(1)}`);
+    check('dew wets dry soil overnight, and dry air does not', got.humid > 1.2 && got.dry <= 0, `${got.humid.toFixed(1)} vs ${got.dry.toFixed(1)}`);
   },
   clouds() {
     // the generated world through an autumn: clouds form aloft with a level base, and it snows on the hills in winter.
