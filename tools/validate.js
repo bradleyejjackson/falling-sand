@@ -2040,6 +2040,42 @@ const scenarios = {
       check('a boxed-in spout lets its block sleep', awake === 0);
     }
   },
+  river() {
+    // N6: a generated world opens on a river: a spring at the foot of a hill, a sand bed falling steadily to a pond, no trees in the
+    // stream. Run, the stream runs the length of its bed into the pond and drops its silt there; it runs high in the spring melt and
+    // low late in a dry summer; and a river cut off by the window's edge (or any river in a flat world) doesn't run.
+    const { CLAY, MUD, ICE } = Sim.ids, EARTH = new Set([SAND, DIRT, MUD, CLAY, STONE]);
+    const ox = Math.floor((Sim.WORLD.WIDE - Sim.WORLD.W) / 2 / Sim.REGION) * Sim.REGION;
+    const world = (clock, shift = 0) => { Sim.reseed(3); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345, Sim.WORLD.WIDE, ox + shift); g.wetHold = 0; if (clock !== undefined) { g.clock = clock; g.updateClimate(); } return g; };
+    const ground = (g, x) => { let y = 0; while (y < g.H - 1 && !EARTH.has(g.type[g.idx(x, y)])) y++; return y; };
+    const g = world(), r = g.noise.rivers.find(r => r.head >= ox && r.head < ox + g.W), xs = u => r.head + u * r.dir - g.ox;
+    g.riverCols();
+    check('a new world opens on a river running in the window', !!r && g.riverOn.length === 1);
+    const floor = [], pondU = []; let rises = 0, trees = 0, sand = 0;
+    for (let u = 0; u <= r.len + r.pw; u++) { const x = xs(u); floor.push(ground(g, x)); if (u > r.len) pondU.push(u); }
+    for (let u = 1; u <= r.len; u++) { if (floor[u] < floor[u - 1]) rises++; if (g.type[g.idx(xs(u), floor[u])] === SAND) sand++; }
+    for (const t of g.trees) if ((t.x - (r.head - g.ox)) * r.dir >= 0 && (t.x - (r.head - g.ox)) * r.dir <= r.len) trees++;
+    const water = (g, u0, u1) => { let n = 0; for (let u = u0; u <= u1; u++) { const x = xs(u); for (let y = r.headY - 60; y < r.mouthY + 30; y++) { const t = g.type[g.idx(x, y)]; if (t === WATER || t === ICE) n++; } } return n; };
+    const pond0 = water(g, r.len + 1, r.len + r.pw);
+    console.log(`  river: spring at ${r.head - g.ox}, pond at ${r.mouth - g.ox}, ${r.len} long, falls ${r.mouthY - r.headY}; bed rises ${rises} times, ${sand}/${r.len} sand, ${trees} trees on it, pond ${pond0}`);
+    check('its bed falls all the way to the pond, sand, with no tree on it', rises === 0 && sand >= 0.95 * r.len && trees === 0);
+    check('its pond starts full', pond0 >= 300);
+    run(g, MIN);
+    let wet = 0; for (let u = 0; u <= r.len; u++) { const x = xs(u); for (let y = r.headY - 60; y < ground(g, x); y++) if (g.type[g.idx(x, y)] === WATER) { wet++; break; } }
+    const pond = water(g, r.len + 1, r.len + r.pw); let silt = 0; for (const u of pondU) silt += Math.max(0, floor[u] - ground(g, xs(u)));
+    console.log(`  after a minute: stream on ${wet}/${r.len + 1} columns, pond ${pond}, the pond's floor built up ${silt} cells, springs ${g.springs}`);
+    check('the stream runs the length of its bed', wet >= 0.75 * (r.len + 1));
+    check('the pond holds its water', pond >= 0.8 * pond0);
+    check('the stream drops its silt in the pond (a delta)', silt >= 5);
+    // the same river from the spring melt and from late in the dry season (wetness pinned at an ordinary year's)
+    const flow = clock => { const h = world(clock); run(h, MIN); return water(h, 0, r.len + r.pw); };
+    const melt = flow(Sim.YEAR * 0.15), low = flow(Sim.YEAR * 0.45);
+    console.log(`  water in the river and pond a minute on: ${melt} from the spring melt, ${low} from late summer`);
+    check('a river runs high in the spring melt and low late in a dry summer', melt > 1.3 * low);
+    const cut = world(undefined, Sim.REGION * 2); cut.riverCols();   // (the window moved two regions east: the pond is off its edge)
+    const f = new Sim.Grid(400, 300); Sim.flat(f); f.riverCols();
+    check('a river cut off by the window\'s edge, or a flat world, has no running spring', cut.riverOn.length === 0 && f.riverOn.length === 0, `${cut.riverOn.length}, ${f.riverOn.length}`);
+  },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
 
