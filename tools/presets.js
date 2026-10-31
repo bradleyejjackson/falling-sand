@@ -3,6 +3,7 @@
 // trees (broadleaf / conifer), snow, the land's height, its rivers, the coast's kind, an eruption under way, and the step's cost.
 // SNAP=dir writes a PNG of the window (each cell its element's colour) at the start and the end.
 // usage: node tools/presets.js [minutes] [seed] [preset ids...]   (SIMFILE=other.html runs another copy)
+// GEN=knob:value,... adds a custom world (the world generator's knobs, as in a share link's gen=) under the id custom.
 const { loadSim } = require('./load');
 const fs = require('fs'), zlib = require('zlib');
 const Sim = loadSim(process.env.SIMFILE);
@@ -31,10 +32,12 @@ function survey(g) {
   return { cols, snow, lava, surf: Math.round(surf / g.W), broad: g.trees.length - con, con };
 }
 const W = Sim.WORLD;
-for (let k = 0; k < Sim.BIOMES.length; k++) {
-  const b = Sim.BIOMES[k]; if (only.length && !only.includes(b.id)) continue;
-  const g = new Sim.Grid(W.W, W.H), ox = Sim.homeOf(W.WIDE, k);
-  Sim.generate(g, seed, W.WIDE, ox, k);
+const knobs = s => { const o = {}; for (const kv of s.split(',')) { const [k, v] = kv.split(':'), n = Sim.KNOBS.find(n => n.k === k); if (n) o[k] = v === '' ? null : n.opts && typeof n.opts[1] === 'string' ? v : +v; } return o; };
+const list = Sim.BIOMES.map((b, k) => k); if (process.env.GEN) list.push(Sim.customBiome(knobs(process.env.GEN)));
+for (const k of list) {
+  const b = Sim.biomeOf(k); if (only.length && !only.includes(b.id)) continue;
+  const wide = b.wide || W.WIDE, g = new Sim.Grid(W.W, W.H), ox = Sim.homeOf(wide, k);
+  Sim.generate(g, seed, wide, ox, k);
   const T = g.noise, rivers = T.rivers.filter(r => r.x0 < ox + g.W && r.x1 > ox).length;
   console.log(`== ${b.name} (seed ${seed}, window at ${ox}): ${T.sea ? T.sea.kind + ' coast, shore at ' + T.sea.shore : 'no sea'}, ${T.rivers.length} rivers (${rivers} in the window)` + (T.volc ? `, volcano at ${T.volc.x}, peak row ${T.volc.peakY}` : '') + `, aridity at the middle ${Sim.aridAt(seed, ox + g.W / 2, k).toFixed(2)}`);
   if (process.env.SNAP) png(g, `${process.env.SNAP}/${b.id}-0.png`);

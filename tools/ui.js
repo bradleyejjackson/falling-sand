@@ -81,6 +81,27 @@ async function suite(threads) {
     check('a save keeps the biome', g.biome === isle && g.noise.volc, `biome ${g.biome}`);
     p.els.biome.value = 'temperate'; p.els.biome.fire('change'); p.run(5);
     check('choosing Temperate goes back to the usual world', g.biome === 0 && !g.noise.volc && g.ox > 0, `biome ${g.biome}, window at ${g.ox}`); }
+  // the world generator: its knobs set a custom biome, Make world builds it from them and the seed, a save keeps the knobs, and Share
+  // link carries them (opening the link makes the same world)
+  { const gen = p.sf.ui.gen, k = gen.knobs;
+    p.els.genbtn.fire('click'); p.run(1);
+    check('World generator opens its panel with a knob for each setting', p.els.gen.classList.contains('on') && Object.keys(k).length === Sim.KNOBS.length && k.warm.out.textContent === '0°', `${Object.keys(k).length} knobs, warmth ${k.warm.out.textContent}`);
+    p.els['gen-from'].value = String(Sim.BIOMES.findIndex(b => b.id === 'alpine')); p.els['gen-from'].fire('change');
+    check('Start from fills the knobs with a preset\'s', gen.bio().base === Sim.BIOMES[1].base && k.snow.out.textContent === '10', k.snow.out.textContent);
+    k.warm.inp.value = '250'; k.warm.inp.fire('input'); k.coast.inp.value = 'none'; k.coast.inp.fire('change'); k.wide.inp.value = '3840'; k.wide.inp.fire('change');
+    k.animals.inp.value = '0'; k.animals.inp.fire('input');
+    check('moving a knob sets it (in its range) and keeps it in this browser', gen.bio().warm === -6 && k.warm.out.textContent === '-6°' && JSON.parse(p.store['sandfall.gen']).spec.coast === 'none', `${gen.bio().warm}, ${p.store['sandfall.gen']}`);
+    p.els['gen-seed'].value = '5150'; p.els['gen-make'].fire('click'); p.run(5);
+    const b = g.biome, ok = b && b.id === 'custom' && b.warm === -6 && b.snow === 10 && g.worldSeed === 5150 && g.worldW === 3840 && !g.noise.sea && Math.abs(g.ox + g.W / 2 - 1920) <= Sim.REGION;
+    check('Make world builds a custom world from the knobs and the seed', ok && p.els.biome.value === 'custom' && /Custom/.test(p.els.msg.textContent) && !g.type.some(t => t === Sim.ids.RABBIT || t === Sim.ids.BIRD), `${p.els.msg.textContent}, ${g.worldW} wide at ${g.ox}`);
+    p.els.save.fire('click'); p.run(1); g.biome = 0; g.noise = null; p.els.load.fire('click'); p.run(1);
+    check('a save keeps the custom knobs', g.biome && g.biome.warm === -6 && g.worldW === 3840 && g.warmK === -6, JSON.stringify(g.biome).slice(0, 60));
+    p.els.sharelink.fire('click'); p.run(1); const link = p.els.iotext.value;
+    check('Share link carries the knobs', /#world=5150&gen=wide:3840,.*warm:-6/.test(link) && /coast:none/.test(link), link);
+    const spec = gen.unpack(link.split('gen=')[1]), again = Sim.customBiome(spec);
+    check('the link\'s knobs make the same biome', JSON.stringify(again) === JSON.stringify(g.biome), JSON.stringify(spec));
+    p.els.genbtn.fire('click'); p.els.biome.value = 'temperate'; p.els.biome.fire('change'); p.run(5);
+    check('a preset after a custom world is the preset again', g.biome === 0 && g.worldW === Sim.WORLD.WIDE && g.warmK === 0); }
 
   // scenarios: the Play row, a budgeted rack, winning through the brush, unlocks, and saving a scenario in progress
   const scn = n => p.created.find(e => e.className === 'el scn' && e.innerHTML.includes(n));

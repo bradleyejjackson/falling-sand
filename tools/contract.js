@@ -42,7 +42,7 @@ const names = [];
 const plain = v => JSON.parse(JSON.stringify(v));
 const isTable = v => (ArrayBuffer.isView(v) || Array.isArray(v)) && v.length === N;
 const constants = {}, elementTables = {}, elementSets = {}, elementMaps = {}, other = {};
-const SKIP = new Set(['EL', 'FIELDS', 'BIOMES', 'BIOME0', 'SCENARIOS', 'RX', 'RXA', 'KH', 'KHD', 'CAPD', 'HOLDD', 'HID', 'LOD', 'WORLD', 'STARTER', 'GROVES', 'VALUE', 'BOX']);
+const SKIP = new Set(['EL', 'FIELDS', 'BIOMES', 'BIOME0', 'KNOBS', 'SCENARIOS', 'RX', 'RXA', 'KH', 'KHD', 'CAPD', 'HOLDD', 'HID', 'LOD', 'WORLD', 'STARTER', 'GROVES', 'VALUE', 'BOX']);
 for (const n of names) {
   if (SKIP.has(n)) continue;
   const v = peek(n);
@@ -87,7 +87,7 @@ const record = {
 };
 
 // ---- biomes and scenarios -------------------------------------------------------
-const biomes = plain(Sim.BIOMES);
+const biomes = plain(Sim.BIOMES), knobs = plain(Sim.KNOBS);
 const scenarios = [];
 {
   const sg = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H);
@@ -95,7 +95,7 @@ const scenarios = [];
 }
 
 // ---- out ---------------------------------------------------------------------------
-const contract = { fields, elements, elementTables, elementSets, elementMaps, conduct, reactions, record, constants, other, biomes,
+const contract = { fields, elements, elementTables, elementSets, elementMaps, conduct, reactions, record, constants, other, biomes, knobs,
   scenarioDefs: scenarios.map(({ world, ...d }) => d) };
 const body = JSON.stringify(contract);
 const hash = crypto.createHash('sha256').update(body).digest('hex').slice(0, 12);
@@ -114,7 +114,10 @@ const parts = {
     elements.map(e => `| ${e.id} | ${e.name} | ${e.kind} | ${e.density || ''} | ${e.k} | ${e.cap} | ${e.t0} | ${cellish(e.life || null)} | ${e.soil || ''} | ${cellish(e.decay)} | ${cellish(e.hi)} | ${cellish(e.lo)} | ${flags(e.id)} |`).join('\n'),
   reactions: '| A | touching B | chance a tick | A becomes | B becomes |\n|---|---|---|---|---|\n' + reactions.map(r => `| ${r.a} | ${r.b} | ${r.p} | ${r.a2 ?? '(stays)'} | ${r.b2 ?? '(stays)'} |`).join('\n'),
   records: `- Tree record keys: ${record.tree.map(k => '`' + k + '`').join(', ')}\n- Segment keys: ${record.segment.map(k => '`' + k + '`').join(', ')}\n- Save: ${record.saveSections} sections split by \`|\`; the store JSON (section 7) has ${record.storeKeys.map(k => '`' + k + '`').join(', ')}, and each region ${record.regionKeys.map(k => '`' + k + '`').join(', ')}`,
-  counts: `${elements.length} elements, ${fields.length} fields, ${Object.keys(constants).length} constants, ${Object.keys(elementTables).length} per-element tables, ${Object.keys(elementSets).length} element sets, ${reactions.length} contact reactions, ${conduct.length} conductance overrides, ${biomes.length} biome presets, ${scenarios.length} scenarios`,
+  knobs: '| knob | setting | range or choices | ' + biomes.map(b => b.name).join(' | ') + ' |\n|---|---|---|' + biomes.map(() => '---|').join('') + '\n' +
+    knobs.map(n => `| ${n.name} | \`${n.k}\` | ${n.opts ? n.opts.map(o => o === null ? 'null' : o).join(' / ') : n.check ? 'on/off' : n.lo + '..' + n.hi + (n.int ? ' whole' : '') + (n.flip ? ' (less is more)' : '')} | ` +
+      biomes.map(b => b[n.k] === undefined ? '(' + Sim.WORLD.WIDE + ')' : String(b[n.k])).join(' | ') + ' |').join('\n'),
+  counts: `${elements.length} elements, ${fields.length} fields, ${Object.keys(constants).length} constants, ${Object.keys(elementTables).length} per-element tables, ${Object.keys(elementSets).length} element sets, ${reactions.length} contact reactions, ${conduct.length} conductance overrides, ${biomes.length} biome presets, ${knobs.length} generator knobs, ${scenarios.length} scenarios`,
 };
 let doc = fs.readFileSync(DOC, 'utf8');
 for (const [k, v] of Object.entries(parts)) {

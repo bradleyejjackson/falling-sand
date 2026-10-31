@@ -2323,6 +2323,64 @@ const scenarios = {
     console.log(`  an eruption: ${erupted} ticks, ${grew} cells of lava and new rock over the cone, out to ${reach} columns from the vent, ${ash} ash`);
     check('island: the volcano erupts, and its lava runs out down the cone (not piling up in a spire)', erupted >= 500 && grew >= 600 && reach >= 60);
   },
+  generator() {
+    // the world generator: a custom world is a preset with knobs set over it (Sim.customBiome). Each knob, set far one way, must change
+    // the window a new world opens on the way it says, against Temperate on the same seed; and a custom world saves and loads whole
+    const { SHRUB, CACTUS, RABBIT, HOPPER, FOX, BIRD, FISH } = Sim.ids, Wd = Sim.WORLD;
+    const make = (bio, seed = 12345) => { const b = Sim.biomeOf(bio), wide = b.wide || Wd.WIDE, g = new Sim.Grid(Wd.W, Wd.H); Sim.generate(g, seed, wide, Sim.homeOf(wide, bio), bio); return g; };
+    const custom = (spec, seed) => make(Sim.customBiome(spec), seed);
+    const look = g => {
+      const o = { surf: 0, spread: 0, water: 0, sand: 0, plant: 0, wet: 0, dirt: 0, cave: 0, animals: 0, snow: 0, brine: 0, trees: g.trees.length }, s = [];
+      for (let x = 0; x < g.W; x++) {
+        let y = 0; for (; y < g.H; y++) { const i = g.idx(x, y), t = g.type[i]; if (g.owner[i] || t === E || t === SNOW || Sim.EL[t].kind === 'gas' || t === PLANT || t === SHRUB || t === CACTUS || t >= RABBIT && t !== Sim.ids.SPOUT && Sim.EL[t].kind !== 'static' && Sim.EL[t].kind !== 'powder' && Sim.EL[t].kind !== 'liquid') continue; break; }
+        s.push(y); const t = g.type[g.idx(x, y)]; if (t === WATER || t === BRINE) o.water++; else if (t === SAND) o.sand++;
+        for (let d = 1; d <= 6; d++) { const i = g.idx(x, y + d); if (g.type[i] === DIRT) { o.wet += g.life[i] & 255; o.dirt++; } }
+        for (let yy = y + 12; yy < g.H; yy++) if (g.type[g.idx(x, yy)] === E) o.cave++;
+      }
+      for (const t of g.type) { if (t === PLANT) o.plant++; else if (t === SNOW) o.snow++; else if (t === BRINE) o.brine++; else if (t === RABBIT || t === HOPPER || t === FOX || t === BIRD || t === FISH) o.animals++; }
+      o.surf = Math.round(s.reduce((a, b) => a + b, 0) / s.length); o.spread = Math.max(...s) - Math.min(...s);
+      o.wet = Math.round(o.wet / Math.max(1, o.dirt)); return o;
+    };
+    const say = (id, o) => console.log(`  ${id}: ground row ${o.surf} (spread ${o.spread}), water ${o.water} cols, sand ${o.sand} cols, soil moisture ${o.wet}, grass ${o.plant}, trees ${o.trees}, caves ${o.cave}, animals ${o.animals}, snow ${o.snow}, brine ${o.brine}`);
+    // the knobs left alone make the preset itself, cell for cell
+    for (const id of ['temperate', 'island']) {
+      const k = Sim.BIOMES.findIndex(b => b.id === id), a = make(k), b = make(Sim.customBiome({}, k));
+      let diff = 0; for (let i = 0; i < a.type.length; i++) if (a.type[i] !== b.type[i] || a.life[i] !== b.life[i]) diff++;
+      check(`a custom world with ${id}'s knobs is ${id}, cell for cell`, diff === 0, `${diff} cells differ`);
+    }
+    const tem = look(make(0)); say('temperate', tem);
+    const hi = look(custom({ base: 0.14, river0: 0, rivers: 0 })), lo = look(custom({ base: 0.48, river0: 0, rivers: 0 })); say('high land', hi); say('low land', lo);
+    check('Land height raises and lowers the land', hi.surf <= tem.surf - 50 && lo.surf >= tem.surf + 30);
+    const flat = look(custom({ amp: 0, river0: 0, rivers: 0 })), rough = look(custom({ amp: 0.9, river0: 0, rivers: 0 })); say('flat', flat); say('rugged', rough);
+    check('Ruggedness flattens the land or piles it up', flat.spread <= tem.spread / 4 && rough.spread >= 3 * tem.spread / 2);
+    { const c = custom({ warm: -12, snow: 12 }), h = custom({ warm: 12 }), g0 = make(0);
+      const d1 = c.ambAt(500) - g0.ambAt(500), d2 = h.ambAt(500) - g0.ambAt(500), cs = look(c); say('cold', cs);
+      check('Warmth moves the air temperature by its degrees, all year (and the treeline with it)', Math.abs(d1 + 12) < 1e-6 && Math.abs(d2 - 12) < 1e-6 && Math.abs(c.warmth(500) - g0.warmth(500) + 12) < 1e-6 && cs.snow >= 1000 && cs.trees < tem.trees, `${d1.toFixed(2)}°, +${d2.toFixed(2)}°`); }
+    const dry = custom({ arid0: 0.7, aridK: 0.1 }), dr = look(dry); say('dry', dr);
+    check('Dryness turns the land to desert', Sim.aridAt(dry.worldSeed, dry.ox, dry.biome) >= Sim.ARID_DESERT && dr.sand >= 0.8 * dry.W && dr.trees === 0);
+    const soak = look(custom({ wet: 1 })); say('water table', soak);
+    check('Water table soaks the soil', soak.wet >= tem.wet + 40);
+    const lk = look(custom({ lakes: 1, lakeDeep: 14, river0: 0 })), nl = look(custom({ lakes: 0, river0: 0, rivers: 0 })); say('lakes', lk); say('no lakes', nl);
+    check('Lakes fill the dips, or leave them dry', lk.water >= 150 && nl.water === 0);
+    { const T0 = make(0).noise, T1 = custom({ rivers: 1 }).noise, T2 = custom({ rivers: 0, river0: 0 }).noise;
+      check('Rivers: more of them, or none', T1.rivers.length > T0.rivers.length && T2.rivers.length === 0, `${T0.rivers.length} -> ${T1.rivers.length}, ${T2.rivers.length}`); }
+    { const ns = custom({ coast: 'none', home: 'coast' }), cl = custom({ coast: 'cliff', home: 'coast', volcano: 1 }), n = look(ns);
+      check('Coast: no sea at all, or the kind chosen (with a volcano on it)', !ns.noise.sea && n.brine === 0 && cl.noise.sea.kind === 'cliff' && cl.noise.volc && ns.ox === 0); }
+    const woods = look(custom({ trees: 2.5 })), bare = look(custom({ trees: 0, grass: 0 })); say('forest', woods); say('bare', bare);
+    check('Forest and Grass: thicker, or none', woods.trees >= 2 * tem.trees && bare.trees === 0 && bare.plant === 0);
+    const solid = look(custom({ caves: 0 })), holey = look(custom({ caves: 2 })); say('no caves', solid); say('riddled', holey);
+    check('Caves: solid rock, or riddled', solid.cave < tem.cave / 100 && holey.cave >= 1.8 * tem.cave, `${solid.cave} / ${tem.cave} / ${holey.cave} open cells underground`);
+    const wild = look(custom({ animals: 3 })), still = look(custom({ animals: 0 })); say('wildlife', wild);
+    check('Wildlife: about three times as many, or none', wild.animals >= 2 * tem.animals && still.animals === 0, `${still.animals} / ${tem.animals} / ${wild.animals}`);
+    for (const wide of [3840, 12800]) { const g = custom({ wide }), ok = g.worldW === wide && Math.abs(g.ox + g.W / 2 - wide / 2) <= Sim.REGION;
+      check(`World width ${wide}: the world is that wide and opens in its middle`, ok, `worldW ${g.worldW}, window at ${g.ox}`); }
+    // a custom world saves with its knobs, loads back as the same biome, and streams on into the same land
+    { const g = custom({ warm: 5, caves: 0.5, coast: 'marsh', wide: 9600 }, 4242); for (let f = 0; f < 120; f++) g.step();
+      const str = g.save(), h = new Sim.Grid(Wd.W, Wd.H); h.load(str);
+      const same = JSON.stringify(h.biome) === JSON.stringify(g.biome) && h.worldW === 9600 && Math.abs(h.warmK - 5) < 1e-9;
+      const sx = h.ox + h.W + 100, s1 = g.noise.surf(sx), s2 = Sim.terrainOf(h).surf(sx);
+      check('a custom world saves and loads with its knobs', same && s1 === s2 && h.noise.sea.kind === 'marsh', `${JSON.stringify(h.biome).slice(0, 80)}...`); }
+  },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
 
