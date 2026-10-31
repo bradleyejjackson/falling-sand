@@ -1,12 +1,15 @@
 // Generate the page's world (Sim.WORLD) and time step() and the page's render path. SIMFILE=other.html times another copy.
-// usage: node tools/perf.js [seed] [frames]
+// usage: node tools/perf.js [seed] [frames]   (BIOME=id generates that biome preset, at the window it opens on)
 const { loadSim, loadPage, census } = require('./load');
 const seed = +(process.argv[2] || 12345), frames = +(process.argv[3] || 600);
 
 const Sim = loadSim(process.env.SIMFILE);
 const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H);
 let t0 = performance.now();
-Sim.generate(g, seed, Sim.WORLD.WIDE, Math.floor((Sim.WORLD.WIDE - g.W) / 2 / Sim.REGION) * Sim.REGION);   // the middle of the world, as the page starts
+const bio = process.env.BIOME ? Sim.BIOMES.findIndex(b => b.id === process.env.BIOME) : 0;
+if (bio < 0) throw new Error('no biome ' + process.env.BIOME);
+if (bio) Sim.generate(g, seed, Sim.WORLD.WIDE, Sim.homeOf(Sim.WORLD.WIDE, bio), bio);
+else Sim.generate(g, seed, Sim.WORLD.WIDE, Math.floor((Sim.WORLD.WIDE - g.W) / 2 / Sim.REGION) * Sim.REGION);   // the middle of the world, as the page starts
 const gen = performance.now() - t0;
 const times = [];
 for (let f = 0; f < frames; f++) { t0 = performance.now(); g.step(); times.push(performance.now() - t0); }
