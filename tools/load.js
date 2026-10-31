@@ -35,7 +35,28 @@ function stubElement(id) {
   };
   return el;
 }
+// a stand-in for IndexedDB, enough for the autosave: one database of object stores held in `data` (a Map), so a second page
+// given the same one sees what the first saved, as after a refresh. Answers come a microtask later, as a browser's do.
+function fakeIDB(data = new Map()) {
+  const later = f => Promise.resolve().then(f);
+  const db = {
+    transaction(name) {
+      if (!data.has(name)) throw new Error('NotFoundError');
+      const st = data.get(name), tx = { error: null };
+      const done = () => later(() => tx.oncomplete && tx.oncomplete());
+      tx.objectStore = () => ({
+        get(k) { const r = {}; later(() => { r.result = st.has(k) ? structuredClone(st.get(k)) : undefined; r.onsuccess && r.onsuccess(); }); return r; },
+        put(v, k) { st.set(k, structuredClone(v)); done(); return {}; },
+        delete(k) { st.delete(k); done(); return {}; },
+      });
+      return tx;
+    },
+    createObjectStore(name) { data.set(name, new Map()); },
+  };
+  return { data, open() { const r = { result: db }; later(() => { if (!data.size) r.onupgradeneeded && r.onupgradeneeded(); r.onsuccess && r.onsuccess(); }); return r; } };
+}
 // opts.threads: give the page Worker and Blob (backed by worker_threads), so it runs its cell pass on workers
+// opts.idb: an IndexedDB for the page (fakeIDB()); without one it has none. opts.hash: the page's location.hash
 function loadPage(file, opts = {}) {
   const src = scriptOf(file);
   const els = {}, created = [];
@@ -43,6 +64,9 @@ function loadPage(file, opts = {}) {
     getElementById: id => (els[id] = els[id] || stubElement(id)),
     createElement: tag => { const e = stubElement(tag); created.push(e); return e; },
     currentScript: { textContent: src },
+    visibilityState: 'visible', listeners: {},
+    addEventListener(t, f) { (this.listeners[t] = this.listeners[t] || []).push(f); },
+    fire(t) { for (const f of this.listeners[t] || []) f({}); },
   };
   const blobs = new Map(), live = [];
   const Blob = opts.threads ? class { constructor(parts) { this.text = parts.join(''); } } : undefined;
@@ -66,16 +90,20 @@ function loadPage(file, opts = {}) {
   let now = 0;
   const performance = { now: () => now };
   const requestAnimationFrame = f => frames.push(f);
-  new Function('window', 'document', 'localStorage', 'performance', 'requestAnimationFrame', 'btoa', 'atob', 'Worker', 'Blob', 'URL', 'navigator', src)(
+  if (opts.store) Object.assign(store, opts.store);   // (localStorage carried over from an earlier page)
+  const location = opts.hash !== undefined ? { hash: opts.hash, href: 'https://sand.test/' + opts.hash } : undefined;
+  new Function('window', 'document', 'localStorage', 'performance', 'requestAnimationFrame', 'btoa', 'atob', 'Worker', 'Blob', 'URL', 'navigator', 'indexedDB', 'location', src)(
     window, document, localStorage, performance, requestAnimationFrame,
-    s => Buffer.from(s, 'binary').toString('base64'), s => Buffer.from(s, 'base64').toString('binary'), Worker, Blob, URL, navigator);
+    s => Buffer.from(s, 'binary').toString('base64'), s => Buffer.from(s, 'base64').toString('binary'), Worker, Blob, URL, navigator, opts.idb, location);
   // drive n frames of the page's own loop (with workers, each frame first waits for the tick they are running, so every frame ticks)
-  const g = window.sandfall.g;
+  const g = window.sandfall.g;   // (the page's loop starts once it has read its autosave: with opts.idb, await p.started first)
   const settle = () => { if (!opts.threads) return; const c = g.ctl; while (Atomics.load(c, 1) !== Atomics.load(c, 0)) Atomics.wait(c, 1, Atomics.load(c, 1), 50); };
   const run = n => { for (let k = 0; k < n; k++) { settle(); now += 16.7; const f = frames.shift(); if (!f) throw new Error('loop stopped'); f(now); } };
   const ready = () => { const t = Date.now(); while (g.workersReady() < window.sandfall.pool.n && Date.now() - t < 10000) Atomics.wait(g.ctl, 0, Atomics.load(g.ctl, 0), 20); return g.workersReady(); };
   const close = () => { g.stopWorkers(); for (const w of live) w.terminate(); };
-  return { sf: window.sandfall, els, created, run, store, ready, close, window };
+  const started = new Promise(ok => { const t = setInterval(() => { if (frames.length) { clearInterval(t); ok(); } }, 1); });
+  const wait = ms => { now += ms; };   // (time passes without frames: the autosave's clock)
+  return { sf: window.sandfall, els, created, run, store, ready, close, window, document, started, wait };
 }
 
 function census(g, EL) {
@@ -83,4 +111,4 @@ function census(g, EL) {
   for (let i = 0; i < g.type.length; i++) c.set(g.type[i], (c.get(g.type[i]) || 0) + 1);
   const o = {}; for (const [t, n] of c) o[EL[t].name] = n; return o;
 }
-module.exports = { loadSim, simSource, loadPage, census, scriptOf };
+module.exports = { loadSim, simSource, loadPage, census, scriptOf, fakeIDB };

@@ -198,7 +198,8 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--bg);color:var(-
         <button class="btn" id="sharelink">Share link</button></div>
       <div class="ctl"><span class="tag">Keep</span><button class="btn" id="save">Save</button>
         <button class="btn" id="load">Load</button>
-        <button class="btn" id="export">Export / Import</button></div>
+        <button class="btn" id="export">Export / Import</button>
+        <button class="btn" id="autosave" aria-pressed="true" title="Keeps the world in this browser as you play, so a refresh picks up where you left off">Autosave: on</button></div>
       <div class="io" id="io">
         <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
         <button class="btn" id="import">Import</button>
@@ -256,7 +257,7 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--bg);color:var(-
   <h4>Trees</h4><p class="hint">Trees come in two kinds: Seed sows a broadleaf, which spreads wide on rich, warm valley ground and drops its leaves in autumn, and Cone a conifer, a narrow evergreen spire that stands the cold, the shade and poor ground. Up the hills the broadleaf trees give out first and conifers carry on to a treeline, over which nothing grows. Conifers are the pioneers on burnt and spent ground, and in the valleys the broadleaf trees overtop them in time; their resinous needles burn fiercely, and a conifer killed by fire drops its seed onto the burn.</p>
   <h4>Devices and tools</h4><p class="hint">The Devices row is for experiments: a Spout pours whatever powder, liquid or gas you chose last, for ever (choose Water, then Spout); a Drain swallows any powder, liquid or gas that touches it; a Heater holds itself at 400° and a Cooler at -40°, so a heater under a pot boils it dry and a cooler freezes a pond over; a Fan blows gases, light powders and liquids along in front of it for up to 24 cells (press Fan again to turn it). Devices stand where you put them, need no support, and nothing but Erase removes them. Speed runs up to four ticks a frame, in a scenario too. Time-lapse (T) runs sixteen ticks a frame in the sandbox and draws every fourth, so years go by in minutes; the clock counts the years, and the history ribbon under the census shows each day's land cover, a day a column. Seed opens the world with that number (New world shows its seed), Share link puts the seed and the country, or the scenario you are playing, in a link, and the strip over the world is a map of all of it: the grey box is the simulated window, the amber the view, and clicking it takes you there. Zoom shows the view at twice the size or half. The brush draws free, or in a line or a box from where you press to where you let go, or fills the patch you click (only what is in view); Undo (Ctrl+Z) takes back the last strokes (up to 30, until the window moves). The Scenario editor makes your own: lay out a box, set the time, the budget, goals and fail lines (count of an element in an area, made by a reaction, trees grown) and sources, then play it or share it; a win earns one to three stars by its score. Sound plays rain, fire and wind, as loud as there is of each in view.</p>
   <h4>Peat, coal, moss and fish</h4><p class="hint">Peat builds up where litter lies waterlogged in a bog: once dried out it smoulders for days underground. Coal lies in seams deep in the rock; it burns slowly and hot. Dry, bare dirt blows away as dust in a strong wind and settles downwind. Lichen and moss creep over bare rock and rubble in damp air, and in time make a thin soil for grass. Fire needs air: a fire sealed under rock smothers, leaving charcoal and smoke, and smoke hurts animals and wilts plants it hangs round. A volcano's fumes sour the clouds downwind, and their rain is weak acid that scorches leaves and leaches the soil. Fish live in ponds and rivers, graze the weed, spawn in spring, and die if the pond dries or freezes solid; birds take them at the surface.</p>
-  <h4>Reading the world</h4><p class="hint">Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. The readout under the world reads whatever cell you point at: what it is, how hot, and what it holds (a soil's moisture and nutrients, a plant's sap, how deep a cell of water lies, a rock's cracks, a tree's vigour with the sun and soil behind it, an animal's energy and age, the air's humidity, wind and pressure); the Inspect tool pins a cell there so you can watch it change. The Census chart under it samples the simulated window eight times a day: rabbits and grasshoppers, foxes and birds, and how many columns are forest, meadow, scrub and desert, against the seasons behind them, over the last three years (point at it to read any sample). Pan with arrow keys / WASD, right-drag, or the Pan tool. Light: day/night draws the world lit by the sun and moon, with shade under cloud, overhangs and in caves; Light: constant draws everything in full daylight, all day and night (the world's own day and night go on underneath).</p>
+  <h4>Reading the world</h4><p class="hint">Autosave keeps the world in this browser as you play (every half minute, and whenever you switch away or close the tab), so a refresh picks up where you left off, scenario and all; New world starts afresh, and Autosave: off forgets it. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. The readout under the world reads whatever cell you point at: what it is, how hot, and what it holds (a soil's moisture and nutrients, a plant's sap, how deep a cell of water lies, a rock's cracks, a tree's vigour with the sun and soil behind it, an animal's energy and age, the air's humidity, wind and pressure); the Inspect tool pins a cell there so you can watch it change. The Census chart under it samples the simulated window eight times a day: rabbits and grasshoppers, foxes and birds, and how many columns are forest, meadow, scrub and desert, against the seasons behind them, over the last three years (point at it to read any sample). Pan with arrow keys / WASD, right-drag, or the Pan tool. Light: day/night draws the world lit by the sun and moon, with shade under cloud, overhangs and in caves; Light: constant draws everything in full daylight, all day and night (the world's own day and night go on underneath).</p>
   <h4>Water, rock, heat and snow</h4><p class="hint">Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt, however big the lake behind them. The hills' rock, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow, unless there is water under it to float on). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. What you build is held up by its strength: a span of laid stone, brick, glass, wood or metal is a beam, bending under its own weight and whatever lies on it, and a thicker beam spans further (pile sand or pour water on a bridge and it bows). Stone, brick and glass are strong in compression but crack when they bend, so a flat stone lintel only spans a few cells while an arch carries a load far wider; wood spans much further, bows a little and then snaps; metal sags under a heavy load and hangs on like a cable instead of breaking, but it softens in a fire, and a hot steel span droops right down. Something held at neither end falls in one piece, and wood floats. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Ice floats: it rides with a tenth of itself out of the water, so a pond's skin lies flush with the surface and a big block shows a row or so; a block of Ice dropped into a pond comes down whole and bobs up, and one left high and dry comes down whole too. In the spring thaw a pond's ice breaks up into floes that drift with the wind and the current, while in a frost ice frozen to the shore stays put. The wind moves snow too: a steady wind over cold, dry snow strips it off the windward slopes and piles it in the lee, packed hard, and at a crest with a drop past it, it builds a cornice out over the edge, which breaks off in a thaw. Deep snow on a steep slope can let go as an avalanche that runs far out past the foot: a wind slab (packed snow lying on a lee slope) is the most dangerous, wet snow in a thaw slides too, cold settled snow mostly holds, and a forest holds the snow on its slope. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch.</p>
   <h4>Soil and plants</h4><p class="hint">Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Damp dirt is firm: it holds a bank twice as steep as dry dirt, which slumps like sand, and soaked dirt slumps again. Soil soaked down toward the rock can't hold a steep slope: it lets go as a landslide, a whole slab of hillside sliding down to the foot and running out past it, and leaves bare rock behind. It takes a lot of water to do it (heavy rain on steep hills, a storm), tree roots hold a slope, and grass helps a little. The steepest ground is bare rock to begin with. Rock open to the weather takes water into its cracks, and where it freezes and thaws (high ground, in autumn and spring) the ice wedges them wider until pieces break off as rubble and pile up as scree under the cliffs; rock under soil or scree is sheltered. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. How big a tree grows depends on its light and its soil together: out in the open on rich ground (old forest litter, ash) it grows into a giant, tall and spreading with thick limbs, on poor soil it stays small, and in the shade of a canopy or under an overhang it stays a stunted understory tree however rich the soil, until a gap opens over it. Scrub grows taller on richer ground too, and grass on spent soil stays short. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it, and its seed blows further off, so a meadow takes back ground a fire or a dead tree has cleared; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it (and reach drier soil than grass can use), and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Wild plants each suit their own ground, so the land sorts itself by climate. Some stretches of the world are dry country, where the sun dries everything faster: east of where a new world opens the hills turn to scrub and then to a sand desert. Shrub is scrub: deep roots let it drink soil too dry for grass, so it stays green through the dry season on dry ground and seeds itself across it, but in a damp meadow its seedlings are smothered and under trees it dies of shade; dried out, it burns like straw. Cactus stores water: it drinks the sand fast after rain and loses almost none, so it lasts the long dry spells, grows tall and puts out arms, but it rots in damp ground and stands well apart from its neighbours. Reed grows in the soaked bed of a shallow pond or a waterlogged bank, up through the water to stand a few cells out of it, and spreads along the bed; in deep water it drowns, and where the pond dries out it dies back. Valley floors in the wet country hold ponds. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt. Soil has fertility as well as water (Soil view shows it, and rich dirt is darker): rotting litter and roots make rich humus, a river's silt settles rich, and ash soaks into the ground it lies on, fastest once rain wets it, so a burnt meadow comes back greener. Plants take the nutrients up as they grow, and grow by them: on rich soil grass thickens and spreads faster and its seed takes more often, trees grow faster and drop more seed, and reeds and shrubs grow faster (shrubs, the scrub of poor ground, care less). Rain soaking down through the soil carries nutrients with it, so heavy rain on bare ground washes the topsoil poor (sand holds none at all, and springs carry them off), while plant cover drinks the rain first and holds them. A new world's topsoil is richest at the surface and poorer in the dry country.</p>
   <h4>Animals</h4><p class="hint">Animals live on the plants. Rabbits wander the meadows and scrub, grazing the grass and shrubs from the top down, so a grazed meadow grows back, though too many rabbits crop it bare. They starve where nothing grows, have young in spring and summer when they are well fed and not too crowded, run from fire, swim for the shore and won't walk off a cliff. Seed they eat in summer comes out in their droppings, with a little fertiliser, well away from where they ate it, so rabbits carry grass and scrub over rock and sand that windblown seed can't cross. Grasshoppers hop through the grass chewing the sap out of it and ride the wind when they jump. They breed through the warm months, fastest in a hot dry summer, when they can strip the straw in plagues. From late summer they lay eggs on the ground, and the frost kills the adults. The eggs lie through the winter and hatch when spring warms up. Foxes hunt the rabbits: a fox picks up a rabbit's scent from a long way off, creeps up on it and springs the last few cells, and a rabbit that sees a fox coming runs from it as it runs from fire, so a fox mostly catches the ones it surprises or corners. Foxes go round tree trunks, climb banks and out of holes, snap up a grasshopper when they are hungry, and starve when the rabbits are gone; when the screen has run out of foxes, a new one wanders in from the land outside once the rabbits are back (birds fly in the same way). In spring a well-fed fox digs a den, throwing the dirt out beside the hole, and raises cubs in it. Birds fly over the hills, dive on grasshoppers, pick up fallen tree seed and peck grass seed, and roost in trees at night. A seed a bird swallows comes out wherever it happens to be later, often far away, so trees spread over rock and water their own seed can't cross, and a flock of birds keeps a grasshopper plague down. In spring a fed bird lays an egg in a tall tree, and it hatches a while later.</p>
@@ -4866,7 +4867,8 @@ function startWorkers(){
 }
 window.sandfall.pool=pool;
 function stopWorkers(why){ g.stopWorkers(); for (const w of pool.workers) w.terminate(); pool.workers=[]; pool.n=0; pool.why=why; }
-window.addEventListener('pagehide',()=>{ if (pool.n) stopWorkers('stopped'); });
+let beforeLeave=()=>{};   // (the autosave, once it is set up: it has to finish the tick and save before the workers stop)
+window.addEventListener('pagehide',()=>{ beforeLeave(); if (pool.n) stopWorkers('stopped'); });
 
 const cv=document.getElementById('c'), ctx=cv.getContext('2d');
 cv.width=VW; cv.height=VH;
@@ -5437,6 +5439,57 @@ document.getElementById('load').addEventListener('click',()=>whenIdle(()=>{ try{
 const io=document.getElementById('io'), iotext=document.getElementById('iotext');
 document.getElementById('export').addEventListener('click',()=>whenIdle(()=>{ io.classList.toggle('open'); if (io.classList.contains('open')){ iotext.value=saveText(); msg((game?'Scenario':'World')+' text ready to copy ('+(iotext.value.length/1024|0)+' KB)'); } }));
 document.getElementById('import').addEventListener('click',()=>whenIdle(()=>{ try{ loadText(iotext.value.trim()); clampCam(); dims(); msg('Imported'); }catch(e){ msg('Could not import: '+e.message); } }));
+// autosave: the world (or the scenario being played, or the layout in the editor) and how the page was set, kept in IndexedDB
+// every AUTO_MS and whenever the page is hidden or closed, so a refresh picks up where it left off. New world starts afresh as
+// ever (and the next save is of it); Autosave: off forgets the saved world. (localStorage is too small: an explored world runs
+// to a few MB of text)
+const AUTO_MS=30000, autoEl=document.getElementById('autosave');
+let autoOn=true, autoAt=0, autoDb=null, autoFail=false;
+try{ autoOn=localStorage.getItem('sandfall.autosave')!=='off'; }catch(e){}
+const showAuto=()=>{ autoEl.textContent='Autosave: '+(autoOn?'on':'off'); autoEl.setAttribute('aria-pressed',autoOn); };
+// open the database (resolves to null where there is none, or it fails)
+function autoOpen(){
+  return new Promise(ok=>{ try{ const r=indexedDB.open('sandfall',1); r.onupgradeneeded=()=>r.result.createObjectStore('saves'); r.onsuccess=()=>{ autoDb=r.result; ok(autoDb); }; r.onerror=()=>ok(null); r.onblocked=()=>ok(null); }catch(e){ ok(null); } });
+}
+function autoRead(){
+  return autoOpen().then(db=>!db ? null : new Promise(ok=>{ try{ const r=db.transaction('saves','readonly').objectStore('saves').get('last'); r.onsuccess=()=>ok(r.result||null); r.onerror=()=>ok(null); }catch(e){ ok(null); } }));
+}
+function autoRecord(){
+  const rec={v:1, at:Date.now(), hash:typeof location!=='undefined' ? location.hash||'' : '', camX, camY, zoomK, paused, speed, timelapse, current, spoutEl, fanDir, brush, hold:g.hold, windK};
+  if (designing){ rec.kind='design'; rec.text=JSON.stringify({sandfall:'scenario', v:1, def:readEditor(), world:g.save()}); }
+  else { rec.kind=game ? 'scenario' : 'world'; rec.text=saveText(); if (game && game.sc.custom) rec.custom=lastCustom; }
+  return rec;
+}
+// save now (between ticks only: a tick the workers are part way through is finished first when the page is going away)
+function autosave(leaving){
+  autoAt=performance.now(); if (!autoOn || !autoDb) return false;
+  if (busy){ if (!leaving) return false; const t=performance.now(); while (!g.tilesDone() && performance.now()-t<500){} if (!g.tilesDone()) return false; finishTick(); }
+  try{ const tx=autoDb.transaction('saves','readwrite'); tx.objectStore('saves').put(autoRecord(),'last'); if (leaving && tx.commit) tx.commit();
+    tx.oncomplete=()=>{ autoFail=false; }; tx.onerror=tx.onabort=()=>{ if (!autoFail) msg('Autosave failed ('+((tx.error && tx.error.name)||'storage error')+'): Export keeps the world as text'); autoFail=true; };
+  }catch(e){ if (!autoFail) msg('Autosave failed: '+e.message); autoFail=true; return false; }
+  return true;
+}
+function autoForget(){ try{ autoDb && autoDb.transaction('saves','readwrite').objectStore('saves').delete('last'); }catch(e){} }
+autoEl.addEventListener('click',()=>{ autoOn=!autoOn; showAuto(); try{ localStorage.setItem('sandfall.autosave',autoOn?'on':'off'); }catch(e){}
+  if (autoOn){ whenIdle(()=>autosave()); msg('Autosave on: a refresh picks up where you left off'); } else { autoForget(); msg('Autosave off: a refresh starts a new world'); } });
+beforeLeave=()=>autosave(true);
+if (typeof document.addEventListener==='function') document.addEventListener('visibilitychange',()=>{ if (document.visibilityState==='hidden') autosave(true); });
+// put the page back as the record has it
+function autoRestore(rec){
+  if (rec.kind==='design') editCustom(rec.text);
+  else { loadText(rec.text); if (game && rec.custom){ lastCustom=rec.custom; game.sc.custom=true; } }
+  if (g.worldSeed){ worldSeed=g.worldSeed; seedEl.value=worldSeed; genSeedEl.value=worldSeed; }
+  if (rec.zoomK>=0 && rec.zoomK<ZOOMS.length) setZoom(rec.zoomK);
+  camX=rec.camX|0; camY=rec.camY|0; clampCam(); dims();
+  if (!game && !designing){ setHold(!!rec.hold); setWind(rec.windK>=0 && rec.windK<WINDS.length ? rec.windK : 0); }
+  if (buttons.some(r=>r.t===rec.current)){ current=-1; choose(rec.current); }   // (-1: not the fan already, so choosing it doesn't turn it)
+  if (EL[rec.spoutEl] && pours(rec.spoutEl)) spoutEl=rec.spoutEl; if (rec.fanDir>=0 && rec.fanDir<4) fanDir=rec.fanDir;   // (refreshRack relabels them)
+  if (rec.brush) setBrush(rec.brush);
+  if (rec.timelapse) setTimelapse(true); else if (rec.speed>=1 && rec.speed<=4){ speed=rec.speed; speedEl.textContent='Speed ×'+speed; }
+  if (!!rec.paused!==paused) togglePause();
+  refreshRack(); drawMinimap();
+  msg('Picked up where you left off'+(game ? '' : ' (New world starts afresh)'));
+}
 
 // --- cell inspector: the cell under the pointer (or the one the Inspect tool pinned), read from Grid.inspect and put in words ---
 const probe=document.getElementById('probe');
@@ -5694,16 +5747,18 @@ function tick(){
   if (pool.n && g.workersReady()>=pool.n && g.awakeTiles){ g.startTiles(pool.n); busy=true; }
   else { g.runTiles(); g.endStep(); if (game) game.tick(); }
 }
+function finishTick(){ const t=performance.now(); busy=false; g.endStep(); if (game) game.tick(); stepMs+=performance.now()-t; while (later.length) later.shift()(); }
 let fpsT=performance.now(), frames=0, stepMs=0, steps=0; const baro=[];
 const fpsEl=document.getElementById('fps'), chunkEl=document.getElementById('chunks'), camEl=document.getElementById('cam'), thrEl=document.getElementById('threads');
 function loop(now){
   keyPan();
-  if (busy && g.tilesDone()){ const t=performance.now(); busy=false; g.endStep(); if (game) game.tick(); stepMs+=performance.now()-t; while (later.length) later.shift()(); }
+  if (busy && g.tilesDone()) finishTick();
   if (game && (game.state!==shown || frames%10===0)) showMission();
   if (!busy){
     if (drawing && lastX>=0) paint(lastX,lastY);
     if (!game) sampleCensus();
     stream();
+    if (autoOn && now-autoAt>AUTO_MS) autosave();
     if (!paused){ const t=performance.now();
       for (let k=1;k<speed;k++){ g.step(); if (game) game.tick(); steps++; }   // extra ticks on this thread, then the usual one
       tick(); stepMs+=performance.now()-t; steps++; }
@@ -5728,10 +5783,21 @@ function loop(now){
   }
   requestAnimationFrame(loop);
 }
+// the autosave is read first (where there is IndexedDB: it answers later, so the page starts once it has)
 function start(data){
+  showAuto();
+  if (typeof indexedDB==='undefined') return begin(data,null);
+  autoRead().then(rec=>begin(data,autoOn ? rec : null));
+}
+function begin(data,rec){
   refreshRack(); setCensus(censusOn); showUndo(); setZoom(0);
   const h=readHash();   // a shared link: a world by its seed, a built-in scenario by name, or a whole scenario
-  if (data && data.world){ try{ if (loadText(data.world)==='world'){ camX=data.camX; camY=data.camY; } clampCam(); dims(); }catch(e){ newWorld(worldSeed); } }
+  // the autosave, unless a link asks for something else (the link the page had when it saved doesn't: that is a refresh)
+  const hash=typeof location!=='undefined' ? location.hash||'' : '', linked=(h.world || h.play || h.scenario) && (!rec || rec.hash!==hash);
+  let restored=false;
+  if (rec && !(data && data.world) && !linked){ try{ autoRestore(rec); restored=true; }catch(e){ msg('Could not pick up the saved world ('+e.message+'): a new one instead'); } }
+  if (restored){}
+  else if (data && data.world){ try{ if (loadText(data.world)==='world'){ camX=data.camX; camY=data.camY; } clampCam(); dims(); }catch(e){ newWorld(worldSeed); } }
   else if (h.world && isFinite(parseInt(h.world,10))){
     if (h.gen){ genFrom=0; genSpec=unpackKnobs(h.gen); genFromEl.value='0'; biomeEl.value='custom'; genSync(); }   // (a custom world's knobs come with it)
     else if (h.biome && Sim.BIOMES.some(b=>b.id===h.biome)) biomeEl.value=h.biome;
@@ -5739,7 +5805,7 @@ function start(data){
   else if (h.play && SCENARIOS.some(s=>s.id===h.play)){ newWorld(worldSeed); startScenario(SCENARIOS.find(s=>s.id===h.play)); }
   else if (h.scenario){ newWorld(worldSeed); unpackScenario(h.scenario).then(t=>whenIdle(()=>playCustom(t)), e=>msg('Could not open the scenario in the link: '+e.message)); }
   else newWorld(worldSeed);
-  startWorkers();
+  startWorkers(); autoAt=performance.now();
   requestAnimationFrame(loop);
 }
 window.claude?.hot?.snapshot?.(()=>({world:saveText(),camX,camY}));

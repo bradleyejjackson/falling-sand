@@ -27,6 +27,7 @@ node tools/perf.js [seed]     # generates the page's world (Sim.WORLD, mid-world
 node tools/steady.js [seed] [frames] [warm]   # the step once a new world has settled (perf.js includes its first, all-awake ticks)
 node tools/prof.js [seed] [frames]   # the step split by pass (cell pass, soil, air, waves, wind, trees, ...)
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
+node tools/autosave.js [serial|threads]   # autosave: a refresh brings back the world, clock, camera, settings and scenario; links win; off forgets
 BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
 node tools/contract.js [--write]   # X9: the Godot port's data contract (docs/PORT.md, docs/port/*.json) still matches Sim; --write accepts a change
 OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
