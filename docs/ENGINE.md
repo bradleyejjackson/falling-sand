@@ -29,7 +29,7 @@ those and the double-width copies (`KHD`, `CAPD`, ...), never the `EL` objects, 
 2. The cell pass (`stepTile` for every listed tile, phase by phase). A tile only touches cells within `REACH` (32) of itself, so
    tiles in one phase can run on any number of threads. Each tile seeds the random stream from the frame seed and its index
    (`reseed(mix(seed, tile))`), so the result doesn't depend on thread count or tile order.
-3. `endStep`, on one thread: deferred work (every `PRESS_EVERY` (4) ticks, the pressure search; the wave pass; spans of building material are judged (`beam`); saplings become trees), trees, the soil pass (every 8th row, `SLOW`), the air pass
+3. `endStep`, on one thread: deferred work (every `PRESS_EVERY` (4) ticks, the pressure search; the wave pass; spans of building material are judged (`beam`); saplings become trees), trees, the tide (`tide`, see The sea), the soil pass (every 8th row, `SLOW`), the air pass
    (every 4th coarse row, `AIRSLOW`; the air masses are worked out just before it, `updateMasses`), the wind solve (every 4th
    tick), storms and lightning (`stepStorms`), the clock and climate.
 
@@ -137,6 +137,19 @@ columns either way (further than a tile's `REACH`, hence on the main thread):
 Every column of the judged span is marked for the tick (`beamSeen`), so one span is judged once. Held spans set the settled bit
 (life bit 0); the soil pass re-opens settled spans now and then (`audit`, `BEAM_AUDIT`), so a load piled on later is felt. Stone
 the brush lays carries `LAID` (life bit 15; stone's cracking is bits 8-14) and is a building material; generated rock is not.
+
+### The sea (N7)
+
+A world `SEA_WORLD` (2880) columns wide or more has a sea at its west end: brine (`SEA_SALT`) from its mean level (`sea.y`) down to a
+floor shaped by `seaSurf`, with a beach, a salt marsh or a cliff for a coast (`seaOf`, from the seed). It is all terrain: nothing
+of it is saved but the cells. `Grid.seaCols` works out per window what of it lies there (`seaOn`, `seaEdge`, and per air and
+wind column `seaM`, `seaB`). `tide()` runs in `endStep`: where the window's west side is out at sea (`seaEdge`), its `SEA_EDGE`
+columns are held at the tide's level of the moment plus a swell (adding or removing at most `SEA_STEP` brine cells a column), and
+the flow of the deep water (`swu`) is pushed by a travelling sine (`SWELL_F`), so waves run in to the shore through the wave pass. A
+marsh's flat is flooded and drained to the tide directly, a cell a column a tick (its reeds would dam the flow). In the soil pass
+the surf (brine within `SURF_D` of its surface) wears rock beside it (`wear`: stone's cracking bits, to rubble at 127), grinds rubble
+to sand and rolls grains to and fro (`surfGrain`). `updateMasses` makes the air over the coast more humid and milder (`seaM`), and
+`stepWind` adds a sea breeze to the lowest wind cells near the shore by day and a land breeze by night (`seaB`).
 
 ### Animals (R8)
 

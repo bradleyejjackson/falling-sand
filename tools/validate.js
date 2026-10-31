@@ -2042,6 +2042,60 @@ const scenarios = {
       check('a boxed-in spout lets its block sleep', awake === 0);
     }
   },
+  sea() {
+    // N7: a streamed world has a salt sea at its west end, with a beach, a salt marsh or cliffs for a coast by its seed (a world one
+    // window wide has none). Run with the window on it: the tide comes in and goes out, a swell runs over it, the high tide floods a
+    // marsh and the low tide leaves its creeks full, the surf wears a cliff back, and a sunny day draws a breeze in off the sea.
+    const { RUBBLE, REED, CLAY } = Sim.ids;
+    const world = (seed, wind) => { Sim.reseed(5); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, seed, Sim.WORLD.WIDE, 0); if (wind !== undefined) g.windHold = wind; return g; };
+    const kinds = {}; for (const seed of [12345, 7, 99, 5, 31, 4242, 17, 2024]) { const g = new Sim.Grid(Sim.WORLD.W, 480); g.worldSeed = seed; g.worldW = Sim.WORLD.WIDE; const c = Sim.terrainOf(g).sea; (kinds[c.kind] = kinds[c.kind] || []).push(seed); }
+    console.log(`  coasts by seed: ${Object.entries(kinds).map(([k, v]) => k + ' ' + v.join(',')).join('; ')}`);
+    check('each kind of coast comes up', kinds.beach && kinds.marsh && kinds.cliff);
+    const narrow = new Sim.Grid(480, 240); Sim.generate(narrow, 99);
+    check('a world one window wide has no sea', !narrow.noise.sea && !narrow.type.some(t => t === BRINE));
+    const g = world(12345), c = g.noise.sea;
+    const top = (g, x) => { let y = c.y - 20; while (y < g.H - 1 && g.type[g.idx(x, y)] !== BRINE && g.type[g.idx(x, y)] !== WATER && (g.type[g.idx(x, y)] === E || Sim.EL[g.type[g.idx(x, y)]].kind === 'gas')) y++; return y; };
+    let deep = 0; for (let y = 0; y < g.H; y++) if (g.type[g.idx(5, y)] === BRINE) deep++;
+    const EARTH = new Set([SAND, DIRT, CLAY, STONE, RUBBLE]), ground = (g, x) => { let y = 0; while (y < g.H - 1 && !EARTH.has(g.type[g.idx(x, y)])) y++; return y; };
+    let trees = g.trees.filter(t => t.x < c.shore + c.wide).length, beach = 0; for (let x = c.shore; x < c.shore + 40; x++) if (g.type[g.idx(x, ground(g, x))] === SAND) beach++;
+    console.log(`  seed 12345: ${c.kind}, shore at ${c.shore}, sea ${deep} deep at the edge, ${beach}/40 of the beach sand, ${trees} trees on the coast`);
+    check('the sea lies deep at the edge, and its beach is sand with no trees', deep >= 35 && beach >= 38 && trees === 0);
+    // the tide over half a day, and the swell on it
+    const lv = [], rough = []; run(g, 2000, 25, () => { let s = 0, lo = 1e9, hi = -1e9; for (let x = 60; x < 300; x += 4) { const y = top(g, x); s += y; lo = Math.min(lo, y); hi = Math.max(hi, y); } lv.push(s / 60); rough.push(hi - lo); });
+    const range = Math.max(...lv) - Math.min(...lv), sw = rough.reduce((a, b) => a + b) / rough.length;
+    console.log(`  the open sea's mean level ranges ${range.toFixed(1)} rows over the tide; the surface spans ${sw.toFixed(1)} rows from trough to crest`);
+    check('the tide rises and falls (3.5+ rows)', range >= 3.5);
+    check('a swell runs on the sea (crests 3+ rows over the troughs)', sw >= 3);
+    // a marsh at high water and at low (seed 99)
+    {
+      const m = world(99), mc = m.noise.sea; let flood = 0, dry = 0, creek = 0, reeds = 0, n = 0;
+      const look = () => { let f = 0, d = 0, k = 0; for (let x = mc.shore + 4; x < mc.shore + mc.wide - 4; x++) { let y = mc.y - 12, reed = false; while (m.type[m.idx(x, y)] === E || Sim.EL[m.type[m.idx(x, y)]].kind === 'gas' || m.type[m.idx(x, y)] === REED) { reed = reed || m.type[m.idx(x, y)] === REED; y++; } if (reed) continue; const t = m.type[m.idx(x, y)]; if (t === BRINE || t === WATER) { if (y < mc.y - 1) f++; else k++; } else d++; } return [f, d, k]; };   // (the open flat between the reeds)
+      for (let x = mc.shore; x < mc.shore + mc.wide; x++) for (let y = mc.y - 12; y < mc.y; y++) if (m.type[m.idx(x, y)] === REED) { reeds++; break; }
+      const P = Math.round(Sim.DAY * 12.42 / 24), clk = m.clock;
+      // high water: the tide peaks a quarter of its period on from a clock at a whole number of periods
+      const at = ph => { const k = Math.ceil((m.clock + 1) / P) * P + ph * P - m.clock; run(m, Math.max(1, Math.round(k))); return look(); };
+      const hi = at(0.25), lo = at(0.75);
+      console.log(`  marsh (${mc.wide} wide, reeds in ${reeds} columns): high water floods ${hi[0]} open columns of the flat (${hi[1]} dry, ${hi[2]} at the creeks' brim); low water leaves ${lo[1]} dry, ${lo[0]} flooded and ${lo[2]} creek columns holding brine`);
+      check('a salt marsh stands in reeds', reeds >= 0.25 * mc.wide);
+      const open = hi[0] + hi[1] + hi[2];
+      check('the high tide floods the marsh and the low tide drains it, leaving its creeks', hi[0] >= 0.6 * open && lo[1] >= 0.6 * open && lo[0] <= 0.1 * open && lo[2] >= 4);
+    }
+    // the surf wears a cliff back (seed 31, a steady wind)
+    {
+      const k = world(31, 1), kc = k.noise.sea, face = () => { const f = []; for (let y = kc.y - 5; y <= kc.y + 2; y++) { let x = kc.shore - 8; while (k.type[k.idx(x, y)] !== STONE && x < kc.shore + 40) x++; f.push(x); } return f; };
+      const f0 = face(); run(k, 3 * MIN); const back = face().map((x, r) => x - f0[r]);
+      console.log(`  cliff (${kc.cliff} high): ${k.seaBroke} cells of rock broken off in three minutes of rough sea; its face worn back ${back.join(' ')} columns by row, from 5 over the mean level to 2 under`);
+      check('the surf wears a notch in a cliff at the waterline', k.seaBroke >= 5 && back.filter(b => b >= 1).length >= 2 && back[0] === 0);
+    }
+    // the sea breeze: in a calm, the low wind near the shore blows onshore at noon and back out at night
+    {
+      const b = world(12345, 0), bc = b.noise.sea, near = () => { let s = 0, n = 0; for (let cx = ((bc.shore - 200) >> 4); cx <= ((bc.shore + 200) >> 4); cx++) { let cy = 0; while (cy < b.CHh && !b.wsolid[cy * b.CW + cx]) cy++; for (let q = 1; q <= 3; q++) { s += b.uc[(cy - q) * b.CW + cx]; n++; } } return s / n; };
+      const to = ph => { const k = ((ph - b.clock % Sim.DAY / Sim.DAY) + 1) % 1 * Sim.DAY; run(b, Math.round(k) || Sim.DAY); return near(); };
+      const noon = to(0.25), night = to(0.75);
+      console.log(`  wind along the ground near the shore in a calm: ${noon.toFixed(3)} at noon, ${night.toFixed(3)} at night`);
+      check('a sea breeze blows in by day and a land breeze out at night', noon > 0.03 && night < noon - 0.03);
+    }
+  },
   river() {
     // N6: a generated world opens on a river: a spring at the foot of a hill, a sand bed falling steadily to a pond, no trees in the
     // stream. Run, the stream runs the length of its bed into the pond and drops its silt there; it runs high in the spring melt and
