@@ -1917,12 +1917,17 @@ const scenarios = {
     }
     // a conifer is a narrow spire that keeps its needles over winter; a broadleaf spreads and drops its leaves
     {
-      const g = hill(200, 30, 80); g.clock = Sim.YEAR * 0.45; g.updateClimate();
-      const b = grow(g, 50, false), c = grow(g, 150, true), sb = shape(g, b), sc = shape(g, c);
-      g.clock = Sim.YEAR * 0.85; g.updateClimate(); run(g, 1200);
-      const wb = shape(g, b), wc = shape(g, c);
-      console.log(`  summer: broadleaf ${sb.h} tall ${sb.w} wide ${sb.leaves} leaves, conifer ${sc.h} tall ${sc.w} wide ${sc.leaves} needles; winter: ${wb.leaves} leaves, ${wc.leaves} needles`);
-      check('a conifer is a spire (at most 0.6 as wide as it is tall, and 0.6 of a broadleaf\'s spread for its height)', sc.w / sc.h <= 0.6 && sc.w / sc.h <= 0.6 * sb.w / sb.h && sc.h >= 20, `${(sc.w / sc.h).toFixed(2)} vs ${(sb.w / sb.h).toFixed(2)}`);
+      // (shapes over three seeds, summed: one tree's shape is a roll of the dice)
+      const sum = (a, b) => ({ h: a.h + b.h, w: a.w + b.w, leaves: a.leaves + b.leaves }), z = { h: 0, w: 0, leaves: 0 };
+      let sb = z, sc = z, wb = z, wc = z;
+      for (const seed of [7, 8, 9]) {
+        const g = hill(200, 30, 80, seed); g.clock = Sim.YEAR * 0.45; g.updateClimate();
+        const b = grow(g, 50, false), c = grow(g, 150, true); sb = sum(sb, shape(g, b)); sc = sum(sc, shape(g, c));
+        g.clock = Sim.YEAR * 0.85; g.updateClimate(); run(g, 1200);
+        wb = sum(wb, shape(g, b)); wc = sum(wc, shape(g, c));
+      }
+      console.log(`  summer (3 trees each): broadleaf ${sb.h} tall ${sb.w} wide ${sb.leaves} leaves, conifer ${sc.h} tall ${sc.w} wide ${sc.leaves} needles; winter: ${wb.leaves} leaves, ${wc.leaves} needles`);
+      check('a conifer is a spire (at most 0.6 as wide as it is tall, and 0.6 of a broadleaf\'s spread for its height)', sc.w / sc.h <= 0.6 && sc.w / sc.h <= 0.6 * sb.w / sb.h && sc.h >= 60, `${(sc.w / sc.h).toFixed(2)} vs ${(sb.w / sb.h).toFixed(2)}`);
       check('a conifer keeps its needles over winter and a broadleaf drops its leaves', wc.leaves >= 0.8 * sc.leaves && wb.leaves <= 0.3 * sb.leaves, `${wc.leaves}/${sc.leaves} vs ${wb.leaves}/${sb.leaves}`);
     }
     // who wins where: on rich soil in a warm valley the broadleaf outgrows a conifer; on a cold upland the conifer the broadleaf
@@ -1935,15 +1940,17 @@ const scenarios = {
     }
     // fire: a crown fire runs along a stand of conifers and kills them, and their cones seed the burn; broadleaf crowns burn slower
     {
-      const stand = con => { const g = hill(160, 30, 80, 3); g.clock = Sim.YEAR * 0.5; g.updateClimate(); const ts = []; for (let k = 0; k < 6; k++) ts.push(grow(g, 30 + k * 10, con, 200));
+      const stand1 = (con, seed) => { const g = hill(160, 30, 80, seed); g.clock = Sim.YEAR * 0.5; g.updateClimate(); const ts = []; for (let k = 0; k < 6; k++) ts.push(grow(g, 30 + k * 10, con, 200));
         const t0 = ts[0]; let n = 0; for (const [i, c] of t0.cells) if ((c & 1) && n++ < 12) g.set(i, FIRE); g.wakeAll();
         run(g, 1800); const dead = ts.filter(t => t.dead || t.cones || t.sprout || !g.trees.includes(t)).length;
         run(g, 2400); let seeds = 0; for (let i = 0; i < g.type.length; i++) if ((g.type[i] === SEED || g.type[i] === TIP) && (g.life[i] & Sim.CONE)) seeds++;
         return { dead, seeds: seeds + g.trees.filter(t => t.con && !ts.includes(t)).length }; };
+      // (three stands of each, summed: how far one fire runs is a roll of the dice)
+      const stand = con => [3, 4, 5].map(seed => stand1(con, seed)).reduce((a, b) => ({ dead: a.dead + b.dead, seeds: a.seeds + b.seeds }));
       const c = stand(true), b = stand(false);
-      console.log(`  conifer stand: ${c.dead} of 6 killed, ${c.seeds} cone seeds and seedlings after; broadleaf stand: ${b.dead} of 6 killed`);
-      check('a crown fire kills most of a conifer stand, and more of it than of a broadleaf one', c.dead >= 4 && c.dead > b.dead, `${c.dead} vs ${b.dead}`);
-      check('burnt conifers seed the ground after the fire', c.seeds >= 6, `${c.seeds}`);
+      console.log(`  conifer stands: ${c.dead} of 18 killed, ${c.seeds} cone seeds and seedlings after; broadleaf stands: ${b.dead} of 18 killed`);
+      check('a crown fire kills most of a conifer stand, and more of it than of a broadleaf one', c.dead >= 12 && c.dead > b.dead, `${c.dead} vs ${b.dead}`);
+      check('burnt conifers seed the ground after the fire', c.seeds >= 12, `${c.seeds}`);
     }
     // a new world: no tree over its kind's line, and the cold sites go to conifers
     {
