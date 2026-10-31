@@ -18,6 +18,7 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   grass compete seasonfire ... widen (E8) ... landslide frost beams (R5)
                               #   scrub cactus reeds biomes (R6)
                               #   nutrients (R7) vigour narrow (N0)
+                              #   river (N6)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -30,6 +31,7 @@ OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, 
 OX=0 node tools/soil.js [seed] [seasons]   # R7: topsoil and subsoil nutrients by cover (forest, meadow, scrub, bare), each season
 node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, binned by sun and soil
 node tools/forest.js [seed] [seasons]   # N4: broadleaf trees and conifers each season, by site warmth (valley, slope, upland, high)
+node tools/rivers.js [seed] [half-seasons] [ox]   # N6: each river in the window: the stream on its bed, the pond, silt, the delta
 ```
 
 ## Engine (stage 4)
@@ -425,3 +427,33 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
 - Long runs (`tools/forest.js`, 4 years): big lightning and dry-season wildfires kill most trees on main as well. Seed 7 ends
   with 7 trees here against 6 on main, seed 99 with 5 against 5, seed 12345 with 6 against 18. The conifers hold the uplands,
   but four years is too short to see broadleaf trees take valleys back from pioneer conifers.
+
+## Rivers (N6)
+
+- A generated world has a river or two (`riversOf` in the Sim block, from the world seed): one always in the window a new world
+  opens on, and one in each 1600-column block with chance 0.6 where it wouldn't cross the dry country. The terrain is laid out
+  around it (`riverSurf`, blended into the hills): a hill with the spring at its foot, a valley floor falling a steady 1 in 16 to
+  1 in 8 over 240-380 columns, a pond basin 70-110 wide and 10 deep, and a rim past it. The bed is one cell of sand over clay
+  (no tree takes root in it, nothing soaks away through it), no cave opens within 40 cells of the surface along the course, and
+  the pond starts full.
+- The opening window is now mostly river valley: generated there, its forest and meadow are about a third of what they were
+  (bare sand bed, no trees within 8 columns of it). Rivers of 300-480 columns took over half the window, so they were shortened,
+  and `validate.js biomes` samples the wet country at the start and two windows west of it.
+- `Grid.riverCols()` marks the window's columns (spring, bed, pond) for each river lying wholly in the window; a river cut off
+  by the window's edge doesn't run. The spring (`Grid.spring`) lets out `RIVER_FLOW` cells a tick, up to 2.2 times that in the
+  spring melt, less late in the dry season, more in a wet year. It finds the top of the ground itself and washes away litter,
+  grass and snow on it, so nothing clogs it.
+- The stream dries a quarter as fast as standing water (the ground under its bed feeds it). The pond has an outlet at the level
+  of its banks: water over it is taken off the pond's floor, leaving its silt there.
+- What was tried and dropped: soil springs fed by a soaked catchment (a trickle that evaporated a third of the way down), a pond
+  with no outlet (filled its whole valley in two years), a pond sinking into its floor by depth (ran dry), a sand bed three
+  deep (all of it in the pond within three minutes).
+- Tests: `validate.js river` (generation, the stream the length of its bed, the pond holding, a delta, more water in the spring melt
+  than late in summer, no spring for a river cut off by the window or in a flat world). `tools/rivers.js [seed] [half-seasons]`
+  surveys each river in the window over time.
+- Two-year surveys (seeds 12345 and 7): the stream covers its whole bed both years (800-2,200 cells, highest in the spring
+  melt); ponds hold 230-500 cells, and one silts up toward the end of year two as its delta fills the basin.
+- Perf (`tools/ab.js` against main, ticks 600-1200): seed 12345 6.81 vs 7.23 ms avg (p50 equal), seed 7 7.01 vs 6.49,
+  seed 99 6.93 vs 6.67 (about +0.3 ms at p50: the stream and pond stay awake). `threads.js`: 4 threads identical to one.
+- Older saves keep their own land, but a river's spring and outlet run from the world seed, so in an old save the spring
+  turns up wherever its columns now lie, and water standing over the pond's bank row in its columns runs off.
