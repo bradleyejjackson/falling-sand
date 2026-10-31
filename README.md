@@ -4,7 +4,7 @@ A falling-sand simulation prototyped as a single HTML file (`falling-sand.html`)
 
 Hosting: Cloudflare Pages builds every push to main with `node tools/pages.js _site`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`; `tools/_headers` is copied into the output and makes Cloudflare send COOP/COEP, so the worker pool runs there. Setup steps: `docs/cloudflare-pages.md`.
 
-The script has two blocks: `Sim` (pure rules, no DOM; this is what ports to Godot) and the render/input block.
+The script has two blocks: `Sim` (pure rules, no DOM; this is what ports to Godot) and the render/input block. The port's data contract and freeze point: `docs/PORT.md`.
 
 ## Tests
 
@@ -27,6 +27,7 @@ node tools/steady.js [seed] [frames] [warm]   # the step once a new world has se
 node tools/prof.js [seed] [frames]   # the step split by pass (cell pass, soil, air, waves, wind, trees, ...)
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
 BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
+node tools/contract.js [--write]   # X9: the Godot port's data contract (docs/PORT.md, docs/port/*.json) still matches Sim; --write accepts a change
 OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
 OX=0 node tools/soil.js [seed] [seasons]   # R7: topsoil and subsoil nutrients by cover (forest, meadow, scrub, bare), each season
 node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, binned by sun and soil

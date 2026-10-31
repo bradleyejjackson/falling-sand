@@ -1,7 +1,8 @@
 # The Sim engine, for the port
 
 This is the contract the `Sim` block in `falling-sand.html` keeps, written down so a Godot port (C# or GDExtension) can
-reproduce it. The render/input block is browser-only and gets replaced wholesale; everything here lives in `Sim`.
+reproduce it. The render/input block is browser-only and gets replaced wholesale; everything here lives in `Sim`. The data a port
+carries over (fields, elements, `life` layouts, records, the save, every constant) is in [PORT.md](PORT.md), checked against the code.
 
 ## Data
 
