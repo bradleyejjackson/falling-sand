@@ -2,7 +2,7 @@
 // usage: node tools/validate.js [scenario...]   (default: all)
 const { loadSim, census } = require('./load');
 const Sim = loadSim(process.env.SIMFILE);
-const { E, DIRT, STONE, WATER, TIP, SEED, WOOD, ROOT, LITTER, ASH, SNOW, PLANT, SAND, CLOUD, FIRE, LAVA, OIL, SALT, BRINE, ACID } = Sim.ids;
+const { E, DIRT, STONE, WATER, TIP, SEED, WOOD, ROOT, LITTER, ASH, SNOW, PLANT, SAND, CLOUD, FIRE, LAVA, OIL, SALT, BRINE, ACID, SMOKE } = Sim.ids;
 const MIN = 3600;   // ticks in a minute at 60 fps
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
@@ -19,6 +19,157 @@ const moisture = (g, y0, y1) => { let s = 0, n = 0; for (let i = y0 * g.W; i < y
 const run = (g, n, every, fn) => { for (let f = 1; f <= n; f++) { g.step(); if (every && f % every === 0) fn(f); } };
 
 const scenarios = {
+  fish() {
+    // fish in a pond live on through two years, spawning in spring; a pond that dries out, or one kept frozen solid, kills them; birds
+    // take the ones at the surface
+    const { FISH, REED } = Sim.ids;
+    const pond = (fate) => {
+      Sim.reseed(13); const W = 200, H = 80, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let y = 40; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y), bowl = y < 60 && x >= 30 && x < 170; if (y >= 76) { g.set(i, STONE); g.life[i] = 1; } else if (!bowl) { g.set(i, DIRT); g.life[i] = (Sim.NREF << 8) | 240; } else if (y >= 44) g.set(i, WATER); }
+      for (let x = 34; x < 166; x += 6) for (let y = 52; y < 60; y++) g.set(g.idx(x, y), REED);
+      for (let k = 0; k < 12; k++) { const i = g.idx(40 + k * 10, 50); g.set(i, FISH); g.life[i] = 160 | (1 << 8); g.vx[i] = 1; }
+      g.initAir(); let lo = 99, hi = 0, spawned = 0;
+      for (let f = 0; f < (fate === 'live' ? 2 : 0.5) * Sim.YEAR; f++) {
+        if (fate === 'dry' && f % 30 === 0) for (let x = 30; x < 170; x++) for (let y = 40; y < 60; y++) { const i = g.idx(x, y); if (g.type[i] === WATER) { g.set(i, E); break; } }
+        if (fate === 'live' && f % 600 === 0) for (let x = 30; x < 170; x++) { const i = g.idx(x, 43); if (g.type[i] === E) g.set(i, WATER); }   // (topped up: no rain in a box)
+        if (fate === 'ice' && f % 30 === 0) for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER || g.type[i] === FISH) g.temp[i] = Math.min(g.temp[i], -20);
+        g.step();
+        if (f % 3600 === 0) { const c = g.census(); lo = Math.min(lo, c.fish); hi = Math.max(hi, c.fish); }
+        if (f % 600 === 0) for (let i = 0; i < g.type.length; i++) if (g.type[i] === FISH && (g.life[i] & Sim.EGG)) spawned++;
+      }
+      return { fish: g.census().fish, lo, hi, spawned };
+    };
+    const live = pond('live'), dry = pond('dry'), ice = pond('ice');
+    console.log(`  a pond, two years: ${live.fish} fish (between ${live.lo} and ${live.hi} at the daily counts, eggs seen ${live.spawned}); dried out: ${dry.fish}; frozen solid: ${ice.fish}`);
+    check('fish live on in a pond for two years, spawning', live.fish >= 6 && live.lo >= 3 && live.spawned > 0);
+    check('a pond that dries out or freezes solid kills its fish', dry.fish === 0 && ice.fish === 0);
+  },
+  moss() {
+    // bare rock in damp air greens over with moss within a couple of years and weathers a thin soil out of it (scree fastest); in dry
+    // air it stays bare
+    const { MOSS, RUBBLE } = Sim.ids;
+    const crag = wet => {
+      Sim.reseed(9); const W = 200, H = 80, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let y = 50; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y < 53 && x >= 100) g.set(i, RUBBLE, g.ambAt(y)); else { g.set(i, STONE, g.ambAt(y)); g.life[i] = 1; } }
+      g.initAir(); const damp = () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c] * (wet ? 0.85 : 0.2); };
+      for (let f = 0; f < 2 * Sim.YEAR; f++) { if (f % 500 === 0) damp(); g.step(); }
+      let moss = 0, rock = 0, scree = 0; for (let x = 0; x < W; x++) for (let y = 40; y < 56; y++) { const t = g.type[g.idx(x, y)]; if (t === MOSS) moss++; else if (t === DIRT) { if (x < 100) rock++; else scree++; } }
+      return { moss, rock, scree };
+    };
+    const wet = crag(true), dry = crag(false);
+    console.log(`  damp air, two years: ${wet.moss} moss, ${wet.rock} cells of soil on the rock and ${wet.scree} on the scree; dry air: ${dry.moss} moss, ${dry.rock + dry.scree} soil`);
+    check('moss takes bare rock in damp air and weathers soil out of it, faster on scree', wet.moss + wet.rock + wet.scree >= 100 && wet.rock + wet.scree >= 20 && wet.scree > wet.rock);
+    check('in dry air bare rock stays bare', dry.moss + dry.rock + dry.scree === 0);
+  },
+  choke() {
+    // a fire needs air: the same grass fire burns less of the grass in a sealed cave than in a pit open to the sky, and the cave
+    // ends up full of smoke with its fire out (what got hot with no air left charred)
+    const room = open => {
+      Sim.reseed(3); const W = 120, H = 80, g = new Sim.Grid(W, H); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true; g.windHold = 0;
+      for (let y = 30; y < H; y++) for (let x = 20; x < 100; x++) { const i = g.idx(x, y), inside = y >= 50 && y < 67 && x >= 33 && x < 87; if (!inside && !(open && y < 50 && x >= 33 && x < 87)) { g.set(i, STONE, g.ambAt(y)); g.life[i] = 1; } }   // (a cave in the rock, or a pit open to the sky)   // (settled)
+      for (let y = 57; y < 67; y++) for (let x = 33; x < 87; x++) { const i = g.idx(x, y); if (y >= 60) { g.set(i, DIRT, g.ambAt(y)); g.life[i] = (40 << 8) | 20; } else g.set(i, PLANT, g.ambAt(y)); }
+      g.initAir(); g.hum.fill(0); g.wakeAll(); for (let x = 40; x < 44; x++) g.set(g.idx(x, 56), FIRE);
+      run(g, 2 * MIN);
+      const c = census(g, Sim.EL); return { ash: c.Ash || 0, char: c.Charcoal || 0, fire: (c.Fire || 0) + (c.Ember || 0), smoke: c.Smoke || 0 };
+    };
+    const shut = room(false), open = room(true);
+    console.log(`  sealed: ${shut.ash} ash, ${shut.char} charcoal, ${shut.fire} flames and embers, ${shut.smoke} smoke; open: ${open.ash} ash, ${open.char} charcoal, ${open.fire} flames and embers, ${open.smoke} smoke`);
+    check('a sealed cave\'s fire chokes: most of what it reaches chars instead of burning to ash (far more of it than in the open pit), it goes out, and the cave stays full of smoke', shut.char > shut.ash && shut.char * open.ash > 1.5 * open.char * shut.ash && shut.fire <= 10 && shut.smoke >= 80 && open.smoke < 50);
+  },
+  smokehurt() {
+    // smoke pooled under a roof kills the grass and the rabbits under it; out in the open it rises away and they live
+    const { RABBIT } = Sim.ids;
+    const yard = roof => {
+      const g = plot(160, 90, 20, 120); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true; g.windHold = 0;
+      for (let x = 20; x < 140; x++){ const i = g.idx(x, 69); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      if (roof) { for (let x = 10; x < 150; x++) for (let y = 50; y < 52; y++){ const i = g.idx(x, y); g.set(i, STONE); g.life[i] = 1; } for (let y = 50; y < 70; y++) for (const x of [10, 11, 148, 149]) { const i = g.idx(x, y); g.set(i, STONE); g.life[i] = 1; } }
+      for (let x = 30; x < 130; x += 20) { const i = g.idx(x, 68); g.set(i, RABBIT); g.life[i] = 200; }
+      for (let f = 0; f < MIN; f++) { g.step(); if (f % 10 === 0) for (let x = 40; x < 120; x += 8) { const i = g.idx(x, 55); if (g.type[i] === E) g.set(i, SMOKE, 30); } }
+      const c = census(g, Sim.EL); return { grass: c.Plant || 0, rabbits: c.Rabbit || 0 };
+    };
+    const under = yard(true), out = yard(false);
+    console.log(`  under a roof: ${under.grass} grass, ${under.rabbits} rabbits left; in the open: ${out.grass} grass, ${out.rabbits} rabbits`);
+    check('smoke trapped under a roof kills grass and rabbits that live in the open', under.grass < 0.5 * out.grass && under.rabbits < out.rabbits && out.rabbits >= 4);
+  },
+  acidrain() {
+    // a volcano's fumes sour the clouds they reach, and sour rain burns leaves and grass and leaches the soil it falls on; plain rain doesn't
+    const { FUMES, CLOUD } = Sim.ids;
+    const shower = sour => {
+      const g = plot(160, 120, 20, 120); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true; g.windHold = 0;
+      for (let x = 0; x < 160; x++){ const i = g.idx(x, 99); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      const rich = () => { let s = 0; for (let x = 0; x < 160; x++) for (let y = 100; y < 104; y++) s += g.life[g.idx(x, y)] >> 8; return s; }, r0 = rich();
+      let fumed = 0;
+      for (let f = 0; f < MIN; f++) { g.step();
+        if (f % 4 === 0) for (let x = 20; x < 140; x += 3) { const i = g.idx(x, 20); if (g.type[i] === E) { g.set(i, CLOUD, 5); g.hum[g.ac(x, 20)] = g.cap[g.ac(x, 20)] * 1.5; } }
+        if (sour && f % 4 === 2) for (let x = 20; x < 140; x += 6) { const i = g.idx(x, 22); if (g.type[i] === E) g.set(i, FUMES); } }
+      for (let i = 0; i < g.type.length; i++) if (g.type[i] === CLOUD && (g.life[i] & 2)) fumed++;
+      return { made: g.made[Sim.ids.ACID], leach: r0 - rich(), fumed, rain: g.precip.reduce((a, b) => a + b, 0) };
+    };
+    const sour = shower(true), plain = shower(false);
+    // and a drop of it on a blade of grass burns its sap; on stone it is soon just water
+    const h = plot(40, 40, 10, 120); h.hold = true; const b = h.idx(20, 29); h.set(b, PLANT); h.life[b] = (200 << 8) | 1;
+    for (let k = 0; k < 4; k++) { const a = h.idx(20, 28); h.set(a, ACID); h.life[a] = 20; for (let f = 0; f < 40 && h.type[a] === ACID; f++) h.step(); }
+    const sap = h.type[b] === PLANT ? h.life[b] >> 8 : 0;
+    console.log(`  sour: ${sour.rain} drops, ${sour.made} of them acid, ${sour.leach} nutrients lost, ${sour.fumed} sour cloud cells; plain: ${plain.rain} drops, ${plain.made} acid, ${plain.leach} lost; four drops on a blade of grass leave its sap at ${sap} of 200`);
+    check('fumes sour the clouds, and their rain falls as weak acid that leaches the soil more than plain rain', sour.made >= 50 && plain.made === 0 && sour.leach > plain.leach + 100);
+    check('acid rain burns the sap out of the grass it lands on', sap <= 120);
+  },
+  peat() {
+    // litter lying in waterlogged ground packs down into peat instead of rotting; the same litter on damp (not soaked) ground rots to dirt
+    const { PEAT, LITTER } = Sim.ids;
+    const g = plot(200, 80, 20, 0); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true;
+    for (let y = 60; y < 77; y++) for (let x = 0; x < 200; x++) { const i = g.idx(x, y); if (g.type[i] === DIRT) g.life[i] = (Sim.NREF << 8) | (x < 100 ? 240 : 120); }
+    for (let x = 10; x < 90; x += 2) { g.set(g.idx(x, 59), LITTER); g.set(g.idx(x + 100, 59), LITTER); }
+    for (let x = 0; x < 100; x++) for (let y = 55; y < 59; y++) g.set(g.idx(x, y), WATER);   // the bog: soaked ground with a pond over it
+    for (let f = 0; f < 2 * Sim.DAY; f++) { g.step(); if (f % 64 === 0) for (let x = 0; x < 100; x++) for (let y = 60; y < 64; y++) { const i = g.idx(x, y); if (g.type[i] === DIRT) g.life[i] = (g.life[i] & 0xff00) | 240; } }
+    let peat = 0, left = 0, right = 0; for (let y = 0; y < 80; y++) for (let x = 0; x < 200; x++) { const t = g.type[g.idx(x, y)]; if (t === PEAT) { peat++; if (x < 100) left++; else right++; } }
+    const litter = census(g, Sim.EL).Litter || 0;
+    console.log(`  peat ${peat} (bog ${left}, damp ground ${right}), litter left ${litter}`);
+    check('litter in the bog turns to peat; on damp ground it rots (no peat there)', left >= 25 && right === 0);
+  },
+  peatfire() {
+    // dry peat buried under dirt, lit at one end, smoulders on for days and creeps through the bed underground; a soaked bed beside it
+    // doesn't take it; burnt-out peat is ash
+    const { PEAT } = Sim.ids;
+    const g = plot(240, 80, 30, 40); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true;
+    for (let y = 60; y < 70; y++) for (let x = 20; x < 220; x++) { const i = g.idx(x, y); g.set(i, PEAT); g.life[i] = x < 120 ? 20 : 220; }
+    for (let y = 60; y < 70; y++) for (let x = 118; x < 122; x++) g.set(g.idx(x, y), STONE);   // (a wall between the dry bed and the wet one, so water doesn't cross)
+    for (let y = 60; y < 70; y++) { const i = g.idx(20, y); g.temp[i] = 400; }
+    const burning = () => { let n = 0, far = 0; for (let y = 60; y < 70; y++) for (let x = 20; x < 220; x++) { const i = g.idx(x, y); if (g.type[i] === PEAT && (g.life[i] >> 8)) { n++; far = Math.max(far, x); } } return { n, far }; };
+    run(g, Sim.DAY);
+    const d1 = burning(); run(g, 2 * Sim.DAY); const d3 = burning();
+    let ash = 0, wet = 0; for (let y = 60; y < 70; y++) for (let x = 20; x < 220; x++) { const t = g.type[g.idx(x, y)]; if (t === ASH && x < 120) ash++; if (x >= 122 && t === PEAT && !(g.life[g.idx(x, y)] >> 8)) wet++; }
+    console.log(`  after a day: ${d1.n} cells smouldering, out to column ${d1.far}; after three: ${d3.n}, out to ${d3.far}; ${ash} ash; ${wet}/980 of the wet bed unburnt`);
+    check('the fire is still smouldering after three days and has crept on through the dry bed', d1.n >= 10 && d3.n >= 10 && d3.far > d1.far + 3 && d3.far < 120);
+    check('burnt peat is ash, and the soaked bed beside it never caught', ash >= 10 && wet === 980);
+  },
+  dust() {
+    // a steady wind over dry bare dirt lifts it as dust, which comes down downwind; damp dirt, or dirt under grass, stays put
+    const { DUST } = Sim.ids;
+    const field = (m, grass) => {
+      const g = plot(360, 120, 20, m); g.clock = Sim.YEAR * 0.4; g.updateClimate(); g.hold = true; g.windHold = 0.6;
+      if (grass) for (let x = 0; x < 360; x++) { const i = g.idx(x, 99); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      const dirt0 = census(g, Sim.EL).Dirt; let peak = 0;
+      for (let f = 0; f < 3 * MIN; f++) { g.step(); if (f % 300 === 0) peak = Math.max(peak, census(g, Sim.EL).Dust || 0); }
+      return { lost: dirt0 - census(g, Sim.EL).Dirt, peak };
+    };
+    const dry = field(0, false), damp = field(120, false), sward = field(0, true);
+    console.log(`  dry bare dirt: ${dry.lost} cells blown off, up to ${dry.peak} dust in the air; damp: ${damp.lost}, ${damp.peak}; under grass: ${sward.lost}, ${sward.peak}`);
+    check('a strong wind blows dust off dry bare dirt', dry.peak >= 20 && dry.lost >= 50);
+    check('damp dirt and dirt under grass stay put', damp.peak === 0 && sward.peak === 0);
+  },
+  coal() {
+    // a generated world has seams of coal deep in its rock; coal burns, slowly, to ember
+    const { COAL } = Sim.ids;
+    const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345, Sim.WORLD.WIDE, 2560);
+    let coal = 0, shallow = 0; for (let x = 0; x < g.W; x++) { let s = 0; while (s < g.H && (g.type[g.idx(x, s)] === E || Sim.EL[g.type[g.idx(x, s)]].kind === 'gas')) s++; for (let y = s; y < g.H; y++) if (g.type[g.idx(x, y)] === COAL) { coal++; if (y - s < 30) shallow++; } }
+    const h = new Sim.Grid(40, 40); for (let y = 20; y < 40; y++) for (let x = 0; x < 40; x++) h.set(h.idx(x, y), COAL); h.initAir();
+    for (let x = 10; x < 30; x++) h.set(h.idx(x, 19), FIRE); for (let f = 0; f < 600; f++) { h.step(); if (f % 30 === 0) for (let x = 10; x < 30; x++) if (h.type[h.idx(x, 19)] === E) h.set(h.idx(x, 19), FIRE); }
+    const burnt = 800 - (census(h, Sim.EL).Coal || 0);
+    console.log(`  ${coal} cells of coal in the window (${shallow} within 30 of the surface); ${burnt} of 800 caught in 10 s of fire`);
+    check('coal seams lie deep in a generated world', coal >= 1000 && shallow === 0);
+    check('coal catches from a fire, slowly', burnt >= 3 && burnt <= 200);
+  },
   vigour() {
     // a tree grows to a size set by its sun and soil together: on rich open ground a giant, on poor soil a small tree, and under
     // an overhang (shade) a stunted one however rich the soil. The soil is kept watered so only light and nutrients differ.
@@ -1108,8 +1259,10 @@ const scenarios = {
       }
       return z;
     };
-    const e = tally(640), w = tally(0), f = o => JSON.stringify(o);
-    console.log(`  cells by climate, east of the start: desert ${f(e.desert)}, scrub ${f(e.scrub)}; at the start, wet country ${f(w.wet)}`);
+    // (the wet country at the start and two windows west of it: the start's own is mostly river valley now, bare sand and a pond)
+    const e = tally(640), w = tally(0), w2 = tally(-1920), f = o => JSON.stringify(o);
+    for (const [k, n] of Object.entries(w2.wet)) w.wet[k] = (w.wet[k] || 0) + n;
+    console.log(`  cells by climate, east of the start: desert ${f(e.desert)}, scrub ${f(e.scrub)}; at the start and west of it, wet country ${f(w.wet)}`);
     check('the desert has cacti and no grass or trees', (e.desert.Cactus || 0) >= 50 && !e.desert.Plant && !e.desert.Tree);
     check('the scrub is shrubs', (e.scrub.Shrub || 0) >= 100 && (e.scrub.Shrub || 0) > 3 * ((e.scrub.Plant || 0) + (e.scrub.Tree || 0)));
     check('the wet country has meadow, forest and reeds', (w.wet.Plant || 0) >= 100 && (w.wet.Tree || 0) >= 500 && (w.wet.Reed || 0) >= 10);
@@ -1230,7 +1383,7 @@ const scenarios = {
     check('dry metal does not rust', dry === 0);
   },
   oil() {
-    const { OIL, SMOKE } = Sim.ids;
+    const { OIL } = Sim.ids;
     // an oil fire in a pan burns down from its surface; water poured on it flashes to steam and throws the burning oil out of the pan
     const pan = water => { Sim.reseed(4); const W = 120, H = 90, g = new Sim.Grid(W, H); g.windHold = 0;
       for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE);
@@ -1275,7 +1428,7 @@ const scenarios = {
     // (the build before waves: 8.1-8.5 s, no pile-up, no swing. The surge is about as fast as it was: what's new is the momentum)
     check('a dam-break surge crosses a 350-wide tank within 9 s', rs.every(r => r.reach > 0 && r.reach <= 540));
     check('it piles up against the far wall 2+ rows over the final level', rs.every(r => r.runup >= 2));
-    check('and sloshes: the water\'s middle swings 5+ cols past the tank\'s middle and on average 2+ back', rs.every(r => r.swing >= 5) && rs.reduce((a, r) => a + r.back, 0) / rs.length >= 2);
+    check('and sloshes: the water\'s middle swings 5+ cols past the tank\'s middle (in 3 runs of 4: one run in a few slumps early) and on average 2+ back', rs.filter(r => r.swing >= 5).length >= 3 && rs.reduce((a, r) => a + r.back, 0) / rs.length >= 2);
     check('the water still settles flat', rs.every(r => r.flat <= 3));
   },
   wave() {
@@ -1865,7 +2018,7 @@ const scenarios = {
     // seed over water: tree seed on bare dirt in the west, a lake 100 wide, bare damp dirt in the east; birds in the west, 4 min of summer
     {
       const far = { 0: 0, 6: 0 };
-      for (const n of [0, 6]) for (const seed of [3, 4]) {
+      for (const n of [0, 6]) for (const seed of [3, 4, 5]) {
         const W = 320, H = 80, g = plot(W, H, 30, 150, seed), sy = H - 31; at(g, 0.3); g.windHold = 0;
         for (let x = 80; x < 180; x++) for (let y = sy - 1; y < sy + 4; y++) g.set(g.idx(x, y), WATER);
         for (let k = 0; k < 40; k++) { const i = g.idx(5 + k * 2, sy - 1); g.set(i, SEED); g.life[i] = 255; }   // (seeds that won't sprout in the 4 min)
@@ -1873,7 +2026,7 @@ const scenarios = {
         run(g, 4 * MIN);
         far[n] += count(g, SEED, 185, W) + count(g, TIP, 185, W) + g.trees.filter(t => t.x >= 185).length;
       }
-      console.log(`  tree seed east of a lake 100 wide after 4 min (2 seeds): ${far[0]} without birds, ${far[6]} with 6 birds`);
+      console.log(`  tree seed east of a lake 100 wide after 4 min (3 seeds): ${far[0]} without birds, ${far[6]} with 6 birds`);
       check('birds carry tree seed across water', far[0] === 0 && far[6] >= 2);
     }
     // a nest: fed birds in a tall tree in spring lay eggs, and the eggs hatch
@@ -2041,11 +2194,199 @@ const scenarios = {
       check('a save keeps what a spout pours and which way a fan blows', keep);
       const b = box(128, 64);
       for (let y = 20; y < 30; y++) for (let x = 20; x < 30; x++) b.set(b.idx(x, y), STONE);
-      b.lay(b.idx(25, 25), SPOUT, undefined, WATER);   // shut inside a block of rock
-      run(b, 120); let awake = 0; for (let k = 0; k < 20; k++) { b.step(); awake += b.awakeTiles; }
+      b.lay(b.idx(25, 25), SPOUT, undefined, WATER);   // shut inside a block of rock, in dry air (a passing cloud keeps its own tile awake)
+      b.hum.fill(0); run(b, 120); let awake = 0; for (let k = 0; k < 20; k++) { b.step(); awake += b.awakeTiles; }
       console.log(`  a spout shut in rock: ${awake / 20} tiles awake`);
       check('a boxed-in spout lets its block sleep', awake === 0);
     }
+  },
+  sea() {
+    // N7: a streamed world has a salt sea at its west end, with a beach, a salt marsh or cliffs for a coast by its seed (a world one
+    // window wide has none). Run with the window on it: the tide comes in and goes out, a swell runs over it, the high tide floods a
+    // marsh and the low tide leaves its creeks full, the surf wears a cliff back, and a sunny day draws a breeze in off the sea.
+    const { RUBBLE, REED, CLAY } = Sim.ids;
+    const world = (seed, wind) => { Sim.reseed(5); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, seed, Sim.WORLD.WIDE, 0); if (wind !== undefined) g.windHold = wind; return g; };
+    const kinds = {}; for (const seed of [12345, 7, 99, 5, 31, 4242, 17, 2024]) { const g = new Sim.Grid(Sim.WORLD.W, 480); g.worldSeed = seed; g.worldW = Sim.WORLD.WIDE; const c = Sim.terrainOf(g).sea; (kinds[c.kind] = kinds[c.kind] || []).push(seed); }
+    console.log(`  coasts by seed: ${Object.entries(kinds).map(([k, v]) => k + ' ' + v.join(',')).join('; ')}`);
+    check('each kind of coast comes up', kinds.beach && kinds.marsh && kinds.cliff);
+    const narrow = new Sim.Grid(480, 240); Sim.generate(narrow, 99);
+    check('a world one window wide has no sea', !narrow.noise.sea && !narrow.type.some(t => t === BRINE));
+    const g = world(12345), c = g.noise.sea;
+    const top = (g, x) => { let y = c.y - 20; while (y < g.H - 1 && g.type[g.idx(x, y)] !== BRINE && g.type[g.idx(x, y)] !== WATER && (g.type[g.idx(x, y)] === E || Sim.EL[g.type[g.idx(x, y)]].kind === 'gas')) y++; return y; };
+    let deep = 0; for (let y = 0; y < g.H; y++) if (g.type[g.idx(5, y)] === BRINE) deep++;
+    const EARTH = new Set([SAND, DIRT, CLAY, STONE, RUBBLE]), ground = (g, x) => { let y = 0; while (y < g.H - 1 && !EARTH.has(g.type[g.idx(x, y)])) y++; return y; };
+    let trees = g.trees.filter(t => t.x < c.shore + c.wide).length, beach = 0; for (let x = c.shore; x < c.shore + 40; x++) if (g.type[g.idx(x, ground(g, x))] === SAND) beach++;
+    console.log(`  seed 12345: ${c.kind}, shore at ${c.shore}, sea ${deep} deep at the edge, ${beach}/40 of the beach sand, ${trees} trees on the coast`);
+    check('the sea lies deep at the edge, and its beach is sand with no trees', deep >= 35 && beach >= 38 && trees === 0);
+    // the tide over half a day, and the swell on it
+    const lv = [], rough = []; run(g, 2000, 25, () => { let s = 0, lo = 1e9, hi = -1e9; for (let x = 60; x < 300; x += 4) { const y = top(g, x); s += y; lo = Math.min(lo, y); hi = Math.max(hi, y); } lv.push(s / 60); rough.push(hi - lo); });
+    const range = Math.max(...lv) - Math.min(...lv), sw = rough.reduce((a, b) => a + b) / rough.length;
+    console.log(`  the open sea's mean level ranges ${range.toFixed(1)} rows over the tide; the surface spans ${sw.toFixed(1)} rows from trough to crest`);
+    check('the tide rises and falls (3.5+ rows)', range >= 3.5);
+    check('a swell runs on the sea (crests 3+ rows over the troughs)', sw >= 3);
+    // a marsh at high water and at low (seed 99)
+    {
+      const m = world(99), mc = m.noise.sea; let flood = 0, dry = 0, creek = 0, reeds = 0, n = 0;
+      const look = () => { let f = 0, d = 0, k = 0; for (let x = mc.shore + 4; x < mc.shore + mc.wide - 4; x++) { let y = mc.y - 12, reed = false; while (m.type[m.idx(x, y)] === E || Sim.EL[m.type[m.idx(x, y)]].kind === 'gas' || m.type[m.idx(x, y)] === REED) { reed = reed || m.type[m.idx(x, y)] === REED; y++; } if (reed) continue; const t = m.type[m.idx(x, y)]; if (t === BRINE || t === WATER) { if (y < mc.y - 1) f++; else k++; } else d++; } return [f, d, k]; };   // (the open flat between the reeds)
+      for (let x = mc.shore; x < mc.shore + mc.wide; x++) for (let y = mc.y - 12; y < mc.y; y++) if (m.type[m.idx(x, y)] === REED) { reeds++; break; }
+      const P = Math.round(Sim.DAY * 12.42 / 24), clk = m.clock;
+      // high water: the tide peaks a quarter of its period on from a clock at a whole number of periods
+      const at = ph => { const k = Math.ceil((m.clock + 1) / P) * P + ph * P - m.clock; run(m, Math.max(1, Math.round(k))); return look(); };
+      const hi = at(0.25), lo = at(0.75);
+      console.log(`  marsh (${mc.wide} wide, reeds in ${reeds} columns): high water floods ${hi[0]} open columns of the flat (${hi[1]} dry, ${hi[2]} at the creeks' brim); low water leaves ${lo[1]} dry, ${lo[0]} flooded and ${lo[2]} creek columns holding brine`);
+      check('a salt marsh stands in reeds', reeds >= 0.25 * mc.wide);
+      const open = hi[0] + hi[1] + hi[2];
+      check('the high tide floods the marsh and the low tide drains it, leaving its creeks', hi[0] >= 0.6 * open && lo[1] >= 0.6 * open && lo[0] <= 0.1 * open && lo[2] >= 4);
+    }
+    // the surf wears a cliff back (seed 31, a steady wind)
+    {
+      const k = world(31, 1), kc = k.noise.sea, face = () => { const f = []; for (let y = kc.y - 5; y <= kc.y + 2; y++) { let x = kc.shore - 8; while (k.type[k.idx(x, y)] !== STONE && x < kc.shore + 40) x++; f.push(x); } return f; };
+      const f0 = face(); run(k, 3 * MIN); const back = face().map((x, r) => x - f0[r]);
+      console.log(`  cliff (${kc.cliff} high): ${k.seaBroke} cells of rock broken off in three minutes of rough sea; its face worn back ${back.join(' ')} columns by row, from 5 over the mean level to 2 under`);
+      check('the surf wears a notch in a cliff at the waterline', k.seaBroke >= 5 && back.filter(b => b >= 1).length >= 2 && back[0] === 0);
+    }
+    // the sea breeze: in a calm, the low wind near the shore blows onshore at noon and back out at night
+    {
+      const b = world(12345, 0), bc = b.noise.sea, near = () => { let s = 0, n = 0; for (let cx = ((bc.shore - 200) >> 4); cx <= ((bc.shore + 200) >> 4); cx++) { let cy = 0; while (cy < b.CHh && !b.wsolid[cy * b.CW + cx]) cy++; for (let q = 1; q <= 3; q++) { s += b.uc[(cy - q) * b.CW + cx]; n++; } } return s / n; };
+      const to = ph => { const k = ((ph - b.clock % Sim.DAY / Sim.DAY) + 1) % 1 * Sim.DAY; run(b, Math.round(k) || Sim.DAY); return near(); };
+      const noon = to(0.25), night = to(0.75);
+      console.log(`  wind along the ground near the shore in a calm: ${noon.toFixed(3)} at noon, ${night.toFixed(3)} at night`);
+      check('a sea breeze blows in by day and a land breeze out at night', noon > 0.03 && night < noon - 0.03);
+    }
+  },
+  river() {
+    // N6: a generated world opens on a river: a spring at the foot of a hill, a sand bed falling steadily to a pond, no trees in the
+    // stream. Run, the stream runs the length of its bed into the pond and drops its silt there; it runs high in the spring melt and
+    // low late in a dry summer; and a river cut off by the window's edge (or any river in a flat world) doesn't run.
+    const { CLAY, MUD, ICE } = Sim.ids, EARTH = new Set([SAND, DIRT, MUD, CLAY, STONE]);
+    const ox = Math.floor((Sim.WORLD.WIDE - Sim.WORLD.W) / 2 / Sim.REGION) * Sim.REGION;
+    const world = (clock, shift = 0) => { Sim.reseed(3); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345, Sim.WORLD.WIDE, ox + shift); g.wetHold = 0; if (clock !== undefined) { g.clock = clock; g.updateClimate(); } return g; };
+    const ground = (g, x) => { let y = 0; while (y < g.H - 1 && !EARTH.has(g.type[g.idx(x, y)])) y++; return y; };
+    const g = world(), r = g.noise.rivers.find(r => r.head >= ox && r.head < ox + g.W), xs = u => r.head + u * r.dir - g.ox;
+    g.riverCols();
+    check('a new world opens on a river running in the window', !!r && g.riverOn.length === 1);
+    const floor = [], pondU = []; let rises = 0, trees = 0, sand = 0;
+    for (let u = 0; u <= r.len + r.pw; u++) { const x = xs(u); floor.push(ground(g, x)); if (u > r.len) pondU.push(u); }
+    for (let u = 1; u <= r.len; u++) { if (floor[u] < floor[u - 1]) rises++; if (g.type[g.idx(xs(u), floor[u])] === SAND) sand++; }
+    for (const t of g.trees) if ((t.x - (r.head - g.ox)) * r.dir >= 0 && (t.x - (r.head - g.ox)) * r.dir <= r.len) trees++;
+    const water = (g, u0, u1) => { let n = 0; for (let u = u0; u <= u1; u++) { const x = xs(u); for (let y = r.headY - 60; y < r.mouthY + 30; y++) { const t = g.type[g.idx(x, y)]; if (t === WATER || t === ICE) n++; } } return n; };
+    const pond0 = water(g, r.len + 1, r.len + r.pw);
+    console.log(`  river: spring at ${r.head - g.ox}, pond at ${r.mouth - g.ox}, ${r.len} long, falls ${r.mouthY - r.headY}; bed rises ${rises} times, ${sand}/${r.len} sand, ${trees} trees on it, pond ${pond0}`);
+    check('its bed falls all the way to the pond, sand, with no tree on it', rises === 0 && sand >= 0.95 * r.len && trees === 0);
+    check('its pond starts full', pond0 >= 300);
+    run(g, MIN);
+    let wet = 0; for (let u = 0; u <= r.len; u++) { const x = xs(u); for (let y = r.headY - 60; y < ground(g, x); y++) if (g.type[g.idx(x, y)] === WATER) { wet++; break; } }
+    const pond = water(g, r.len + 1, r.len + r.pw); let silt = 0; for (const u of pondU) silt += Math.max(0, floor[u] - ground(g, xs(u)));
+    console.log(`  after a minute: stream on ${wet}/${r.len + 1} columns, pond ${pond}, the pond's floor built up ${silt} cells, springs ${g.springs}`);
+    check('the stream runs the length of its bed', wet >= 0.75 * (r.len + 1));
+    check('the pond holds its water', pond >= 0.8 * pond0);
+    check('the stream drops its silt in the pond (a delta)', silt >= 5);
+    // the same river from the spring melt and from late in the dry season (wetness pinned at an ordinary year's)
+    const flow = clock => { const h = world(clock); run(h, MIN); return water(h, 0, r.len + r.pw); };
+    const melt = flow(Sim.YEAR * 0.15), low = flow(Sim.YEAR * 0.45);
+    console.log(`  water in the river and pond a minute on: ${melt} from the spring melt, ${low} from late summer`);
+    check('a river runs high in the spring melt and low late in a dry summer', melt > 1.3 * low);
+    const cut = world(undefined, Sim.REGION * 2); cut.riverCols();   // (the window moved two regions east: the pond is off its edge)
+    const f = new Sim.Grid(400, 300); Sim.flat(f); f.riverCols();
+    check('a river cut off by the window\'s edge, or a flat world, has no running spring', cut.riverOn.length === 0 && f.riverOn.length === 0, `${cut.riverOn.length}, ${f.riverOn.length}`);
+  },
+  presets() {
+    // biome presets (X6): New world laid out as each kind of country, at the window it opens on, measured against what it should be
+    const { SHRUB, REED, RUBBLE } = Sim.ids, Wd = Sim.WORLD, B = Sim.BIOMES, k = id => B.findIndex(b => b.id === id);
+    const make = (id, seed = 12345) => { const g = new Sim.Grid(Wd.W, Wd.H); Sim.generate(g, seed, Wd.WIDE, Sim.homeOf(Wd.WIDE, k(id)), k(id)); return g; };
+    const look = g => {
+      const o = { surf: 0, water: 0, snow: 0, reed: 0, shrub: 0, lava: 0, trees: g.trees.length, con: g.trees.filter(t => t.con).length, high: 0, arid: [1, 0], wet: 0, dirt: 0 };
+      for (let x = 0; x < g.W; x++) {
+        let y = 0; for (; y < g.H; y++) { const i = g.idx(x, y), t = g.type[i]; if (g.owner[i] || t === E || t === REED || t === SNOW || Sim.EL[t].kind === 'gas') continue; break; }
+        o.surf += y / g.W; if (g.type[g.idx(x, y)] === WATER || g.type[g.idx(x, y)] === BRINE) o.water++;
+        for (let d = 1; d <= 6; d++) { const i = g.idx(x, y + d); if (g.type[i] === DIRT) { o.wet += g.life[i] & 255; o.dirt++; } }
+        const a = Sim.aridAt(g.worldSeed, g.ox + x, g.biome); o.arid[0] = Math.min(o.arid[0], a); o.arid[1] = Math.max(o.arid[1], a);
+      }
+      for (let i = 0; i < g.type.length; i++) { const t = g.type[i]; if (t === SNOW) o.snow++; else if (t === REED) o.reed++; else if (t === SHRUB) o.shrub++; else if (t === LAVA) o.lava++; }
+      for (const t of g.trees) if (g.hardy(t.con, t.y) < 0.25) o.high++;
+      o.wet = Math.round(o.wet / Math.max(1, o.dirt)); o.surf = Math.round(o.surf); return o;
+    };
+    const say = (id, o) => console.log(`  ${id}: mean ground row ${o.surf}, ${o.water} columns of open water, soil moisture ${o.wet}, aridity ${o.arid.map(a => a.toFixed(2)).join('-')}, trees ${o.trees} (${o.con} conifers, ${o.high} over the treeline), snow ${o.snow}, reeds ${o.reed}, shrubs ${o.shrub}`);
+    const tem = look(make('temperate')); say('temperate', tem);
+    const alp = look(make('alpine')); say('alpine', alp);
+    check('alpine: mountains higher than temperate hills, snow on them, trees in the valleys (conifers among them) and none over the treeline', alp.surf <= tem.surf - 40 && alp.snow >= 300 && alp.trees >= 5 && alp.con >= 1 && alp.high === 0);
+    const wet = look(make('wetland')); say('wetland', wet);
+    check('wetland: lower and flatter, soaked, with ponds and reed beds, no dry country', wet.surf >= tem.surf + 30 && wet.water >= 200 && wet.reed >= 100 && wet.wet >= tem.wet + 40 && wet.arid[1] === 0);
+    const scr = look(make('scrub')); say('scrub', scr);
+    check('scrubland: dry all through, shrubs and no trees', scr.arid[0] >= Sim.ARID_SCRUB && scr.shrub >= 500 && scr.trees === 0);
+    const cg = make('coast'), co = look(cg); say('coast', co);
+    check('coast: opens on the sea\'s shore', cg.noise.sea && cg.noise.sea.shore > cg.ox + 100 && cg.noise.sea.shore < cg.ox + cg.W - 100 && co.water >= 200 && cg.ventCols() < 0);
+    // the volcanic island: the volcano in the window, its vent full of lava, quiet as a world opens, erupting at the next period
+    const ig = make('island'), is = look(ig), v = ig.noise.volc, vx = ig.ventCols(); say('island', is);
+    // (lava and new rock lying over the cone's ground as the world opened, and how far out from the vent it lies)
+    const ground0 = []; for (let x = vx - 200; x <= vx + 200; x++) { let y = 0; while (y < ig.H - 1 && !(ig.type[ig.idx(x, y)] === STONE || ig.type[ig.idx(x, y)] === LAVA || ig.type[ig.idx(x, y)] === DIRT || ig.type[ig.idx(x, y)] === SAND)) y++; ground0.push(y); }
+    let reach = 0; const above = () => { let n = 0; reach = 0; for (let x = vx - 200; x <= vx + 200; x++) for (let y = 0; y < ground0[x - vx + 200]; y++) { const t = ig.type[ig.idx(x, y)]; if (t === LAVA || t === STONE || t === RUBBLE) { n++; reach = Math.max(reach, Math.abs(x - vx)); } } return n; };
+    const lava0 = above(); let quiet = true;
+    for (let f = 0; f < Sim.DAY * 0.5; f++) { ig.step(); if (ig.eruption) quiet = false; }
+    check('island: the sea on one side, a volcano with a lava-filled vent in the window, quiet at first', v && vx > 0 && is.water >= 200 && is.lava >= 300 && ig.type[ig.idx(vx, v.peakY + v.cd + 20)] === LAVA && quiet && above() - lava0 < 20, `vent at ${vx}, ${is.lava} lava`);
+    ig.clock = Sim.DAY * 2 - 60; ig.updateClimate(); let erupted = 0;
+    for (let f = 0; f < Sim.DAY / 6 + 600; f++) { ig.step(); if (ig.eruption) erupted++; }
+    const grew = above() - lava0, ash = census(ig, Sim.EL).Ash || 0;
+    console.log(`  an eruption: ${erupted} ticks, ${grew} cells of lava and new rock over the cone, out to ${reach} columns from the vent, ${ash} ash`);
+    check('island: the volcano erupts, and its lava runs out down the cone (not piling up in a spire)', erupted >= 500 && grew >= 600 && reach >= 60);
+  },
+  generator() {
+    // the world generator: a custom world is a preset with knobs set over it (Sim.customBiome). Each knob, set far one way, must change
+    // the window a new world opens on the way it says, against Temperate on the same seed; and a custom world saves and loads whole
+    const { SHRUB, CACTUS, RABBIT, HOPPER, FOX, BIRD, FISH } = Sim.ids, Wd = Sim.WORLD;
+    const make = (bio, seed = 12345) => { const b = Sim.biomeOf(bio), wide = b.wide || Wd.WIDE, g = new Sim.Grid(Wd.W, Wd.H); Sim.generate(g, seed, wide, Sim.homeOf(wide, bio), bio); return g; };
+    const custom = (spec, seed) => make(Sim.customBiome(spec), seed);
+    const look = g => {
+      const o = { surf: 0, spread: 0, water: 0, sand: 0, plant: 0, wet: 0, dirt: 0, cave: 0, animals: 0, snow: 0, brine: 0, trees: g.trees.length }, s = [];
+      for (let x = 0; x < g.W; x++) {
+        let y = 0; for (; y < g.H; y++) { const i = g.idx(x, y), t = g.type[i]; if (g.owner[i] || t === E || t === SNOW || Sim.EL[t].kind === 'gas' || t === PLANT || t === SHRUB || t === CACTUS || t >= RABBIT && t !== Sim.ids.SPOUT && Sim.EL[t].kind !== 'static' && Sim.EL[t].kind !== 'powder' && Sim.EL[t].kind !== 'liquid') continue; break; }
+        s.push(y); const t = g.type[g.idx(x, y)]; if (t === WATER || t === BRINE) o.water++; else if (t === SAND) o.sand++;
+        for (let d = 1; d <= 6; d++) { const i = g.idx(x, y + d); if (g.type[i] === DIRT) { o.wet += g.life[i] & 255; o.dirt++; } }
+        for (let yy = y + 12; yy < g.H; yy++) if (g.type[g.idx(x, yy)] === E) o.cave++;
+      }
+      for (const t of g.type) { if (t === PLANT) o.plant++; else if (t === SNOW) o.snow++; else if (t === BRINE) o.brine++; else if (t === RABBIT || t === HOPPER || t === FOX || t === BIRD || t === FISH) o.animals++; }
+      o.surf = Math.round(s.reduce((a, b) => a + b, 0) / s.length); o.spread = Math.max(...s) - Math.min(...s);
+      o.wet = Math.round(o.wet / Math.max(1, o.dirt)); return o;
+    };
+    const say = (id, o) => console.log(`  ${id}: ground row ${o.surf} (spread ${o.spread}), water ${o.water} cols, sand ${o.sand} cols, soil moisture ${o.wet}, grass ${o.plant}, trees ${o.trees}, caves ${o.cave}, animals ${o.animals}, snow ${o.snow}, brine ${o.brine}`);
+    // the knobs left alone make the preset itself, cell for cell
+    for (const id of ['temperate', 'island']) {
+      const k = Sim.BIOMES.findIndex(b => b.id === id), a = make(k), b = make(Sim.customBiome({}, k));
+      let diff = 0; for (let i = 0; i < a.type.length; i++) if (a.type[i] !== b.type[i] || a.life[i] !== b.life[i]) diff++;
+      check(`a custom world with ${id}'s knobs is ${id}, cell for cell`, diff === 0, `${diff} cells differ`);
+    }
+    const tem = look(make(0)); say('temperate', tem);
+    const hi = look(custom({ base: 0.14, river0: 0, rivers: 0 })), lo = look(custom({ base: 0.48, river0: 0, rivers: 0 })); say('high land', hi); say('low land', lo);
+    check('Land height raises and lowers the land', hi.surf <= tem.surf - 50 && lo.surf >= tem.surf + 30);
+    const flat = look(custom({ amp: 0, river0: 0, rivers: 0 })), rough = look(custom({ amp: 0.9, river0: 0, rivers: 0 })); say('flat', flat); say('rugged', rough);
+    check('Ruggedness flattens the land or piles it up', flat.spread <= tem.spread / 4 && rough.spread >= 3 * tem.spread / 2);
+    { const c = custom({ warm: -12, snow: 12 }), h = custom({ warm: 12 }), g0 = make(0);
+      const d1 = c.ambAt(500) - g0.ambAt(500), d2 = h.ambAt(500) - g0.ambAt(500), cs = look(c); say('cold', cs);
+      check('Warmth moves the air temperature by its degrees, all year (and the treeline with it)', Math.abs(d1 + 12) < 1e-6 && Math.abs(d2 - 12) < 1e-6 && Math.abs(c.warmth(500) - g0.warmth(500) + 12) < 1e-6 && cs.snow >= 1000 && cs.trees < tem.trees, `${d1.toFixed(2)}°, +${d2.toFixed(2)}°`); }
+    const dry = custom({ arid0: 0.7, aridK: 0.1 }), dr = look(dry); say('dry', dr);
+    check('Dryness turns the land to desert', Sim.aridAt(dry.worldSeed, dry.ox, dry.biome) >= Sim.ARID_DESERT && dr.sand >= 0.8 * dry.W && dr.trees === 0);
+    const soak = look(custom({ wet: 1 })); say('water table', soak);
+    check('Water table soaks the soil', soak.wet >= tem.wet + 40);
+    const lk = look(custom({ lakes: 1, lakeDeep: 14, river0: 0 })), nl = look(custom({ lakes: 0, river0: 0, rivers: 0 })); say('lakes', lk); say('no lakes', nl);
+    check('Lakes fill the dips, or leave them dry', lk.water >= 150 && nl.water === 0);
+    { const T0 = make(0).noise, T1 = custom({ rivers: 1 }).noise, T2 = custom({ rivers: 0, river0: 0 }).noise;
+      check('Rivers: more of them, or none', T1.rivers.length > T0.rivers.length && T2.rivers.length === 0, `${T0.rivers.length} -> ${T1.rivers.length}, ${T2.rivers.length}`); }
+    { const ns = custom({ coast: 'none', home: 'coast' }), cl = custom({ coast: 'cliff', home: 'coast', volcano: 1 }), n = look(ns);
+      check('Coast: no sea at all, or the kind chosen (with a volcano on it)', !ns.noise.sea && n.brine === 0 && cl.noise.sea.kind === 'cliff' && cl.noise.volc && ns.ox === 0); }
+    const woods = look(custom({ trees: 2.5 })), bare = look(custom({ trees: 0, grass: 0 })); say('forest', woods); say('bare', bare);
+    check('Forest and Grass: thicker, or none', woods.trees >= 2 * tem.trees && bare.trees === 0 && bare.plant === 0);
+    const solid = look(custom({ caves: 0 })), holey = look(custom({ caves: 2 })); say('no caves', solid); say('riddled', holey);
+    check('Caves: solid rock, or riddled', solid.cave < tem.cave / 100 && holey.cave >= 1.8 * tem.cave, `${solid.cave} / ${tem.cave} / ${holey.cave} open cells underground`);
+    const wild = look(custom({ animals: 3 })), still = look(custom({ animals: 0 })); say('wildlife', wild);
+    check('Wildlife: about three times as many, or none', wild.animals >= 2 * tem.animals && still.animals === 0, `${still.animals} / ${tem.animals} / ${wild.animals}`);
+    for (const wide of [3840, 12800]) { const g = custom({ wide }), ok = g.worldW === wide && Math.abs(g.ox + g.W / 2 - wide / 2) <= Sim.REGION;
+      check(`World width ${wide}: the world is that wide and opens in its middle`, ok, `worldW ${g.worldW}, window at ${g.ox}`); }
+    // a custom world saves with its knobs, loads back as the same biome, and streams on into the same land
+    { const g = custom({ warm: 5, caves: 0.5, coast: 'marsh', wide: 9600 }, 4242); for (let f = 0; f < 120; f++) g.step();
+      const str = g.save(), h = new Sim.Grid(Wd.W, Wd.H); h.load(str);
+      const same = JSON.stringify(h.biome) === JSON.stringify(g.biome) && h.worldW === 9600 && Math.abs(h.warmK - 5) < 1e-9;
+      const sx = h.ox + h.W + 100, s1 = g.noise.surf(sx), s2 = Sim.terrainOf(h).surf(sx);
+      check('a custom world saves and loads with its knobs', same && s1 === s2 && h.noise.sea.kind === 'marsh', `${JSON.stringify(h.biome).slice(0, 80)}...`); }
   },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];

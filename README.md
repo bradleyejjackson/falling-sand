@@ -4,7 +4,7 @@ A falling-sand simulation prototyped as a single HTML file (`falling-sand.html`)
 
 Hosting: Cloudflare Pages builds every push to main with `node tools/pages.js _site`, which wraps `falling-sand.html` in a doctype and `<head>` as `_site/index.html`; `tools/_headers` is copied into the output and makes Cloudflare send COOP/COEP, so the worker pool runs there. Setup steps: `docs/cloudflare-pages.md`.
 
-The script has two blocks: `Sim` (pure rules, no DOM; this is what ports to Godot) and the render/input block.
+The script has two blocks: `Sim` (pure rules, no DOM; this is what ports to Godot) and the render/input block. The port's data contract and freeze point: `docs/PORT.md`.
 
 ## Tests
 
@@ -18,6 +18,8 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   grass compete seasonfire ... widen (E8) ... landslide frost beams (R5)
                               #   scrub cactus reeds biomes (R6)
                               #   nutrients (R7) vigour narrow (N0)
+                              #   river (N6)
+                              #   presets (X6) generator (world generator)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -26,10 +28,13 @@ node tools/steady.js [seed] [frames] [warm]   # the step once a new world has se
 node tools/prof.js [seed] [frames]   # the step split by pass (cell pass, soil, air, waves, wind, trees, ...)
 node tools/game.js [ids]      # stage 5: each scenario's scripted solution wins, doing nothing loses; budgets, scoring, unlocks, saves
 BASE=old.html node tools/same.js [frames] [seeds]   # two builds must give exactly the same world (for pure speed-ups)
+node tools/contract.js [--write]   # X9: the Godot port's data contract (docs/PORT.md, docs/port/*.json) still matches Sim; --write accepts a change
 OX=640 node tools/biomes.js [seed] [seasons]   # R6: columns of forest, meadow, scrub, desert and reed bed, and wild plants, each season
 OX=0 node tools/soil.js [seed] [seasons]   # R7: topsoil and subsoil nutrients by cover (forest, meadow, scrub, bare), each season
 node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, binned by sun and soil
 node tools/forest.js [seed] [seasons]   # N4: broadleaf trees and conifers each season, by site warmth (valley, slope, upland, high)
+node tools/rivers.js [seed] [half-seasons] [ox]   # N6: each river in the window: the stream on its bed, the pond, silt, the delta
+GEN=warm:8,coast:none node tools/presets.js [minutes] [seed] custom   # survey a custom world (knobs as in a share link's gen=); SNAP=dir for PNGs
 ```
 
 ## Engine (stage 4)
@@ -425,3 +430,67 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
 - Long runs (`tools/forest.js`, 4 years): big lightning and dry-season wildfires kill most trees on main as well. Seed 7 ends
   with 7 trees here against 6 on main, seed 99 with 5 against 5, seed 12345 with 6 against 18. The conifers hold the uplands,
   but four years is too short to see broadleaf trees take valleys back from pioneer conifers.
+
+## Rivers (N6)
+
+- A generated world has a river or two (`riversOf` in the Sim block, from the world seed): one always in the window a new world
+  opens on, and one in each 1600-column block with chance 0.6 where it wouldn't cross the dry country. The terrain is laid out
+  around it (`riverSurf`, blended into the hills): a hill with the spring at its foot, a valley floor falling a steady 1 in 16 to
+  1 in 8 over 240-380 columns, a pond basin 70-110 wide and 10 deep, and a rim past it. The bed is one cell of sand over clay
+  (no tree takes root in it, nothing soaks away through it), no cave opens within 40 cells of the surface along the course, and
+  the pond starts full.
+- The opening window is now mostly river valley: generated there, its forest and meadow are about a third of what they were
+  (bare sand bed, no trees within 8 columns of it). Rivers of 300-480 columns took over half the window, so they were shortened,
+  and `validate.js biomes` samples the wet country at the start and two windows west of it.
+- `Grid.riverCols()` marks the window's columns (spring, bed, pond) for each river lying wholly in the window; a river cut off
+  by the window's edge doesn't run. The spring (`Grid.spring`) lets out `RIVER_FLOW` cells a tick, up to 2.2 times that in the
+  spring melt, less late in the dry season, more in a wet year. It finds the top of the ground itself and washes away litter,
+  grass and snow on it, so nothing clogs it.
+- The stream dries a quarter as fast as standing water (the ground under its bed feeds it). The pond has an outlet at the level
+  of its banks: water over it is taken off the pond's floor, leaving its silt there.
+- What was tried and dropped: soil springs fed by a soaked catchment (a trickle that evaporated a third of the way down), a pond
+  with no outlet (filled its whole valley in two years), a pond sinking into its floor by depth (ran dry), a sand bed three
+  deep (all of it in the pond within three minutes).
+- Tests: `validate.js river` (generation, the stream the length of its bed, the pond holding, a delta, more water in the spring melt
+  than late in summer, no spring for a river cut off by the window or in a flat world). `tools/rivers.js [seed] [half-seasons]`
+  surveys each river in the window over time.
+- Two-year surveys (seeds 12345 and 7): the stream covers its whole bed both years (800-2,200 cells, highest in the spring
+  melt); ponds hold 230-500 cells, and one silts up toward the end of year two as its delta fills the basin.
+- Perf (`tools/ab.js` against main, ticks 600-1200): seed 12345 6.81 vs 7.23 ms avg (p50 equal), seed 7 7.01 vs 6.49,
+  seed 99 6.93 vs 6.67 (about +0.3 ms at p50: the stream and pond stay awake). `threads.js`: 4 threads identical to one.
+- Older saves keep their own land, but a river's spring and outlet run from the world seed, so in an old save the spring
+  turns up wherever its columns now lie, and water standing over the pond's bank row in its columns runs off.
+
+## World generator
+
+- The page's World generator button opens a panel of knobs, one for each setting of a biome (`KNOBS` in the Sim block): world
+  width, land height, ruggedness, hill width, warmth, dryness, dry spells, the desert east of home, water table, sandy lowlands,
+  lakes and their depth, rivers and the river at home, the coast (by the seed, beach, marsh, cliff or no sea), a volcano on it,
+  where the world opens, snow cover, forest, grass, caves and wildlife. Start from loads a preset's values into the knobs. A
+  preview draws the whole world the knobs and seed make (land, sea, rivers, climate along the top, and the box it opens on),
+  redrawn as a knob moves. Make world builds it; the Custom entry in the biome box makes a new custom world from the same knobs.
+- `customBiome(spec, from)` makes the biome: preset `from` with the knobs in `spec` set over it, each kept in its range.
+  `Grid.biome` is that object (presets stay an index), saved with the world; Share link carries the knobs set off Temperate's
+  (`#world=SEED&gen=wide:6400,warm:6,...`). The knobs are kept in this browser (`sandfall.gen`).
+- New settings beyond X6's: `warm` (degrees on the air all year; `Grid.warmK`, moves the treeline, snow and growing season),
+  `trees`, `grass`, `animals` (multiply their odds at generation), `caves` (0 none, 2 riddled: `CAVE_AT`, `CAVE_K`), `coast:
+  'none'` and `wide`. With every knob at a preset's value the world is the preset's, cell for cell, and the six presets generate
+  exactly as before.
+- Fixed on the way: New world never set the view's height or the dims (a comment had swallowed the rest of the line).
+- Tests: `validate.js generator` (each knob moves the window it opens on the way it says, against Temperate on the same seed; a
+  custom world saves and loads with its knobs), `ui.js` (the panel, Start from, a knob, Make world, save, Share link). The port
+  contract has a `knobs` section and a table in docs/PORT.md.
+
+## Page layout
+
+- The page is a bench: the world on the left, sized to the window's height (4:3, at most 60% of the width), with the toolbar
+  (brush size and shape, undo, pause, speed, time-lapse, zoom, messages), the minimap, the cell readout and the census under it;
+  the element rack and the menus on the right. Under 900px wide it stacks: world, toolbar, rack, readouts.
+- Everything that is not an element lives in one of five menus beside the rack, open one at a time (`showMenu` in the page):
+  Play (sandbox, scenarios, Unlock all, the scenario editor), World (new world, biome, world generator, flat, clear, seed,
+  share link, save, load, export/import), View (one tint of heat, moisture or soil; wind and chunk overlays; light, census,
+  sound, the stats line), Weather (the sandbox's season, hold, wind and cold front; hidden in a scenario, `#sbox`) and Help
+  (the keys). The header shows only the clock and the barometer; the fps, chunk, thread and camera stats show under it when
+  View › Stats is on. The scenario editor and the world generator open under the menus. The manual is a folded
+  "How Sandfall works" at the foot of the page, split into headed sections. Every control keeps its id, so `tools/ui.js` drives
+  them as before.

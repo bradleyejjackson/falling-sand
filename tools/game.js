@@ -67,7 +67,7 @@ const solutions = {
   rod: { 30: game => { for (const x of [108, 142, 178, 212]) paintRect(game, x, 129, x + 1, 160, METAL); } },   // a mast in the gaps between and beside the huts, standing clear of the wood
   gorge: { 30: game => { for (let x = 120; x < 200; x++) { const t = 80 + Math.round(16 * ((x + 0.5 - 160) / 40) ** 2); paintRect(game, x, t, x + 1, t + 4, STONE); } } },   // a stone arch 4 deep, springing from the old footings
   kiln: { 30: game => paintRect(game, 42, 140, 198, 142, CLAY) },   // the clay spread thin over the whole seep
-  plague: { 30: game => { for (const x of [50, 160, 270]) paintRect(game, x, 140, x + 1, 141, FOX); } },
+  plague: { 30: game => { for (const x of [80, 240]) paintRect(game, x, 140, x + 1, 141, FOX); } },   // two foxes: three won only half the time across seeds (SEED=1..6), killing the rabbits off
   pond: Object.fromEntries([600, 2400, 4200, 6600].map(t => [t, game => paintRect(game, 122, 120, 278, 122, WATER)])),   // a ration every half minute or so, the last one kept back for the end
   wildfire: { 60: game => { for (const x of Sim.GROVES) { paintRect(game, x - 14, 90, x - 13, 150, METAL); paintRect(game, x + 14, 90, x + 15, 150, METAL); } } },   // a rod either side of each grove, taller than the trees
 };
@@ -196,6 +196,17 @@ tests.saveload = () => {
   const custom = JSON.parse(text); custom.def = { id: 'mine', name: 'Mine', brief: 'Fill it', time: 600, budget: { Water: 50 }, goals: [{ label: 'Water', count: 'Water', rect: [0, 0, 320, 200], min: 1 }], fails: [] };
   const m = Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), JSON.stringify(custom));
   check('a hand-written scenario loads', m.sc.name === 'Mine' && m.left('Water') === 50 && m.goals[0].value > 0);
+};
+
+// the scenario editor (X4): a built-in staged without its game, laid out again from its definition, plays the same; and stars
+tests.editor = () => {
+  const sc = SCENARIOS[0], g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), g2 = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H);
+  Game.stage(g, sc); const a = Game.start(g2, sc);
+  let same = 0; for (let i = 0; i < g.type.length; i++) if (g.type[i] === g2.type[i]) same++;
+  check('staging a scenario lays out the same box as starting it', same === g.type.length, `${same}/${g.type.length}`);
+  const d = Sim.defOf(sc), b = Game.load(new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H), JSON.stringify({ sandfall: 'scenario', v: 1, def: d, world: g.save() }));
+  check('its definition round-trips through the editor\'s JSON', b.sc.name === sc.name && b.goals.length === a.goals.length && Object.keys(b.sc.budget).every(k => b.left(k) === a.left(k)));
+  check('one star for a win, three for a high score', Sim.stars(sc, 0) === 0 && Sim.stars(sc, 1000) === 1 && Sim.stars(sc, 1500) === 2 && Sim.stars(sc, 1800) === 3 && Sim.stars({ survive: true }, 1600) === 3);
 };
 
 const pick = process.argv.slice(2);

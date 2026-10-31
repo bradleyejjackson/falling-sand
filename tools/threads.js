@@ -1,6 +1,6 @@
 // The cell pass on worker threads over shared memory. Checks that N threads give exactly the same world as one
 // (the checkerboard keeps tiles that run together from touching the same cells), and times both.
-// usage: node tools/threads.js [threads] [frames] [seed]
+// usage: node tools/threads.js [threads] [frames] [seed]   (OX=x: a streamed world with the window at column x, as OX=0 on the sea; BIOME=id: that biome preset, where it opens, CLOCK=t starting at tick t)
 const { Worker } = require('worker_threads');
 const { loadSim, simSource } = require('./load');
 const threads = +(process.argv[2] || 4), frames = +(process.argv[3] || 300), seed = +(process.argv[4] || 12345);
@@ -9,7 +9,7 @@ const SimA = loadSim(process.env.SIMFILE), SimB = loadSim(process.env.SIMFILE);
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
 
-function world(Sim, shared) { Sim.reseed(1); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H, { shared }); Sim.generate(g, seed); return g; }
+function world(Sim, shared) { Sim.reseed(1); const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H, { shared }); if (process.env.BIOME) { const b = Sim.BIOMES.findIndex(o => o.id === process.env.BIOME); Sim.generate(g, seed, Sim.WORLD.WIDE, Sim.homeOf(Sim.WORLD.WIDE, b), b); if (process.env.CLOCK) g.clock = +process.env.CLOCK; } else if (process.env.OX !== undefined) Sim.generate(g, seed, Sim.WORLD.WIDE, +process.env.OX); else Sim.generate(g, seed); return g; }
 function spawn(g, n) {
   const src = simSource(process.env.SIMFILE);
   const code = `const { workerData } = require('worker_threads'); const Sim = new Function(workerData.src + '\\nreturn Sim;')();
