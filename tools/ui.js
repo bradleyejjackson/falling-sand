@@ -5,15 +5,15 @@ const { loadPage, census } = require('./load');
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
 
-function suite(threads) {
+async function suite(threads) {
   console.log(`# ${threads ? 'worker threads' : 'one thread'}`);
-  const p = loadPage(undefined, { threads });
+  const p = loadPage(process.env.SIMFILE, { threads });
   const { g, Sim, pool } = p.sf;
   if (threads) { const n = p.ready(); check('the page starts its worker threads', pool.n > 0 && n === pool.n, `${n} of ${pool.n} ready`); }
   else check('without workers the page says why it runs on one thread', pool.n === 0 && pool.why === 'no workers here', pool.why);
 
   p.run(40);
-  check('stats show the season and time', /^(Spring|Summer|Autumn|Winter)( \(dry season\))?( in an? [a-z ]+)?, day \d+, \d\d:\d\d, [+-]?\d+°$/.test(p.els.clock.textContent), p.els.clock.textContent);
+  check('stats show the year, season and time', /^Year \d+, (Spring|Summer|Autumn|Winter)( \(dry season\))?( in an? [a-z ]+)?, day \d+, \d\d:\d\d, [+-]?\d+°$/.test(p.els.clock.textContent), p.els.clock.textContent);
   check('stats show the threads', threads ? /^\d worker threads/.test(p.els.threads.textContent) : /^1 thread/.test(p.els.threads.textContent), p.els.threads.textContent);
   const names = p.created.filter(e => e.className === 'el').map(e => e.innerHTML.replace('<i></i>', ''));
   check('Dirt and Litter are in the rack', names.includes('Dirt') && names.includes('Litter'), names.join(' '));
@@ -201,9 +201,59 @@ function suite(threads) {
   check('and has one air mass and no lightning', !g.fronts && !g.lightning && g.massT.every(v => v === 0));
   check('a scenario hides the census but keeps the Inspect tool', !p.els.census.classList.contains('on') && btn('Inspect').style.display !== 'none');
   p.els.leave.fire('click'); p.run(2);
+  // X5: brush shapes, undo, zoom, the seed box and the minimap; X7 time-lapse; X8 keys
+  { const ui = p.sf.ui, stone = () => census(g, Sim.EL).Stone || 0;
+    p.run(1); g.clear(); p.run(1); btn('Stone').fire('click');
+    const n0 = census(g, Sim.EL).Stone || 0;
+    p.els.shape.value = 'box'; p.els.shape.fire('change');
+    cv.fire('pointerdown', at(40, 40)); cv.fire('pointermove', at(70, 60)); cv.fire('pointerup', at(70, 60)); p.run(1);
+    const box = (census(g, Sim.EL).Stone || 0) - n0;
+    check('the box shape fills the rectangle dragged', box >= 500 && box <= 1200, `${box} cells`);
+    p.els.shape.value = 'line'; p.els.shape.fire('change'); p.els.brush.value = '1'; p.els.brush.fire('input');
+    cv.fire('pointerdown', at(100, 30)); cv.fire('pointerup', at(200, 30)); p.run(1);
+    const line = stone() - n0 - box;
+    check('the line shape draws from press to release', line >= 90 && line < 600, `${line} cells`);
+    const u = ui.undos(); p.els.undo.fire('click'); p.run(1);
+    check('Undo takes back the last stroke and only that', stone() === n0 + box && ui.undos() === u - 1, `${stone() - n0} stone, ${ui.undos()} left`);
+    p.els.undo.fire('click'); p.run(1);
+    check('a second Undo takes back the box', (census(g, Sim.EL).Stone || 0) === n0);
+    p.els.shape.value = 'free'; p.els.shape.fire('change');
+    p.els.zoom.fire('click'); p.run(2);
+    check('Zoom shows a quarter of the view, bigger', ui.zoom()[0] === 160 && p.sf.px.length === 160 * 120 && /×2/.test(p.els.zoom.textContent), p.els.zoom.textContent);
+    p.els.zoom.fire('click'); p.run(2); check('and then four times as much', ui.zoom()[0] === 640 && p.sf.px.length === 640 * 480);
+    p.els.zoom.fire('click'); p.run(2);
+    p.window.fire('keydown', { key: 't' }); p.run(3);
+    check('T turns the time-lapse on, ×16 a frame', ui.timelapse()[0] && ui.timelapse()[1] === 16);
+    const c0 = g.clock; p.run(8); check('time-lapse runs 16 ticks a frame', g.clock - c0 >= 8 * 16, `${g.clock - c0} ticks in 8 frames`);
+    p.window.fire('keydown', { key: 't' }); check('T again turns it off', !ui.timelapse()[0] && ui.timelapse()[1] === 1);
+    btn('Sand').fire('click'); p.window.fire('keydown', { key: 'e' }); check('E picks the next element in the rack', ui.current() !== Sim.ids.SAND);
+    p.window.fire('keydown', { key: 'q' }); check('Q goes back', ui.current() === Sim.ids.SAND);
+    p.window.fire('keydown', { key: ']' }); check('] makes the brush bigger', String(p.els.brush.value) === '2', p.els.brush.value);
+    p.window.fire('keydown', { key: 'x' }); check('X picks the eraser', btn('Erase').getAttribute('aria-pressed') === true || btn('Erase').getAttribute('aria-pressed') === 'true');
+    btn('Sand').fire('click');
+    p.els.seedin.value = '424242'; p.els.goseed.fire('click'); p.run(20);
+    check('Open seed makes the world from that seed', g.worldSeed === 424242, String(g.worldSeed));
+    p.run(16); check('the minimap shows a generated world', p.els.minimap.style.display !== 'none');
+    const ox = g.ox; ui.jumpTo(ox + 2400); p.run(3);
+    check('jumping on the minimap moves the window there', g.ox > ox && Math.abs(g.ox + p.sf.cam().x + 160 - (ox + 2400)) < 400, `ox ${ox} -> ${g.ox}`);
+    p.els.sharelink.fire('click'); p.run(1);
+    check('Share link gives a link to the seed', /#world=424242&biome=temperate/.test(p.els.iotext.value), p.els.iotext.value);
+  }
+  // X4: a custom scenario packs into a link and plays from it
+  { const ui = p.sf.ui; ui.design(-1); p.run(2);
+    check('laying out a box stops time and locks the view on it', p.els.pause.textContent === 'Resume' && ui.zoom()[0] === 320);
+    const text = JSON.stringify({ sandfall: 'scenario', v: 1, def: { id: 'custom-1', custom: true, name: 'Test pool', brief: 'b', time: 60 * 60, budget: { Water: 400 }, goals: [{ label: 'Water', count: 'Water', rect: [0, 0, 320, 200], min: 100 }], fails: [], sources: [] }, world: g.save() });
+    const link = await ui.packScenario(text), back = await ui.unpackScenario(link);
+    check('a scenario packs into a link and back', back === text, `${text.length} chars in ${link.length}`);
+    ui.playCustom(text); p.run(3);
+    check('a custom scenario plays', p.sf.game() && p.sf.game().sc.name === 'Test pool' && p.sf.game().state === 'play');
+    p.els.leave.fire('click'); p.run(2);
+  }
   p.close();
 }
 const mode = process.argv[2];
-if (mode !== 'threads') suite(false);
-if (mode !== 'serial') suite(true);
-if (failed) { console.log(`${failed} UI check(s) failed`); process.exit(1); }
+(async () => {
+  if (mode !== 'threads') await suite(false);
+  if (mode !== 'serial') await suite(true);
+  if (failed) { console.log(`${failed} UI check(s) failed`); process.exit(1); }
+})();
