@@ -2132,6 +2132,46 @@ const scenarios = {
     const f = new Sim.Grid(400, 300); Sim.flat(f); f.riverCols();
     check('a river cut off by the window\'s edge, or a flat world, has no running spring', cut.riverOn.length === 0 && f.riverOn.length === 0, `${cut.riverOn.length}, ${f.riverOn.length}`);
   },
+  presets() {
+    // biome presets (X6): New world laid out as each kind of country, at the window it opens on, measured against what it should be
+    const { SHRUB, REED, RUBBLE } = Sim.ids, Wd = Sim.WORLD, B = Sim.BIOMES, k = id => B.findIndex(b => b.id === id);
+    const make = (id, seed = 12345) => { const g = new Sim.Grid(Wd.W, Wd.H); Sim.generate(g, seed, Wd.WIDE, Sim.homeOf(Wd.WIDE, k(id)), k(id)); return g; };
+    const look = g => {
+      const o = { surf: 0, water: 0, snow: 0, reed: 0, shrub: 0, lava: 0, trees: g.trees.length, con: g.trees.filter(t => t.con).length, high: 0, arid: [1, 0], wet: 0, dirt: 0 };
+      for (let x = 0; x < g.W; x++) {
+        let y = 0; for (; y < g.H; y++) { const i = g.idx(x, y), t = g.type[i]; if (g.owner[i] || t === E || t === REED || t === SNOW || Sim.EL[t].kind === 'gas') continue; break; }
+        o.surf += y / g.W; if (g.type[g.idx(x, y)] === WATER || g.type[g.idx(x, y)] === BRINE) o.water++;
+        for (let d = 1; d <= 6; d++) { const i = g.idx(x, y + d); if (g.type[i] === DIRT) { o.wet += g.life[i] & 255; o.dirt++; } }
+        const a = Sim.aridAt(g.worldSeed, g.ox + x, g.biome); o.arid[0] = Math.min(o.arid[0], a); o.arid[1] = Math.max(o.arid[1], a);
+      }
+      for (let i = 0; i < g.type.length; i++) { const t = g.type[i]; if (t === SNOW) o.snow++; else if (t === REED) o.reed++; else if (t === SHRUB) o.shrub++; else if (t === LAVA) o.lava++; }
+      for (const t of g.trees) if (g.hardy(t.con, t.y) < 0.25) o.high++;
+      o.wet = Math.round(o.wet / Math.max(1, o.dirt)); o.surf = Math.round(o.surf); return o;
+    };
+    const say = (id, o) => console.log(`  ${id}: mean ground row ${o.surf}, ${o.water} columns of open water, soil moisture ${o.wet}, aridity ${o.arid.map(a => a.toFixed(2)).join('-')}, trees ${o.trees} (${o.con} conifers, ${o.high} over the treeline), snow ${o.snow}, reeds ${o.reed}, shrubs ${o.shrub}`);
+    const tem = look(make('temperate')); say('temperate', tem);
+    const alp = look(make('alpine')); say('alpine', alp);
+    check('alpine: mountains higher than temperate hills, snow on them, trees in the valleys (conifers among them) and none over the treeline', alp.surf <= tem.surf - 40 && alp.snow >= 300 && alp.trees >= 5 && alp.con >= 1 && alp.high === 0);
+    const wet = look(make('wetland')); say('wetland', wet);
+    check('wetland: lower and flatter, soaked, with ponds and reed beds, no dry country', wet.surf >= tem.surf + 30 && wet.water >= 200 && wet.reed >= 100 && wet.wet >= tem.wet + 40 && wet.arid[1] === 0);
+    const scr = look(make('scrub')); say('scrub', scr);
+    check('scrubland: dry all through, shrubs and no trees', scr.arid[0] >= Sim.ARID_SCRUB && scr.shrub >= 500 && scr.trees === 0);
+    const cg = make('coast'), co = look(cg); say('coast', co);
+    check('coast: opens on the sea\'s shore', cg.noise.sea && cg.noise.sea.shore > cg.ox + 100 && cg.noise.sea.shore < cg.ox + cg.W - 100 && co.water >= 200 && cg.ventCols() < 0);
+    // the volcanic island: the volcano in the window, its vent full of lava, quiet as a world opens, erupting at the next period
+    const ig = make('island'), is = look(ig), v = ig.noise.volc, vx = ig.ventCols(); say('island', is);
+    // (lava and new rock lying over the cone's ground as the world opened, and how far out from the vent it lies)
+    const ground0 = []; for (let x = vx - 200; x <= vx + 200; x++) { let y = 0; while (y < ig.H - 1 && !(ig.type[ig.idx(x, y)] === STONE || ig.type[ig.idx(x, y)] === LAVA || ig.type[ig.idx(x, y)] === DIRT || ig.type[ig.idx(x, y)] === SAND)) y++; ground0.push(y); }
+    let reach = 0; const above = () => { let n = 0; reach = 0; for (let x = vx - 200; x <= vx + 200; x++) for (let y = 0; y < ground0[x - vx + 200]; y++) { const t = ig.type[ig.idx(x, y)]; if (t === LAVA || t === STONE || t === RUBBLE) { n++; reach = Math.max(reach, Math.abs(x - vx)); } } return n; };
+    const lava0 = above(); let quiet = true;
+    for (let f = 0; f < Sim.DAY * 0.5; f++) { ig.step(); if (ig.eruption) quiet = false; }
+    check('island: the sea on one side, a volcano with a lava-filled vent in the window, quiet at first', v && vx > 0 && is.water >= 200 && is.lava >= 300 && ig.type[ig.idx(vx, v.peakY + v.cd + 20)] === LAVA && quiet && above() - lava0 < 20, `vent at ${vx}, ${is.lava} lava`);
+    ig.clock = Sim.DAY * 2 - 60; ig.updateClimate(); let erupted = 0;
+    for (let f = 0; f < Sim.DAY / 6 + 600; f++) { ig.step(); if (ig.eruption) erupted++; }
+    const grew = above() - lava0, ash = census(ig, Sim.EL).Ash || 0;
+    console.log(`  an eruption: ${erupted} ticks, ${grew} cells of lava and new rock over the cone, out to ${reach} columns from the vent, ${ash} ash`);
+    check('island: the volcano erupts, and its lava runs out down the cone (not piling up in a spire)', erupted >= 500 && grew >= 600 && reach >= 60);
+  },
 };
 const seasonAt = clock => ['Spring', 'Summer', 'Autumn', 'Winter'][(((clock % Sim.YEAR) / Sim.YEAR) * 4) | 0];
 

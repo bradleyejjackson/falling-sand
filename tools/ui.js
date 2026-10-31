@@ -72,6 +72,16 @@ function suite(threads) {
   p.run(1); p.els.save.fire('click'); p.run(1); const big = p.store['sandfall.world'];
   check('a streamed world saves', big && big.split('|').length === 12, `${(big.length / 1024) | 0} KB, ${p.els.msg.textContent}`);
 
+  // the biome box: choosing a kind of country makes a new world of it, remembers the choice, and a save keeps it
+  { const isle = Sim.BIOMES.findIndex(b => b.id === 'island');
+    p.els.biome.value = 'island'; p.els.biome.fire('change'); p.run(5);
+    const v = g.noise.volc;
+    check('choosing Volcanic island makes a world with a volcano, opening on the coast', g.biome === isle && v && g.ox === 0 && p.sf.cam().x < v.x && p.sf.cam().x + 320 > g.noise.sea.shore && /Volcanic island/.test(p.els.msg.textContent) && p.store['sandfall.biome'] === 'island', `biome ${g.biome}, camera at ${p.sf.cam().x}, ${p.els.msg.textContent}`);
+    p.els.save.fire('click'); p.run(1); g.biome = 0; g.noise = null; p.els.load.fire('click'); p.run(1);
+    check('a save keeps the biome', g.biome === isle && g.noise.volc, `biome ${g.biome}`);
+    p.els.biome.value = 'temperate'; p.els.biome.fire('change'); p.run(5);
+    check('choosing Temperate goes back to the usual world', g.biome === 0 && !g.noise.volc && g.ox > 0, `biome ${g.biome}, window at ${g.ox}`); }
+
   // scenarios: the Play row, a budgeted rack, winning through the brush, unlocks, and saving a scenario in progress
   const scn = n => p.created.find(e => e.className === 'el scn' && e.innerHTML.includes(n));
   check('the sandbox rack starts with the starter elements only', btn('Lava').disabled && !btn('Water').disabled && /Lava crossing/.test(btn('Lava').title), btn('Lava').title);
