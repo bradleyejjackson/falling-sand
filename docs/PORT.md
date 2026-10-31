@@ -6,8 +6,8 @@ has to carry over unchanged: the fields, the element table and its per-element t
 tree record, the save format, the biome presets and the scenarios. Everything here that can be read out of the code is, by
 `tools/contract.js`, and checked against it, so the document can't drift from the game.
 
-Contract <!-- contract:hash -->`f3c782374453`<!-- /contract:hash -->: <!-- contract:counts -->
-54 elements, 40 fields, 737 constants, 41 per-element tables, 3 element sets, 10 contact reactions, 20 conductance overrides, 6 biome presets, 15 scenarios
+Contract <!-- contract:hash -->`c351aeac4550`<!-- /contract:hash -->: <!-- contract:counts -->
+54 elements, 40 fields, 739 constants, 41 per-element tables, 3 element sets, 10 contact reactions, 20 conductance overrides, 6 biome presets, 22 generator knobs, 15 scenarios
 <!-- /contract:counts -->
 
 ## The freeze point
@@ -59,6 +59,7 @@ What the check can't see is a change to the rules themselves with every number l
   - `constants`: every top-level number, string and short list of Sim, by name.
   - `other`: `WORLD`, `BOX` (the scenario box), `VALUE` (reaction scores), and the two shared fuel records.
   - `biomes`: the presets (`BIOMES`; index = `Grid.biome`, saved with the world).
+  - `knobs`: the world generator's knobs (`KNOBS`), each a setting of a biome with its range or choices (see World generator).
   - `scenarioDefs`: each built-in scenario as its definition (`defOf`: goals, fails, budget, sources, clock, weather).
 - `docs/port/scenarios.json`: each built-in scenario's opening world as a save string. The scenarios' `build` functions are code,
   so a port loads these instead of re-coding them (`Game.stage` = clear, set the clock and weather, load the world).
@@ -278,6 +279,52 @@ The **save** (`Grid.save`, `Grid.load`): every RLE is (value, count) u16 pairs, 
 | 12 | rows of land under the sky (`H - top`) |
 
 Older saves (fewer sections, a narrower, wider or shorter window) load as ENGINE.md (Streaming) says.
+
+## World generator
+
+A custom world (the page's World generator) is a biome made from knobs: `customBiome(spec, from)` copies preset `from` (an index, 0
+Temperate) and sets each knob in `spec` over it, kept in its range (`lo`..`hi`, rounded where `int`; on/off as 1/0 where `check`;
+one of `opts`). `Grid.biome` is then that object instead of an index; `biomeOf(k)` takes either. It saves as it is (section 7's
+`biome` is an object), and `load` passes it back through `customBiome`, so a hand-edited save can't set a knob out of range. A
+port keeps `Grid.biome` as either a preset index or a full biome record. Knobs whose setting a preset leaves unset (`wide`) fall
+back to `WORLD.WIDE`. With every knob at a preset's own value the world is that preset's, cell for cell (validate `generator`).
+`flip` only tells a slider to run the other way: less `base` or `sandy` is higher land or more sand.
+
+<!-- contract:knobs -->
+| knob | setting | range or choices | Temperate | Alpine | Wetland | Volcanic island | Scrubland | Coast |
+|---|---|---|---|---|---|---|---|---|
+| World width | `wide` | 3840 / 6400 / 9600 / 12800 | (6400) | (6400) | (6400) | (6400) | (6400) | (6400) |
+| Land height | `base` | 0.12..0.5 (less is more) | 0.32 | 0.17 | 0.44 | 0.36 | 0.32 | 0.32 |
+| Ruggedness | `amp` | 0..0.9 | 0.35 | 0.75 | 0.08 | 0.22 | 0.35 | 0.35 |
+| Hill width | `wave` | 30..250 whole | 90 | 150 | 40 | 90 | 90 | 90 |
+| Warmth | `warm` | -12..12 whole | 0 | 0 | 0 | 0 | 0 | 0 |
+| Dryness | `arid0` | 0..0.8 | 0 | 0 | 0 | 0 | 0.32 | 0 |
+| Dry spells | `aridK` | 0..1.5 | 1 | 0.4 | 0 | 0.2 | 0.6 | 0.5 |
+| Desert east of home | `desert` | on/off | 1 | 0 | 0 | 0 | 1 | 0 |
+| Water table | `wet` | 0..1 | 0 | 0 | 0.8 | 0 | 0 | 0 |
+| Sandy lowlands | `sandy` | 0.3..0.8 (less is more) | 0.42 | 0.5 | 0.62 | 0.42 | 0.42 | 0.42 |
+| Lakes | `lakes` | 0..1 | 0.5 | 0.4 | 1 | 0.5 | 0 | 0.5 |
+| Lake depth | `lakeDeep` | 2..16 whole | 6 | 6 | 10 | 6 | 6 | 6 |
+| Rivers | `rivers` | 0..1 | 0.6 | 0.4 | 0.6 | 0.6 | 0.3 | 0.6 |
+| River at home | `river0` | on/off | 1 | 0 | 0 | 1 | 1 | 1 |
+| Coast | `coast` | null / beach / marsh / cliff / none | null | null | marsh | cliff | null | null |
+| Volcano on the coast | `volcano` | on/off | 0 | 0 | 0 | 1 | 0 | 0 |
+| Start at | `home` | middle / coast | middle | middle | middle | coast | middle | coast |
+| Snow cover | `snow` | 0..16 whole | 0 | 10 | 0 | 0 | 0 | 0 |
+| Forest | `trees` | 0..2.5 | 1 | 1 | 1 | 1 | 1 | 1 |
+| Grass | `grass` | 0..1.33 | 1 | 1 | 1 | 1 | 1 | 1 |
+| Caves | `caves` | 0..2 | 1 | 1 | 1 | 1 | 1 | 1 |
+| Wildlife | `animals` | 0..3 | 1 | 1 | 1 | 1 | 1 | 1 |
+<!-- /contract:knobs -->
+
+What the knobs that are new with the generator do (the others are X6's, in ENGINE.md and the `BIOMES` comment):
+- `warm`: degrees added to the climate all year (`Grid.warmK`, in `updateClimate`): the air (`ambAt`), a site's yearly mean
+  (`warmth`, so the treeline), and the season's growth and foliage curves.
+- `trees`, `grass`: multiply the odds of a tree in each `TREES_EVERY` run and of grass on a column at generation.
+- `caves`: a cavern opens where the cave noise passes `CAVE_AT + (1 - caves) × CAVE_K`; 0 is no caverns at all.
+- `animals`: multiplies every animal's odds at generation (rabbits, grasshoppers, foxes, birds, fish).
+- `coast: 'none'`: no sea (`seaOf` returns null), so no volcano either.
+- `wide`: the world's width; the desert east of home sits at `wide / 2 + ARID_NEAR`.
 
 ## Randomness, and making the same world
 

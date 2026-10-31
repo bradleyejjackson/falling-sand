@@ -1,5 +1,5 @@
 {
- "hash": "f3c782374453",
+ "hash": "c351aeac4550",
  "fields": [
   {
    "name": "type",
@@ -5200,6 +5200,8 @@
    30,
    70
   ],
+  "CAVE_AT": 0.62,
+  "CAVE_K": 0.08,
   "LAKE": 6734,
   "LAKE_RIM": 24,
   "TREE": 32318,
@@ -5334,7 +5336,12 @@
    "home": "middle",
    "coast": null,
    "volcano": 0,
-   "snow": 0
+   "snow": 0,
+   "warm": 0,
+   "trees": 1,
+   "grass": 1,
+   "caves": 1,
+   "animals": 1
   },
   {
    "id": "alpine",
@@ -5354,7 +5361,12 @@
    "home": "middle",
    "coast": null,
    "volcano": 0,
-   "snow": 10
+   "snow": 10,
+   "warm": 0,
+   "trees": 1,
+   "grass": 1,
+   "caves": 1,
+   "animals": 1
   },
   {
    "id": "wetland",
@@ -5374,7 +5386,12 @@
    "home": "middle",
    "coast": "marsh",
    "volcano": 0,
-   "snow": 0
+   "snow": 0,
+   "warm": 0,
+   "trees": 1,
+   "grass": 1,
+   "caves": 1,
+   "animals": 1
   },
   {
    "id": "island",
@@ -5394,7 +5411,12 @@
    "home": "coast",
    "coast": "cliff",
    "volcano": 1,
-   "snow": 0
+   "snow": 0,
+   "warm": 0,
+   "trees": 1,
+   "grass": 1,
+   "caves": 1,
+   "animals": 1
   },
   {
    "id": "scrub",
@@ -5414,7 +5436,12 @@
    "home": "middle",
    "coast": null,
    "volcano": 0,
-   "snow": 0
+   "snow": 0,
+   "warm": 0,
+   "trees": 1,
+   "grass": 1,
+   "caves": 1,
+   "animals": 1
   },
   {
    "id": "coast",
@@ -5434,7 +5461,160 @@
    "home": "coast",
    "coast": null,
    "volcano": 0,
-   "snow": 0
+   "snow": 0,
+   "warm": 0,
+   "trees": 1,
+   "grass": 1,
+   "caves": 1,
+   "animals": 1
+  }
+ ],
+ "knobs": [
+  {
+   "k": "wide",
+   "name": "World width",
+   "opts": [
+    3840,
+    6400,
+    9600,
+    12800
+   ]
+  },
+  {
+   "k": "base",
+   "name": "Land height",
+   "lo": 0.12,
+   "hi": 0.5,
+   "flip": 1
+  },
+  {
+   "k": "amp",
+   "name": "Ruggedness",
+   "lo": 0,
+   "hi": 0.9
+  },
+  {
+   "k": "wave",
+   "name": "Hill width",
+   "lo": 30,
+   "hi": 250,
+   "int": 1
+  },
+  {
+   "k": "warm",
+   "name": "Warmth",
+   "lo": -12,
+   "hi": 12,
+   "int": 1
+  },
+  {
+   "k": "arid0",
+   "name": "Dryness",
+   "lo": 0,
+   "hi": 0.8
+  },
+  {
+   "k": "aridK",
+   "name": "Dry spells",
+   "lo": 0,
+   "hi": 1.5
+  },
+  {
+   "k": "desert",
+   "name": "Desert east of home",
+   "check": 1
+  },
+  {
+   "k": "wet",
+   "name": "Water table",
+   "lo": 0,
+   "hi": 1
+  },
+  {
+   "k": "sandy",
+   "name": "Sandy lowlands",
+   "lo": 0.3,
+   "hi": 0.8,
+   "flip": 1
+  },
+  {
+   "k": "lakes",
+   "name": "Lakes",
+   "lo": 0,
+   "hi": 1
+  },
+  {
+   "k": "lakeDeep",
+   "name": "Lake depth",
+   "lo": 2,
+   "hi": 16,
+   "int": 1
+  },
+  {
+   "k": "rivers",
+   "name": "Rivers",
+   "lo": 0,
+   "hi": 1
+  },
+  {
+   "k": "river0",
+   "name": "River at home",
+   "check": 1
+  },
+  {
+   "k": "coast",
+   "name": "Coast",
+   "opts": [
+    null,
+    "beach",
+    "marsh",
+    "cliff",
+    "none"
+   ]
+  },
+  {
+   "k": "volcano",
+   "name": "Volcano on the coast",
+   "check": 1
+  },
+  {
+   "k": "home",
+   "name": "Start at",
+   "opts": [
+    "middle",
+    "coast"
+   ]
+  },
+  {
+   "k": "snow",
+   "name": "Snow cover",
+   "lo": 0,
+   "hi": 16,
+   "int": 1
+  },
+  {
+   "k": "trees",
+   "name": "Forest",
+   "lo": 0,
+   "hi": 2.5
+  },
+  {
+   "k": "grass",
+   "name": "Grass",
+   "lo": 0,
+   "hi": 1.33
+  },
+  {
+   "k": "caves",
+   "name": "Caves",
+   "lo": 0,
+   "hi": 2
+  },
+  {
+   "k": "animals",
+   "name": "Wildlife",
+   "lo": 0,
+   "hi": 3
   }
  ],
  "scenarioDefs": [

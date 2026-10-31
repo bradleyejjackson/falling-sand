@@ -19,6 +19,7 @@ node tools/validate.js        # all scenarios, or name some: sapling sand soak t
                               #   scrub cactus reeds biomes (R6)
                               #   nutrients (R7) vigour narrow (N0)
                               #   river (N6)
+                              #   presets (X6) generator (world generator)
 SIMFILE=other.html node tools/validate.js   # run them against another copy of the page
 node tools/ui.js [serial|threads]   # runs the whole page against a stub DOM and pokes the UI, on one thread and on workers
 node tools/threads.js [n] [frames]  # n worker threads must give exactly the world one thread gives; times both
@@ -33,6 +34,7 @@ OX=0 node tools/soil.js [seed] [seasons]   # R7: topsoil and subsoil nutrients b
 node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, binned by sun and soil
 node tools/forest.js [seed] [seasons]   # N4: broadleaf trees and conifers each season, by site warmth (valley, slope, upland, high)
 node tools/rivers.js [seed] [half-seasons] [ox]   # N6: each river in the window: the stream on its bed, the pond, silt, the delta
+GEN=warm:8,coast:none node tools/presets.js [minutes] [seed] custom   # survey a custom world (knobs as in a share link's gen=); SNAP=dir for PNGs
 ```
 
 ## Engine (stage 4)
@@ -458,3 +460,23 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   seed 99 6.93 vs 6.67 (about +0.3 ms at p50: the stream and pond stay awake). `threads.js`: 4 threads identical to one.
 - Older saves keep their own land, but a river's spring and outlet run from the world seed, so in an old save the spring
   turns up wherever its columns now lie, and water standing over the pond's bank row in its columns runs off.
+
+## World generator
+
+- The page's World generator button opens a panel of knobs, one for each setting of a biome (`KNOBS` in the Sim block): world
+  width, land height, ruggedness, hill width, warmth, dryness, dry spells, the desert east of home, water table, sandy lowlands,
+  lakes and their depth, rivers and the river at home, the coast (by the seed, beach, marsh, cliff or no sea), a volcano on it,
+  where the world opens, snow cover, forest, grass, caves and wildlife. Start from loads a preset's values into the knobs. A
+  preview draws the whole world the knobs and seed make (land, sea, rivers, climate along the top, and the box it opens on),
+  redrawn as a knob moves. Make world builds it; the Custom entry in the biome box makes a new custom world from the same knobs.
+- `customBiome(spec, from)` makes the biome: preset `from` with the knobs in `spec` set over it, each kept in its range.
+  `Grid.biome` is that object (presets stay an index), saved with the world; Share link carries the knobs set off Temperate's
+  (`#world=SEED&gen=wide:6400,warm:6,...`). The knobs are kept in this browser (`sandfall.gen`).
+- New settings beyond X6's: `warm` (degrees on the air all year; `Grid.warmK`, moves the treeline, snow and growing season),
+  `trees`, `grass`, `animals` (multiply their odds at generation), `caves` (0 none, 2 riddled: `CAVE_AT`, `CAVE_K`), `coast:
+  'none'` and `wide`. With every knob at a preset's value the world is the preset's, cell for cell, and the six presets generate
+  exactly as before.
+- Fixed on the way: New world never set the view's height or the dims (a comment had swallowed the rest of the line).
+- Tests: `validate.js generator` (each knob moves the window it opens on the way it says, against Temperate on the same seed; a
+  custom world saves and loads with its knobs), `ui.js` (the panel, Start from, a knob, Make world, save, Share link). The port
+  contract has a `knobs` section and a table in docs/PORT.md.
