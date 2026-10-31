@@ -2,7 +2,7 @@
 // usage: node tools/validate.js [scenario...]   (default: all)
 const { loadSim, census } = require('./load');
 const Sim = loadSim(process.env.SIMFILE);
-const { E, DIRT, STONE, WATER, TIP, SEED, WOOD, ROOT, LITTER, ASH, SNOW, PLANT, SAND, CLOUD, FIRE, LAVA, OIL, SALT, BRINE, ACID } = Sim.ids;
+const { E, DIRT, STONE, WATER, TIP, SEED, WOOD, ROOT, LITTER, ASH, SNOW, PLANT, SAND, CLOUD, FIRE, LAVA, OIL, SALT, BRINE, ACID, SMOKE } = Sim.ids;
 const MIN = 3600;   // ticks in a minute at 60 fps
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`); if (!ok) failed++; };
@@ -19,6 +19,157 @@ const moisture = (g, y0, y1) => { let s = 0, n = 0; for (let i = y0 * g.W; i < y
 const run = (g, n, every, fn) => { for (let f = 1; f <= n; f++) { g.step(); if (every && f % every === 0) fn(f); } };
 
 const scenarios = {
+  fish() {
+    // fish in a pond live on through two years, spawning in spring; a pond that dries out, or one kept frozen solid, kills them; birds
+    // take the ones at the surface
+    const { FISH, REED } = Sim.ids;
+    const pond = (fate) => {
+      Sim.reseed(13); const W = 200, H = 80, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let y = 40; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y), bowl = y < 60 && x >= 30 && x < 170; if (y >= 76) { g.set(i, STONE); g.life[i] = 1; } else if (!bowl) { g.set(i, DIRT); g.life[i] = (Sim.NREF << 8) | 240; } else if (y >= 44) g.set(i, WATER); }
+      for (let x = 34; x < 166; x += 6) for (let y = 52; y < 60; y++) g.set(g.idx(x, y), REED);
+      for (let k = 0; k < 12; k++) { const i = g.idx(40 + k * 10, 50); g.set(i, FISH); g.life[i] = 160 | (1 << 8); g.vx[i] = 1; }
+      g.initAir(); let lo = 99, hi = 0, spawned = 0;
+      for (let f = 0; f < (fate === 'live' ? 2 : 0.5) * Sim.YEAR; f++) {
+        if (fate === 'dry' && f % 30 === 0) for (let x = 30; x < 170; x++) for (let y = 40; y < 60; y++) { const i = g.idx(x, y); if (g.type[i] === WATER) { g.set(i, E); break; } }
+        if (fate === 'live' && f % 600 === 0) for (let x = 30; x < 170; x++) { const i = g.idx(x, 43); if (g.type[i] === E) g.set(i, WATER); }   // (topped up: no rain in a box)
+        if (fate === 'ice' && f % 30 === 0) for (let i = 0; i < g.type.length; i++) if (g.type[i] === WATER || g.type[i] === FISH) g.temp[i] = Math.min(g.temp[i], -20);
+        g.step();
+        if (f % 3600 === 0) { const c = g.census(); lo = Math.min(lo, c.fish); hi = Math.max(hi, c.fish); }
+        if (f % 600 === 0) for (let i = 0; i < g.type.length; i++) if (g.type[i] === FISH && (g.life[i] & Sim.EGG)) spawned++;
+      }
+      return { fish: g.census().fish, lo, hi, spawned };
+    };
+    const live = pond('live'), dry = pond('dry'), ice = pond('ice');
+    console.log(`  a pond, two years: ${live.fish} fish (between ${live.lo} and ${live.hi} at the daily counts, eggs seen ${live.spawned}); dried out: ${dry.fish}; frozen solid: ${ice.fish}`);
+    check('fish live on in a pond for two years, spawning', live.fish >= 6 && live.lo >= 3 && live.spawned > 0);
+    check('a pond that dries out or freezes solid kills its fish', dry.fish === 0 && ice.fish === 0);
+  },
+  moss() {
+    // bare rock in damp air greens over with moss within a couple of years and weathers a thin soil out of it (scree fastest); in dry
+    // air it stays bare
+    const { MOSS, RUBBLE } = Sim.ids;
+    const crag = wet => {
+      Sim.reseed(9); const W = 200, H = 80, g = new Sim.Grid(W, H); g.windHold = 0;
+      for (let y = 50; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y < 53 && x >= 100) g.set(i, RUBBLE, g.ambAt(y)); else { g.set(i, STONE, g.ambAt(y)); g.life[i] = 1; } }
+      g.initAir(); const damp = () => { for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c] * (wet ? 0.85 : 0.2); };
+      for (let f = 0; f < 2 * Sim.YEAR; f++) { if (f % 500 === 0) damp(); g.step(); }
+      let moss = 0, rock = 0, scree = 0; for (let x = 0; x < W; x++) for (let y = 40; y < 56; y++) { const t = g.type[g.idx(x, y)]; if (t === MOSS) moss++; else if (t === DIRT) { if (x < 100) rock++; else scree++; } }
+      return { moss, rock, scree };
+    };
+    const wet = crag(true), dry = crag(false);
+    console.log(`  damp air, two years: ${wet.moss} moss, ${wet.rock} cells of soil on the rock and ${wet.scree} on the scree; dry air: ${dry.moss} moss, ${dry.rock + dry.scree} soil`);
+    check('moss takes bare rock in damp air and weathers soil out of it, faster on scree', wet.moss + wet.rock + wet.scree >= 100 && wet.rock + wet.scree >= 20 && wet.scree > wet.rock);
+    check('in dry air bare rock stays bare', dry.moss + dry.rock + dry.scree === 0);
+  },
+  choke() {
+    // a fire needs air: the same grass fire burns less of the grass in a sealed cave than in a pit open to the sky, and the cave
+    // ends up full of smoke with its fire out (what got hot with no air left charred)
+    const room = open => {
+      Sim.reseed(3); const W = 120, H = 80, g = new Sim.Grid(W, H); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true; g.windHold = 0;
+      for (let y = 30; y < H; y++) for (let x = 20; x < 100; x++) { const i = g.idx(x, y), inside = y >= 50 && y < 67 && x >= 33 && x < 87; if (!inside && !(open && y < 50 && x >= 33 && x < 87)) { g.set(i, STONE, g.ambAt(y)); g.life[i] = 1; } }   // (a cave in the rock, or a pit open to the sky)   // (settled)
+      for (let y = 57; y < 67; y++) for (let x = 33; x < 87; x++) { const i = g.idx(x, y); if (y >= 60) { g.set(i, DIRT, g.ambAt(y)); g.life[i] = (40 << 8) | 20; } else g.set(i, PLANT, g.ambAt(y)); }
+      g.initAir(); g.hum.fill(0); g.wakeAll(); for (let x = 40; x < 44; x++) g.set(g.idx(x, 56), FIRE);
+      run(g, 2 * MIN);
+      const c = census(g, Sim.EL); return { ash: c.Ash || 0, char: c.Charcoal || 0, fire: (c.Fire || 0) + (c.Ember || 0), smoke: c.Smoke || 0 };
+    };
+    const shut = room(false), open = room(true);
+    console.log(`  sealed: ${shut.ash} ash, ${shut.char} charcoal, ${shut.fire} flames and embers, ${shut.smoke} smoke; open: ${open.ash} ash, ${open.char} charcoal, ${open.fire} flames and embers, ${open.smoke} smoke`);
+    check('a sealed cave\'s fire chokes: less burns to ash than in the open pit, more chars, it goes out, and the cave stays full of smoke', shut.ash < open.ash && shut.char > open.char && shut.fire <= 10 && shut.smoke >= 80 && open.smoke < 50);
+  },
+  smokehurt() {
+    // smoke pooled under a roof kills the grass and the rabbits under it; out in the open it rises away and they live
+    const { RABBIT } = Sim.ids;
+    const yard = roof => {
+      const g = plot(160, 90, 20, 120); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true; g.windHold = 0;
+      for (let x = 20; x < 140; x++){ const i = g.idx(x, 69); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      if (roof) { for (let x = 10; x < 150; x++) for (let y = 50; y < 52; y++){ const i = g.idx(x, y); g.set(i, STONE); g.life[i] = 1; } for (let y = 50; y < 70; y++) for (const x of [10, 11, 148, 149]) { const i = g.idx(x, y); g.set(i, STONE); g.life[i] = 1; } }
+      for (let x = 30; x < 130; x += 20) { const i = g.idx(x, 68); g.set(i, RABBIT); g.life[i] = 200; }
+      for (let f = 0; f < MIN; f++) { g.step(); if (f % 10 === 0) for (let x = 40; x < 120; x += 8) { const i = g.idx(x, 55); if (g.type[i] === E) g.set(i, SMOKE, 30); } }
+      const c = census(g, Sim.EL); return { grass: c.Plant || 0, rabbits: c.Rabbit || 0 };
+    };
+    const under = yard(true), out = yard(false);
+    console.log(`  under a roof: ${under.grass} grass, ${under.rabbits} rabbits left; in the open: ${out.grass} grass, ${out.rabbits} rabbits`);
+    check('smoke trapped under a roof kills grass and rabbits that live in the open', under.grass < 0.5 * out.grass && under.rabbits < out.rabbits && out.rabbits >= 4);
+  },
+  acidrain() {
+    // a volcano's fumes sour the clouds they reach, and sour rain burns leaves and grass and leaches the soil it falls on; plain rain doesn't
+    const { FUMES, CLOUD } = Sim.ids;
+    const shower = sour => {
+      const g = plot(160, 120, 20, 120); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true; g.windHold = 0;
+      for (let x = 0; x < 160; x++){ const i = g.idx(x, 99); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      const rich = () => { let s = 0; for (let x = 0; x < 160; x++) for (let y = 100; y < 104; y++) s += g.life[g.idx(x, y)] >> 8; return s; }, r0 = rich();
+      let fumed = 0;
+      for (let f = 0; f < MIN; f++) { g.step();
+        if (f % 4 === 0) for (let x = 20; x < 140; x += 3) { const i = g.idx(x, 20); if (g.type[i] === E) { g.set(i, CLOUD, 5); g.hum[g.ac(x, 20)] = g.cap[g.ac(x, 20)] * 1.5; } }
+        if (sour && f % 4 === 2) for (let x = 20; x < 140; x += 6) { const i = g.idx(x, 22); if (g.type[i] === E) g.set(i, FUMES); } }
+      for (let i = 0; i < g.type.length; i++) if (g.type[i] === CLOUD && (g.life[i] & 2)) fumed++;
+      return { made: g.made[Sim.ids.ACID], leach: r0 - rich(), fumed, rain: g.precip.reduce((a, b) => a + b, 0) };
+    };
+    const sour = shower(true), plain = shower(false);
+    // and a drop of it on a blade of grass burns its sap; on stone it is soon just water
+    const h = plot(40, 40, 10, 120); h.hold = true; const b = h.idx(20, 29); h.set(b, PLANT); h.life[b] = (200 << 8) | 1;
+    for (let k = 0; k < 4; k++) { const a = h.idx(20, 28); h.set(a, ACID); h.life[a] = 20; for (let f = 0; f < 40 && h.type[a] === ACID; f++) h.step(); }
+    const sap = h.type[b] === PLANT ? h.life[b] >> 8 : 0;
+    console.log(`  sour: ${sour.rain} drops, ${sour.made} of them acid, ${sour.leach} nutrients lost, ${sour.fumed} sour cloud cells; plain: ${plain.rain} drops, ${plain.made} acid, ${plain.leach} lost; four drops on a blade of grass leave its sap at ${sap} of 200`);
+    check('fumes sour the clouds, and their rain falls as weak acid that leaches the soil more than plain rain', sour.made >= 50 && plain.made === 0 && sour.leach > plain.leach + 100);
+    check('acid rain burns the sap out of the grass it lands on', sap <= 120);
+  },
+  peat() {
+    // litter lying in waterlogged ground packs down into peat instead of rotting; the same litter on damp (not soaked) ground rots to dirt
+    const { PEAT, LITTER } = Sim.ids;
+    const g = plot(200, 80, 20, 0); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true;
+    for (let y = 60; y < 77; y++) for (let x = 0; x < 200; x++) { const i = g.idx(x, y); if (g.type[i] === DIRT) g.life[i] = (Sim.NREF << 8) | (x < 100 ? 240 : 120); }
+    for (let x = 10; x < 90; x += 2) { g.set(g.idx(x, 59), LITTER); g.set(g.idx(x + 100, 59), LITTER); }
+    for (let x = 0; x < 100; x++) for (let y = 55; y < 59; y++) g.set(g.idx(x, y), WATER);   // the bog: soaked ground with a pond over it
+    for (let f = 0; f < 2 * Sim.DAY; f++) { g.step(); if (f % 64 === 0) for (let x = 0; x < 100; x++) for (let y = 60; y < 64; y++) { const i = g.idx(x, y); if (g.type[i] === DIRT) g.life[i] = (g.life[i] & 0xff00) | 240; } }
+    let peat = 0, left = 0, right = 0; for (let y = 0; y < 80; y++) for (let x = 0; x < 200; x++) { const t = g.type[g.idx(x, y)]; if (t === PEAT) { peat++; if (x < 100) left++; else right++; } }
+    const litter = census(g, Sim.EL).Litter || 0;
+    console.log(`  peat ${peat} (bog ${left}, damp ground ${right}), litter left ${litter}`);
+    check('litter in the bog turns to peat; on damp ground it rots (no peat there)', left >= 25 && right === 0);
+  },
+  peatfire() {
+    // dry peat buried under dirt, lit at one end, smoulders on for days and creeps through the bed underground; a soaked bed beside it
+    // doesn't take it; burnt-out peat is ash
+    const { PEAT } = Sim.ids;
+    const g = plot(240, 80, 30, 40); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true;
+    for (let y = 60; y < 70; y++) for (let x = 20; x < 220; x++) { const i = g.idx(x, y); g.set(i, PEAT); g.life[i] = x < 120 ? 20 : 220; }
+    for (let y = 60; y < 70; y++) for (let x = 118; x < 122; x++) g.set(g.idx(x, y), STONE);   // (a wall between the dry bed and the wet one, so water doesn't cross)
+    for (let y = 60; y < 70; y++) { const i = g.idx(20, y); g.temp[i] = 400; }
+    const burning = () => { let n = 0, far = 0; for (let y = 60; y < 70; y++) for (let x = 20; x < 220; x++) { const i = g.idx(x, y); if (g.type[i] === PEAT && (g.life[i] >> 8)) { n++; far = Math.max(far, x); } } return { n, far }; };
+    run(g, Sim.DAY);
+    const d1 = burning(); run(g, 2 * Sim.DAY); const d3 = burning();
+    let ash = 0, wet = 0; for (let y = 60; y < 70; y++) for (let x = 20; x < 220; x++) { const t = g.type[g.idx(x, y)]; if (t === ASH && x < 120) ash++; if (x >= 122 && t === PEAT && !(g.life[g.idx(x, y)] >> 8)) wet++; }
+    console.log(`  after a day: ${d1.n} cells smouldering, out to column ${d1.far}; after three: ${d3.n}, out to ${d3.far}; ${ash} ash; ${wet}/980 of the wet bed unburnt`);
+    check('the fire is still smouldering after three days and has crept on through the dry bed', d1.n >= 10 && d3.n >= 10 && d3.far > d1.far + 3 && d3.far < 120);
+    check('burnt peat is ash, and the soaked bed beside it never caught', ash >= 10 && wet === 980);
+  },
+  dust() {
+    // a steady wind over dry bare dirt lifts it as dust, which comes down downwind; damp dirt, or dirt under grass, stays put
+    const { DUST } = Sim.ids;
+    const field = (m, grass) => {
+      const g = plot(360, 120, 20, m); g.clock = Sim.YEAR * 0.4; g.updateClimate(); g.hold = true; g.windHold = 0.6;
+      if (grass) for (let x = 0; x < 360; x++) { const i = g.idx(x, 99); g.set(i, PLANT); g.life[i] = (200 << 8) | 1; }
+      const dirt0 = census(g, Sim.EL).Dirt; let peak = 0;
+      for (let f = 0; f < 3 * MIN; f++) { g.step(); if (f % 300 === 0) peak = Math.max(peak, census(g, Sim.EL).Dust || 0); }
+      return { lost: dirt0 - census(g, Sim.EL).Dirt, peak };
+    };
+    const dry = field(0, false), damp = field(120, false), sward = field(0, true);
+    console.log(`  dry bare dirt: ${dry.lost} cells blown off, up to ${dry.peak} dust in the air; damp: ${damp.lost}, ${damp.peak}; under grass: ${sward.lost}, ${sward.peak}`);
+    check('a strong wind blows dust off dry bare dirt', dry.peak >= 20 && dry.lost >= 50);
+    check('damp dirt and dirt under grass stay put', damp.peak === 0 && sward.peak === 0);
+  },
+  coal() {
+    // a generated world has seams of coal deep in its rock; coal burns, slowly, to ember
+    const { COAL } = Sim.ids;
+    const g = new Sim.Grid(Sim.WORLD.W, Sim.WORLD.H); Sim.generate(g, 12345, Sim.WORLD.WIDE, 2560);
+    let coal = 0, shallow = 0; for (let x = 0; x < g.W; x++) { let s = 0; while (s < g.H && (g.type[g.idx(x, s)] === E || Sim.EL[g.type[g.idx(x, s)]].kind === 'gas')) s++; for (let y = s; y < g.H; y++) if (g.type[g.idx(x, y)] === COAL) { coal++; if (y - s < 30) shallow++; } }
+    const h = new Sim.Grid(40, 40); for (let y = 20; y < 40; y++) for (let x = 0; x < 40; x++) h.set(h.idx(x, y), COAL); h.initAir();
+    for (let x = 10; x < 30; x++) h.set(h.idx(x, 19), FIRE); for (let f = 0; f < 600; f++) { h.step(); if (f % 30 === 0) for (let x = 10; x < 30; x++) if (h.type[h.idx(x, 19)] === E) h.set(h.idx(x, 19), FIRE); }
+    const burnt = 800 - (census(h, Sim.EL).Coal || 0);
+    console.log(`  ${coal} cells of coal in the window (${shallow} within 30 of the surface); ${burnt} of 800 caught in 10 s of fire`);
+    check('coal seams lie deep in a generated world', coal >= 1000 && shallow === 0);
+    check('coal catches from a fire, slowly', burnt >= 3 && burnt <= 200);
+  },
   vigour() {
     // a tree grows to a size set by its sun and soil together: on rich open ground a giant, on poor soil a small tree, and under
     // an overhang (shade) a stunted one however rich the soil. The soil is kept watered so only light and nutrients differ.
@@ -1232,7 +1383,7 @@ const scenarios = {
     check('dry metal does not rust', dry === 0);
   },
   oil() {
-    const { OIL, SMOKE } = Sim.ids;
+    const { OIL } = Sim.ids;
     // an oil fire in a pan burns down from its surface; water poured on it flashes to steam and throws the burning oil out of the pan
     const pan = water => { Sim.reseed(4); const W = 120, H = 90, g = new Sim.Grid(W, H); g.windHold = 0;
       for (let x = 0; x < W; x++) for (let y = H - 4; y < H; y++) g.set(g.idx(x, y), STONE);
