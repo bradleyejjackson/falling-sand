@@ -2,7 +2,9 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" crossorigin="anonymous" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one-screen lab bench — a dark cabinet with the sim as the lit specimen, element rack beneath it. Single dark world by choice. */
+/* Layout: a lab bench. The world is the lit specimen on the left, sized to the window's height, with its readouts under it
+   (toolbar, map, cell readout, census); the rack of elements and the menus stand beside it on the right, so the palette is always
+   next to the world. On a narrow screen it all stacks: world, toolbar, rack, then the readouts. Single dark world by choice. */
 :root{
   --bg:#0d0f14; --panel:#161a22; --line:#262c38; --fg:#e6e3d8; --muted:#8b92a3;
   --accent:#f0b24a; --accent-ink:#1a1206;
@@ -12,44 +14,67 @@
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
-  padding-block:14px;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;}
-header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  padding-block:12px;box-sizing:border-box;display:flex;flex-direction:column;gap:10px;}
+header{display:flex;align-items:baseline;gap:8px 20px;flex-wrap:wrap}
 h1{font-family:var(--display);font-weight:700;font-size:22px;letter-spacing:.04em;margin:0;text-transform:uppercase}
 h1 span{color:var(--accent)}
-.stats{color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:16px;flex-wrap:wrap}
-.stage{position:relative;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden;
-  aspect-ratio:4/3;width:min(100%,80vh);margin:0 auto;flex-shrink:0}   /* (the width the 60vh height allows, so a resize keeps 4:3 instead of stretching) */
+.clock{color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:4px 16px;flex-wrap:wrap}
+.clock #clock{color:var(--fg)}
+.stats{display:none;width:100%;color:var(--muted);font-variant-numeric:tabular-nums;gap:4px 16px;flex-wrap:wrap;font-size:12px}
+.stats.on{display:flex}
+/* the bench: two columns on a wide screen, one on a narrow one */
+.bench{display:grid;gap:8px 14px;align-items:start;
+  grid-template-columns:minmax(0,min(calc((100vh - 180px) * 4 / 3),60%)) minmax(0,1fr);
+  grid-template-areas:"stage side" "bar side" "map side" "probe side" "census side" ". side"}
+@media (max-width:899px){ .bench{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "bar" "side" "map" "probe" "census"} }
+.stage{grid-area:stage;position:relative;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden;aspect-ratio:4/3;width:100%}
 canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:crosshair}
-.groups{display:flex;flex-direction:column;gap:8px}
-.group{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
-.group h2{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0;width:62px;padding-top:9px;flex-shrink:0}
-.rack{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
-.el{font-family:var(--display);font-weight:500;font-size:13px;letter-spacing:.06em;text-transform:uppercase;
-  background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:7px 10px;
-  display:flex;align-items:center;gap:8px;cursor:pointer}
-.el i{width:12px;height:12px;border-radius:2px;background:var(--sw);display:inline-block}
-.el[aria-pressed="true"]{border-color:var(--accent);background:#2a2411;color:#fff}
-.el:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.ctl{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;color:var(--muted)}
-.ctl label{display:flex;align-items:center;gap:8px}
-.ctl .tag{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;width:62px}
-.ctl.off{display:none}
-input[type=range]{accent-color:var(--accent);width:140px}
+.side{grid-area:side;display:flex;flex-direction:column;gap:10px;min-width:0}
+/* the toolbar under the world: what you use while playing */
+.bar{grid-area:bar;display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;color:var(--muted)}
+.bar label{display:flex;align-items:center;gap:6px}
+.bar .sep{width:1px;height:22px;background:var(--line);margin:0 2px}
+.bar .msg{flex:1;min-width:14ch}
+input[type=range]{accent-color:var(--accent);width:110px}
 .btn{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;font-size:12px;background:transparent;color:var(--fg);
   border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
 .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
 select.btn option{background:var(--panel);color:var(--fg);text-transform:none}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
-.hint{color:var(--muted);margin:0;line-height:1.5}
-.io{display:none;gap:8px;align-items:flex-start}
-.io.open{display:flex}
-textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;flex:1;min-width:0;height:60px;resize:vertical}
+.btn.step{padding:2px 8px;font-size:14px}
 .msg{color:var(--accent);min-height:1.2em}
+/* the element rack */
+.groups{display:flex;flex-direction:column;gap:6px}
+.group{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+.group h2{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0;width:58px;padding-top:7px;flex-shrink:0}
+.rack{display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0}
+.el{font-family:var(--display);font-weight:500;font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+  background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:5px 8px;
+  display:flex;align-items:center;gap:6px;cursor:pointer}
+.el i{width:11px;height:11px;border-radius:2px;background:var(--sw);display:inline-block}
+.el[aria-pressed="true"]{border-color:var(--accent);background:#2a2411;color:#fff}
+.el:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .el b{font-family:var(--mono);font-weight:500;font-size:11px;color:var(--muted);letter-spacing:0}
 .el[aria-pressed="true"] b{color:var(--accent)}
 .el:disabled{opacity:.35;cursor:not-allowed}
-.el.scn{flex-direction:column;align-items:flex-start;gap:2px}
+.el.scn{flex-direction:column;align-items:flex-start;gap:1px}
 .el.scn small{font-family:var(--mono);font-size:11px;letter-spacing:0;text-transform:none;color:var(--muted)}
+/* the menus: Play, World, View and Weather, one open at a time */
+.menus{display:flex;flex-direction:column;gap:8px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.menu{display:none;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px;color:var(--muted)}
+.menu.on{display:flex}
+.ctl{display:flex;align-items:flex-start;gap:8px 10px;flex-wrap:wrap;color:var(--muted)}
+.ctl label{display:flex;align-items:center;gap:8px}
+.tag{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;width:62px;flex-shrink:0;padding-top:8px}
+.off{display:none!important}
+.hint{color:var(--muted);margin:0;line-height:1.5}
+.io{display:none;gap:8px;align-items:flex-start;width:100%}
+.io.open{display:flex}
+textarea{font-family:var(--mono);font-size:11px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px;flex:1;min-width:0;height:60px;resize:vertical}
+.seed{font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:5px 8px;width:11ch}
+/* a scenario's mission card */
 .mission{display:none;gap:10px 24px;flex-wrap:wrap;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px}
 .mission.on{display:flex}
 .mission h3{font-family:var(--display);font-size:15px;letter-spacing:.06em;text-transform:uppercase;margin:0 0 4px}
@@ -61,30 +86,13 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 .mission .nums{display:flex;flex-direction:column;gap:3px;font-variant-numeric:tabular-nums;color:var(--muted)}
 .mission .nums strong{color:var(--fg);font-weight:500}
 .mission .acts{display:flex;gap:8px;margin-left:auto}
-.lab{width:min(100%,80vh);margin:0 auto;display:flex;flex-direction:column;gap:8px}
-.minimap{width:100%;height:44px;display:block;background:var(--panel);border:1px solid var(--line);border-radius:4px;cursor:pointer;image-rendering:auto}
-.seed{font-family:var(--mono);font-size:12px;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:5px 8px;width:9ch}
-.editor{display:none;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px;color:var(--muted)}
-.editor.on{display:flex}
-.editor .erow{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center}
-.editor h4{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 4px;color:var(--muted)}
-.editor input,.editor select:not(.btn){font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:4px 6px}
-.editor input[type=number]{width:7ch}
-.editor input.wide{width:min(60ch,70vw)}
-.editor .item{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
-.editor .item .rect{width:16ch}
-.gen .knobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:6px 18px}
-.gen .knob{display:flex;gap:8px;align-items:center}
-.gen .knob span{white-space:nowrap;min-width:13ch}
-.gen .knob input[type=range]{flex:1;min-width:70px}
-.gen .knob select,.gen .knob input[type=checkbox]{margin-left:auto}
-.gen .knob output{font-family:var(--mono);font-size:12px;color:var(--fg);min-width:5ch;text-align:right}
-.gen .minimap{height:72px;cursor:default}
-.probe{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 10px;min-height:2.9em;line-height:1.45;color:var(--muted);font-variant-numeric:tabular-nums}
+/* the readouts under the world */
+.minimap{grid-area:map;width:100%;height:44px;display:block;background:var(--panel);border:1px solid var(--line);border-radius:4px;cursor:pointer;image-rendering:auto}
+.probe{grid-area:probe;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px 10px;min-height:2.9em;line-height:1.45;color:var(--muted);font-variant-numeric:tabular-nums}
 .probe b{font-family:var(--display);font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--fg)}
 .probe i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
 .probe .pin{color:var(--accent)}
-.census{display:none;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
+.census{grid-area:census;display:none;flex-direction:column;gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:8px 10px}
 .census.on{display:flex}
 .census canvas{width:100%;height:240px;cursor:crosshair;image-rendering:auto}
 .census canvas.history{height:40px;cursor:default}
@@ -93,85 +101,131 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
 .legend i{width:12px;height:3px;border-radius:2px;display:inline-block}
 .legend strong{color:var(--fg);font-weight:500}
 .legend .when{color:var(--fg)}
+/* the scenario editor and the world generator: panels under the menus */
+.editor{display:none;flex-direction:column;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px;color:var(--muted)}
+.editor.on{display:flex}
+.editor .erow{display:flex;gap:8px 14px;flex-wrap:wrap;align-items:center}
+.editor h4{font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;margin:0 0 4px;color:var(--muted)}
+.editor input,.editor select:not(.btn){font-family:var(--mono);font-size:12px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:4px 6px}
+.editor input[type=number]{width:7ch}
+.editor input.wide{width:min(60ch,70vw);flex:1}
+.editor .item{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:4px}
+.editor .item .rect{width:16ch}
+.gen .knobs{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px 18px}
+.gen .knob{display:flex;gap:8px;align-items:center}
+.gen .knob span{white-space:nowrap;min-width:13ch}
+.gen .knob input[type=range]{flex:1;min-width:70px}
+.gen .knob select,.gen .knob input[type=checkbox]{margin-left:auto}
+.gen .knob select{min-width:0;max-width:55%}
+.gen .knob output{font-family:var(--mono);font-size:12px;color:var(--fg);min-width:5ch;text-align:right}
+.gen .minimap{height:72px;cursor:default}
 .banner{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(8,9,12,.62)}
 .banner.on{display:flex}
 .banner div{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:16px 18px;text-align:center;display:flex;flex-direction:column;gap:8px;max-width:80%}
 .banner h3{font-family:var(--display);font-size:20px;letter-spacing:.08em;text-transform:uppercase;margin:0}
 .banner p{margin:0;color:var(--muted)}
 .banner .acts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
-.btn.step{padding:2px 8px;font-size:14px}
-.keys{color:var(--muted);margin:0;font-size:12px}
+/* the manual, folded away */
+.help{border:1px solid var(--line);border-radius:4px;padding:8px 12px;color:var(--muted)}
+.help summary{cursor:pointer;font-family:var(--display);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.help[open] summary{margin-bottom:8px}
+.help h4{font-family:var(--display);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg);margin:14px 0 4px}
+.help .hint{max-width:90ch}
+.keys{color:var(--muted);margin:0;font-size:12px;line-height:1.8}
 .keys kbd{font-family:var(--mono);border:1px solid var(--line);border-radius:3px;padding:0 4px;color:var(--fg)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 /* a touch screen: bigger targets, and a brush slider a thumb can work */
-@media (pointer:coarse){ .btn{padding:10px 14px} .btn.step{padding:8px 16px;font-size:18px} .el{min-height:40px} input[type=range]{width:200px;height:32px} }
+@media (pointer:coarse){ .btn{padding:10px 14px} .btn.step{padding:8px 16px;font-size:18px} .el{min-height:40px} input[type=range]{width:160px;height:32px} }
 </style>
 
 <header>
   <h1>Sand<span>fall</span></h1>
-  <div class="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="threads"></span><span id="wind"></span><span id="clock"></span></div>
+  <div class="clock"><span id="clock"></span><span id="wind"></span></div>
+  <div class="stats" id="stats"><span id="fps">0 fps</span><span id="chunks">0 chunks</span><span id="dims"></span><span id="cam"></span><span id="threads"></span></div>
 </header>
 
+<div class="bench">
 <div class="stage"><canvas id="c"></canvas>
   <div class="banner" id="banner" role="status"><div><h3 id="bannerh"></h3><p id="bannerp"></p><div class="acts" id="banneracts"></div></div></div>
 </div>
-
-<div class="lab">
-  <canvas class="minimap" id="minimap" aria-label="Map of the whole world: click to go there"></canvas>
-  <div class="probe" id="probe">Point at the world to read a cell (the Inspect tool pins one).</div>
-  <div class="census" id="census" role="img" aria-label="Census of the simulated window over the seasons">
-    <canvas id="censusc"></canvas>
-    <canvas id="historyc" class="history" aria-label="Land cover over the years, a day a column"></canvas>
-    <div class="legend" id="legend"></div>
-  </div>
-</div>
-
-<div class="mission" id="mission">
-  <div><h3 id="mname"></h3><p id="mbrief"></p></div>
-  <ul id="mgoals"></ul>
-  <div class="nums"><span>Time <strong id="mtime"></strong></span><span>Reactions <strong id="mpoints"></strong></span><span id="mchain"></span></div>
-  <div class="acts"><button class="btn" id="restart">Restart</button><button class="btn" id="leave">Sandbox</button></div>
-</div>
-
-<div class="groups" id="groups"></div>
-
-<div class="ctl">
+<div class="bar">
   <label>Brush <button class="btn step" id="brushdn" aria-label="Smaller brush">−</button><input type="range" id="brush" min="1" max="24" value="4"><button class="btn step" id="brushup" aria-label="Bigger brush">+</button><span id="brushv">4</span></label>
+  <select class="btn" id="shape" aria-label="Brush shape"><option value="free">Brush: free</option><option value="line">Brush: line</option><option value="box">Brush: box</option><option value="fill">Brush: fill</option></select>
+  <button class="btn" id="undo">Undo</button>
+  <span class="sep"></span>
   <button class="btn" id="pause">Pause</button>
   <button class="btn" id="speed" aria-label="Simulation speed">Speed ×1</button>
   <button class="btn" id="timelapse" aria-pressed="false">Time-lapse</button>
   <button class="btn" id="zoom" aria-label="Zoom">Zoom ×1</button>
-  <select class="btn" id="shape" aria-label="Brush shape"><option value="free">Brush: free</option><option value="line">Brush: line</option><option value="box">Brush: box</option><option value="fill">Brush: fill</option></select>
-  <button class="btn" id="undo">Undo</button>
-  <button class="btn" id="newworld">New world</button>
-  <select class="btn" id="biome" aria-label="What kind of country New world makes"><option value="temperate">Temperate</option><option value="alpine">Alpine</option><option value="wetland">Wetland</option><option value="island">Volcanic island</option><option value="scrub">Scrubland</option><option value="coast">Coast</option><option value="custom">Custom</option></select>
-  <button class="btn" id="genbtn" aria-pressed="false">World generator</button>
-  <label>Seed <input class="seed" id="seedin" type="text" inputmode="numeric" autocomplete="off" aria-label="World seed"></label>
-  <button class="btn" id="goseed">Open seed</button>
-  <button class="btn" id="sharelink">Share link</button>
-  <button class="btn" id="clear">Clear</button>
-  <button class="btn" id="save">Save</button>
-  <button class="btn" id="load">Load</button>
-  <button class="btn" id="export">Export / Import</button>
-  <button class="btn" id="showchunks" aria-pressed="false">Chunks</button>
-  <button class="btn" id="heatview" aria-pressed="false">Heat view</button>
-  <button class="btn" id="moistview" aria-pressed="false">Moisture view</button>
-  <button class="btn" id="windview" aria-pressed="false">Wind view</button>
-  <button class="btn" id="soilview" aria-pressed="false">Soil view</button>
-  <button class="btn" id="lightmode" aria-pressed="false">Light: day/night</button>
-  <button class="btn" id="censusbtn" aria-pressed="false">Census</button>
-  <button class="btn" id="sound" aria-pressed="false">Sound: off</button>
   <span class="msg" id="msg"></span>
 </div>
-<div class="ctl" id="sbox">
-  <span class="tag">Sandbox</span>
-  <button class="btn" id="flatworld">Flat world</button>
-  <button class="btn" id="season">Next season</button>
-  <button class="btn" id="hold" aria-pressed="false">Hold time</button>
-  <button class="btn" id="windset">Wind: natural</button>
-  <button class="btn" id="front">Send a cold front</button>
-  <button class="btn" id="editbtn" aria-pressed="false">Scenario editor</button>
+<canvas class="minimap" id="minimap" aria-label="Map of the whole world: click to go there"></canvas>
+<div class="probe" id="probe">Point at the world to read a cell (the Inspect tool pins one).</div>
+<div class="census" id="census" role="img" aria-label="Census of the simulated window over the seasons">
+  <canvas id="censusc"></canvas>
+  <canvas id="historyc" class="history" aria-label="Land cover over the years, a day a column"></canvas>
+  <div class="legend" id="legend"></div>
 </div>
+
+<div class="side">
+  <div class="mission" id="mission">
+    <div><h3 id="mname"></h3><p id="mbrief"></p></div>
+    <ul id="mgoals"></ul>
+    <div class="nums"><span>Time <strong id="mtime"></strong></span><span>Reactions <strong id="mpoints"></strong></span><span id="mchain"></span></div>
+    <div class="acts"><button class="btn" id="restart">Restart</button><button class="btn" id="leave">Sandbox</button></div>
+  </div>
+  <div class="groups" id="groups"></div>
+  <div class="menus">
+    <div class="tabs" id="tabs">
+      <button class="btn" id="tab-play" aria-pressed="false">Play</button>
+      <button class="btn" id="tab-world" aria-pressed="false">World</button>
+      <button class="btn" id="tab-view" aria-pressed="false">View</button>
+      <button class="btn" id="tab-weather" aria-pressed="false">Weather</button>
+      <button class="btn" id="tab-help" aria-pressed="false">Help</button>
+    </div>
+    <div class="menu" id="menu-play">
+      <div class="ctl"><span class="tag">Scenarios</span><div class="rack" id="playrack"></div></div>
+      <div class="ctl"><span class="tag">Make</span><button class="btn" id="editbtn" aria-pressed="false">Scenario editor</button></div>
+    </div>
+    <div class="menu" id="menu-world">
+      <div class="ctl"><span class="tag">New</span><button class="btn" id="newworld">New world</button>
+        <select class="btn" id="biome" aria-label="What kind of country New world makes"><option value="temperate">Temperate</option><option value="alpine">Alpine</option><option value="wetland">Wetland</option><option value="island">Volcanic island</option><option value="scrub">Scrubland</option><option value="coast">Coast</option><option value="custom">Custom</option></select>
+        <button class="btn" id="genbtn" aria-pressed="false">World generator</button>
+        <button class="btn" id="flatworld">Flat world</button>
+        <button class="btn" id="clear">Clear</button></div>
+      <div class="ctl"><span class="tag">Seed</span><label><input class="seed" id="seedin" type="text" inputmode="numeric" autocomplete="off" aria-label="World seed"></label>
+        <button class="btn" id="goseed">Open seed</button>
+        <button class="btn" id="sharelink">Share link</button></div>
+      <div class="ctl"><span class="tag">Keep</span><button class="btn" id="save">Save</button>
+        <button class="btn" id="load">Load</button>
+        <button class="btn" id="export">Export / Import</button></div>
+      <div class="io" id="io">
+        <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
+        <button class="btn" id="import">Import</button>
+      </div>
+    </div>
+    <div class="menu" id="menu-view">
+      <div class="ctl"><span class="tag">Tint</span><button class="btn" id="heatview" aria-pressed="false">Heat</button>
+        <button class="btn" id="moistview" aria-pressed="false">Moisture</button>
+        <button class="btn" id="soilview" aria-pressed="false">Soil</button></div>
+      <div class="ctl"><span class="tag">Overlay</span><button class="btn" id="windview" aria-pressed="false">Wind</button>
+        <button class="btn" id="showchunks" aria-pressed="false">Chunks</button></div>
+      <div class="ctl"><span class="tag">Show</span><button class="btn" id="lightmode" aria-pressed="false">Light: day/night</button>
+        <button class="btn" id="censusbtn" aria-pressed="false">Census</button>
+        <button class="btn" id="sound" aria-pressed="false">Sound: off</button>
+        <button class="btn" id="statsbtn" aria-pressed="false">Stats</button></div>
+    </div>
+    <div class="menu" id="sbox">
+      <div class="ctl"><span class="tag">Sandbox</span><button class="btn" id="season">Next season</button>
+        <button class="btn" id="hold" aria-pressed="false">Hold time</button>
+        <button class="btn" id="windset">Wind: natural</button>
+        <button class="btn" id="front">Send a cold front</button></div>
+    </div>
+    <div class="menu" id="menu-help">
+      <p class="keys" id="keys"><kbd>Q</kbd>/<kbd>E</kbd> previous/next element, <kbd>1</kbd>–<kbd>9</kbd> the elements of its row, <kbd>[</kbd>/<kbd>]</kbd> brush size, <kbd>Space</kbd> pause, <kbd>X</kbd> erase, <kbd>I</kbd> inspect, <kbd>Z</kbd> zoom, <kbd>B</kbd> brush shape, <kbd>T</kbd> time-lapse, <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo, arrows or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pan.</p>
+      <p class="hint">Pan with the arrow keys, WASD, a right-drag, or the Pan tool. The full manual is at the foot of the page.</p>
+    </div>
+  </div>
 <div class="editor" id="editor">
   <div class="erow"><label>Name <input id="ed-name" value="My scenario"></label><label>Time (s) <input id="ed-time" type="number" min="10" value="90"></label>
     <label>Season <select id="ed-season"><option value="0">Spring</option><option value="0.25">Summer</option><option value="0.5">Autumn</option><option value="0.75">Winter</option></select></label>
@@ -193,12 +247,25 @@ textarea{font-family:var(--mono);font-size:11px;background:var(--panel);color:va
   <div class="knobs" id="gen-knobs"></div>
   <p class="hint">The preview is the whole world from west to east: land (green, olive in scrub, tan in desert), sea in blue, and the box where it opens. Make world builds it from the knobs and the seed; the knobs are kept in this browser and go along in Share link.</p>
 </div>
-<p class="keys" id="keys"><kbd>Q</kbd>/<kbd>E</kbd> previous/next element, <kbd>1</kbd>–<kbd>9</kbd> the elements of its row, <kbd>[</kbd>/<kbd>]</kbd> brush size, <kbd>Space</kbd> pause, <kbd>X</kbd> erase, <kbd>I</kbd> inspect, <kbd>Z</kbd> zoom, <kbd>B</kbd> brush shape, <kbd>T</kbd> time-lapse, <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo, arrows or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pan.</p>
-<div class="io" id="io">
-  <textarea id="iotext" placeholder="Exported world text appears here. Paste a world here and press Import." aria-label="World data"></textarea>
-  <button class="btn" id="import">Import</button>
 </div>
-<p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. The later scenarios: hold a river in flood off a town (dam it with a clay core: sand alone washes out), put out a volcano before its lava reaches the village (water crusts lava over, and the crater wants capping), and grow a forest in the desert (water sinks through sand, so line the beds with clay). After those: plant a hillside before a storm soaks it into a landslide, save a village from lightning with metal masts (clear of the wood), bridge a gorge with an arch that carries a load a plank can't, fire bricks on a lava seep, thin a rabbit plague with foxes without wiping the rabbits out, ration water to a drying pond, and keep a forest standing through a season of dry lightning. Sandbox is free play: New world makes a fresh generated world (it opens on a river: a spring at the foot of a hill feeding a stream that runs down a sandy bed to a pond, high in the spring melt and low late in a dry summer), and the box beside it picks what kind of country it makes: Temperate (the usual mix of hills, river, forest and, further east, desert), Alpine (high mountains with snow on their peaks, conifers up to a treeline and forest in the valleys), Wetland (low, flat, soaked ground full of reed ponds, with a salt marsh on its coast), Volcanic island (it opens on the sea, with a volcano rising from cliffs on the shore: every few days it erupts, lava welling out of its crater and running down its bare upper slopes while ash rains round it, and its lower slopes are rich old ash), Scrubland (dry country all through: scrub on thin soil, a sand desert here and there, few trees or rivers) and Coast (it opens on the sea's shore). Custom makes it from the World generator's knobs: open that panel to set the world's width, height, ruggedness, warmth, dryness, water, coast, snow, forest, caves and wildlife yourself, with a preview of the whole world as you go. Flat world a level field of grass to build on, and the sandbox row skips to the next season, holds the clock still, or sets the wind. Trees come in two kinds: Seed sows a broadleaf, which spreads wide on rich, warm valley ground and drops its leaves in autumn, and Cone a conifer, a narrow evergreen spire that stands the cold, the shade and poor ground. Up the hills the broadleaf trees give out first and conifers carry on to a treeline, over which nothing grows. Conifers are the pioneers on burnt and spent ground, and in the valleys the broadleaf trees overtop them in time; their resinous needles burn fiercely, and a conifer killed by fire drops its seed onto the burn. The Devices row is for experiments: a Spout pours whatever powder, liquid or gas you chose last, for ever (choose Water, then Spout); a Drain swallows any powder, liquid or gas that touches it; a Heater holds itself at 400° and a Cooler at -40°, so a heater under a pot boils it dry and a cooler freezes a pond over; a Fan blows gases, light powders and liquids along in front of it for up to 24 cells (press Fan again to turn it). Devices stand where you put them, need no support, and nothing but Erase removes them. Speed runs up to four ticks a frame, in a scenario too. Time-lapse (T) runs sixteen ticks a frame in the sandbox and draws every fourth, so years go by in minutes; the clock counts the years, and the history ribbon under the census shows each day's land cover, a day a column. Seed opens the world with that number (New world shows its seed), Share link puts the seed and the country, or the scenario you are playing, in a link, and the strip over the world is a map of all of it: the grey box is the simulated window, the amber the view, and clicking it takes you there. Zoom shows the view at twice the size or half. The brush draws free, or in a line or a box from where you press to where you let go, or fills the patch you click (only what is in view); Undo (Ctrl+Z) takes back the last strokes (up to 30, until the window moves). The Scenario editor makes your own: lay out a box, set the time, the budget, goals and fail lines (count of an element in an area, made by a reaction, trees grown) and sources, then play it or share it; a win earns one to three stars by its score. Sound plays rain, fire and wind, as loud as there is of each in view. Peat builds up where litter lies waterlogged in a bog: once dried out it smoulders for days underground. Coal lies in seams deep in the rock; it burns slowly and hot. Dry, bare dirt blows away as dust in a strong wind and settles downwind. Lichen and moss creep over bare rock and rubble in damp air, and in time make a thin soil for grass. Fire needs air: a fire sealed under rock smothers, leaving charcoal and smoke, and smoke hurts animals and wilts plants it hangs round. A volcano's fumes sour the clouds downwind, and their rain is weak acid that scorches leaves and leaches the soil. Fish live in ponds and rivers, graze the weed, spawn in spring, and die if the pond dries or freezes solid; birds take them at the surface. Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. The readout under the world reads whatever cell you point at: what it is, how hot, and what it holds (a soil's moisture and nutrients, a plant's sap, how deep a cell of water lies, a rock's cracks, a tree's vigour with the sun and soil behind it, an animal's energy and age, the air's humidity, wind and pressure); the Inspect tool pins a cell there so you can watch it change. The Census chart under it samples the simulated window eight times a day: rabbits and grasshoppers, foxes and birds, and how many columns are forest, meadow, scrub and desert, against the seasons behind them, over the last three years (point at it to read any sample). Pan with arrow keys / WASD, right-drag, or the Pan tool. Light: day/night draws the world lit by the sun and moon, with shade under cloud, overhangs and in caves; Light: constant draws everything in full daylight, all day and night (the world's own day and night go on underneath). Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt, however big the lake behind them. The hills' rock, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow, unless there is water under it to float on). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. What you build is held up by its strength: a span of laid stone, brick, glass, wood or metal is a beam, bending under its own weight and whatever lies on it, and a thicker beam spans further (pile sand or pour water on a bridge and it bows). Stone, brick and glass are strong in compression but crack when they bend, so a flat stone lintel only spans a few cells while an arch carries a load far wider; wood spans much further, bows a little and then snaps; metal sags under a heavy load and hangs on like a cable instead of breaking, but it softens in a fire, and a hot steel span droops right down. Something held at neither end falls in one piece, and wood floats. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Ice floats: it rides with a tenth of itself out of the water, so a pond's skin lies flush with the surface and a big block shows a row or so; a block of Ice dropped into a pond comes down whole and bobs up, and one left high and dry comes down whole too. In the spring thaw a pond's ice breaks up into floes that drift with the wind and the current, while in a frost ice frozen to the shore stays put. The wind moves snow too: a steady wind over cold, dry snow strips it off the windward slopes and piles it in the lee, packed hard, and at a crest with a drop past it, it builds a cornice out over the edge, which breaks off in a thaw. Deep snow on a steep slope can let go as an avalanche that runs far out past the foot: a wind slab (packed snow lying on a lee slope) is the most dangerous, wet snow in a thaw slides too, cold settled snow mostly holds, and a forest holds the snow on its slope. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch. Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Damp dirt is firm: it holds a bank twice as steep as dry dirt, which slumps like sand, and soaked dirt slumps again. Soil soaked down toward the rock can't hold a steep slope: it lets go as a landslide, a whole slab of hillside sliding down to the foot and running out past it, and leaves bare rock behind. It takes a lot of water to do it (heavy rain on steep hills, a storm), tree roots hold a slope, and grass helps a little. The steepest ground is bare rock to begin with. Rock open to the weather takes water into its cracks, and where it freezes and thaws (high ground, in autumn and spring) the ice wedges them wider until pieces break off as rubble and pile up as scree under the cliffs; rock under soil or scree is sheltered. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. How big a tree grows depends on its light and its soil together: out in the open on rich ground (old forest litter, ash) it grows into a giant, tall and spreading with thick limbs, on poor soil it stays small, and in the shade of a canopy or under an overhang it stays a stunted understory tree however rich the soil, until a gap opens over it. Scrub grows taller on richer ground too, and grass on spent soil stays short. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it, and its seed blows further off, so a meadow takes back ground a fire or a dead tree has cleared; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it (and reach drier soil than grass can use), and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Wild plants each suit their own ground, so the land sorts itself by climate. Some stretches of the world are dry country, where the sun dries everything faster: east of where a new world opens the hills turn to scrub and then to a sand desert. Shrub is scrub: deep roots let it drink soil too dry for grass, so it stays green through the dry season on dry ground and seeds itself across it, but in a damp meadow its seedlings are smothered and under trees it dies of shade; dried out, it burns like straw. Cactus stores water: it drinks the sand fast after rain and loses almost none, so it lasts the long dry spells, grows tall and puts out arms, but it rots in damp ground and stands well apart from its neighbours. Reed grows in the soaked bed of a shallow pond or a waterlogged bank, up through the water to stand a few cells out of it, and spreads along the bed; in deep water it drowns, and where the pond dries out it dies back. Valley floors in the wet country hold ponds. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt. Soil has fertility as well as water (Soil view shows it, and rich dirt is darker): rotting litter and roots make rich humus, a river's silt settles rich, and ash soaks into the ground it lies on, fastest once rain wets it, so a burnt meadow comes back greener. Plants take the nutrients up as they grow, and grow by them: on rich soil grass thickens and spreads faster and its seed takes more often, trees grow faster and drop more seed, and reeds and shrubs grow faster (shrubs, the scrub of poor ground, care less). Rain soaking down through the soil carries nutrients with it, so heavy rain on bare ground washes the topsoil poor (sand holds none at all, and springs carry them off), while plant cover drinks the rain first and holds them. A new world's topsoil is richest at the surface and poorer in the dry country. Animals live on the plants. Rabbits wander the meadows and scrub, grazing the grass and shrubs from the top down, so a grazed meadow grows back, though too many rabbits crop it bare. They starve where nothing grows, have young in spring and summer when they are well fed and not too crowded, run from fire, swim for the shore and won't walk off a cliff. Seed they eat in summer comes out in their droppings, with a little fertiliser, well away from where they ate it, so rabbits carry grass and scrub over rock and sand that windblown seed can't cross. Grasshoppers hop through the grass chewing the sap out of it and ride the wind when they jump. They breed through the warm months, fastest in a hot dry summer, when they can strip the straw in plagues. From late summer they lay eggs on the ground, and the frost kills the adults. The eggs lie through the winter and hatch when spring warms up. Foxes hunt the rabbits: a fox picks up a rabbit's scent from a long way off, creeps up on it and springs the last few cells, and a rabbit that sees a fox coming runs from it as it runs from fire, so a fox mostly catches the ones it surprises or corners. Foxes go round tree trunks, climb banks and out of holes, snap up a grasshopper when they are hungry, and starve when the rabbits are gone; when the screen has run out of foxes, a new one wanders in from the land outside once the rabbits are back (birds fly in the same way). In spring a well-fed fox digs a den, throwing the dirt out beside the hole, and raises cubs in it. Birds fly over the hills, dive on grasshoppers, pick up fallen tree seed and peck grass seed, and roost in trees at night. A seed a bird swallows comes out wherever it happens to be later, often far away, so trees spread over rock and water their own seed can't cross, and a flock of birds keeps a grasshopper plague down. In spring a fed bird lays an egg in a tall tree, and it hatches a while later. Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Weather comes in air masses that drift in from the west: warm, humid air and cold, dry air in turn, a few days apart (Heat view tints the air warmer or colder than usual). Cold air is denser, so the barometer on the stats line rises when cold air comes in and falls when warm air does, and it dips in the trough along a front. Where cold air drives into warm air (a cold front) it forces the warm air up into a line of tall shower clouds with heavy rain, tallest in summer; a warm front, where warm air rides in over cold, comes in gently. A deep storm cloud throws lightning at the highest thing under it: a hilltop, a tall tree, and a metal mast most of all (a lightning rod). No two years are alike: wet years and dry years come in runs, a drought year's summer is longer, hotter and drier (grasshopper plagues and fires follow), and some summers bring a heat wave (the clock says which year it is). The tallest storm clouds drop hail, which strips leaves and kills grasshoppers before it melts. The sun rises on the right and sets on the left, so a slope facing right gets the cool morning sun and one facing left the hot afternoon's: left-facing slopes dry out first and lose their snow first. It fuses sand to glass, and in the dry season it sets grass and trees alight; in the wet season it mostly scorches them. In the sandbox, Send a cold front brings one in from the west of the screen. Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap. New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools, and water quenches it to a crust of rock where they touch; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it. The sea: the world's west end is a salt sea (pan west from where a new world opens, past the hills). Its tide comes in and goes out twice a day, a few cells up and down the shore, and a swell rolls in over it, higher when the wind blows. The coast is one of three kinds: a sandy beach with dunes behind it that the wind works over, a salt marsh (a flat of soaked mud and reeds cut by creeks, flooded at every high tide and left in pools at low water, which dry to salt), or cliffs that the surf undercuts at the waterline until they fall into the sea as rubble, which it grinds to sand. The air off the sea is damper and milder, so the coast gets more fog and rain and softer winters; on a sunny day the land warms past the sea and draws a breeze in off it, and at night a lighter one blows back out. Engine: the world is 6400 cells wide, twenty screens. A window of 960 by 960 cells (three screens across and four tall) simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+</div>
+
+<details class="help" id="help"><summary>How Sandfall works</summary>
+  <h4>Play</h4><p class="hint">Play: each scenario is a puzzle on one screen with a fixed supply of a few elements (the counts on the buttons). Meet every goal and hold it for a moment to win; trip a fail line or run out of time and it's lost. Reactions score points, multiplied while a chain of different products keeps going (fire to ember to charcoal to ash). Winning a scenario opens the next and unlocks its elements in the sandbox. The later scenarios: hold a river in flood off a town (dam it with a clay core: sand alone washes out), put out a volcano before its lava reaches the village (water crusts lava over, and the crater wants capping), and grow a forest in the desert (water sinks through sand, so line the beds with clay). After those: plant a hillside before a storm soaks it into a landslide, save a village from lightning with metal masts (clear of the wood), bridge a gorge with an arch that carries a load a plank can't, fire bricks on a lava seep, thin a rabbit plague with foxes without wiping the rabbits out, ration water to a drying pond, and keep a forest standing through a season of dry lightning.</p>
+  <h4>Sandbox and worlds</h4><p class="hint">Sandbox is free play: New world makes a fresh generated world (it opens on a river: a spring at the foot of a hill feeding a stream that runs down a sandy bed to a pond, high in the spring melt and low late in a dry summer), and the box beside it picks what kind of country it makes: Temperate (the usual mix of hills, river, forest and, further east, desert), Alpine (high mountains with snow on their peaks, conifers up to a treeline and forest in the valleys), Wetland (low, flat, soaked ground full of reed ponds, with a salt marsh on its coast), Volcanic island (it opens on the sea, with a volcano rising from cliffs on the shore: every few days it erupts, lava welling out of its crater and running down its bare upper slopes while ash rains round it, and its lower slopes are rich old ash), Scrubland (dry country all through: scrub on thin soil, a sand desert here and there, few trees or rivers) and Coast (it opens on the sea's shore). Custom makes it from the World generator's knobs: open that panel to set the world's width, height, ruggedness, warmth, dryness, water, coast, snow, forest, caves and wildlife yourself, with a preview of the whole world as you go. Flat world a level field of grass to build on, and the sandbox row skips to the next season, holds the clock still, or sets the wind.</p>
+  <h4>Trees</h4><p class="hint">Trees come in two kinds: Seed sows a broadleaf, which spreads wide on rich, warm valley ground and drops its leaves in autumn, and Cone a conifer, a narrow evergreen spire that stands the cold, the shade and poor ground. Up the hills the broadleaf trees give out first and conifers carry on to a treeline, over which nothing grows. Conifers are the pioneers on burnt and spent ground, and in the valleys the broadleaf trees overtop them in time; their resinous needles burn fiercely, and a conifer killed by fire drops its seed onto the burn.</p>
+  <h4>Devices and tools</h4><p class="hint">The Devices row is for experiments: a Spout pours whatever powder, liquid or gas you chose last, for ever (choose Water, then Spout); a Drain swallows any powder, liquid or gas that touches it; a Heater holds itself at 400° and a Cooler at -40°, so a heater under a pot boils it dry and a cooler freezes a pond over; a Fan blows gases, light powders and liquids along in front of it for up to 24 cells (press Fan again to turn it). Devices stand where you put them, need no support, and nothing but Erase removes them. Speed runs up to four ticks a frame, in a scenario too. Time-lapse (T) runs sixteen ticks a frame in the sandbox and draws every fourth, so years go by in minutes; the clock counts the years, and the history ribbon under the census shows each day's land cover, a day a column. Seed opens the world with that number (New world shows its seed), Share link puts the seed and the country, or the scenario you are playing, in a link, and the strip over the world is a map of all of it: the grey box is the simulated window, the amber the view, and clicking it takes you there. Zoom shows the view at twice the size or half. The brush draws free, or in a line or a box from where you press to where you let go, or fills the patch you click (only what is in view); Undo (Ctrl+Z) takes back the last strokes (up to 30, until the window moves). The Scenario editor makes your own: lay out a box, set the time, the budget, goals and fail lines (count of an element in an area, made by a reaction, trees grown) and sources, then play it or share it; a win earns one to three stars by its score. Sound plays rain, fire and wind, as loud as there is of each in view.</p>
+  <h4>Peat, coal, moss and fish</h4><p class="hint">Peat builds up where litter lies waterlogged in a bog: once dried out it smoulders for days underground. Coal lies in seams deep in the rock; it burns slowly and hot. Dry, bare dirt blows away as dust in a strong wind and settles downwind. Lichen and moss creep over bare rock and rubble in damp air, and in time make a thin soil for grass. Fire needs air: a fire sealed under rock smothers, leaving charcoal and smoke, and smoke hurts animals and wilts plants it hangs round. A volcano's fumes sour the clouds downwind, and their rain is weak acid that scorches leaves and leaches the soil. Fish live in ponds and rivers, graze the weed, spawn in spring, and die if the pond dries or freezes solid; birds take them at the surface.</p>
+  <h4>Reading the world</h4><p class="hint">Save and Export carry a scenario in progress; a scenario's goals are plain JSON in the exported text, so you can write your own. The readout under the world reads whatever cell you point at: what it is, how hot, and what it holds (a soil's moisture and nutrients, a plant's sap, how deep a cell of water lies, a rock's cracks, a tree's vigour with the sun and soil behind it, an animal's energy and age, the air's humidity, wind and pressure); the Inspect tool pins a cell there so you can watch it change. The Census chart under it samples the simulated window eight times a day: rabbits and grasshoppers, foxes and birds, and how many columns are forest, meadow, scrub and desert, against the seasons behind them, over the last three years (point at it to read any sample). Pan with arrow keys / WASD, right-drag, or the Pan tool. Light: day/night draws the world lit by the sun and moon, with shade under cloud, overhangs and in caves; Light: constant draws everything in full daylight, all day and night (the world's own day and night go on underneath).</p>
+  <h4>Water, rock, heat and snow</h4><p class="hint">Liquids now carry pressure: water under a head will rise through a connected body to find a surface, so U-bends level out and sealed pockets squirt, however big the lake behind them. The hills' rock, ice and charcoal need support: undercut a cliff or tunnel under a thin shelf and it shears off as rubble (ice as snow, unless there is water under it to float on). Support can come from straight below or diagonally below, so a sloping roof or a brace stands. What you build is held up by its strength: a span of laid stone, brick, glass, wood or metal is a beam, bending under its own weight and whatever lies on it, and a thicker beam spans further (pile sand or pour water on a bridge and it bows). Stone, brick and glass are strong in compression but crack when they bend, so a flat stone lintel only spans a few cells while an arch carries a load far wider; wood spans much further, bows a little and then snaps; metal sags under a heavy load and hangs on like a cable instead of breaking, but it softens in a fire, and a hot steel span droops right down. Something held at neither end falls in one piece, and wood floats. Deep down, lava lies sealed in rock chambers. Hot air rises, so fires and lava make their own updrafts. Materials hold and pass heat differently (Heat view shows it): Metal carries heat end to end in seconds, so a bar with one end in lava gets hot all along, while stone warms slowly and holds what it gets; anything solid glows red when it gets hot enough. Ice and snow melt at 0°, but they have to soak up a lot of heat to do it, and water has to give that heat off to freeze: a block of ice melts layer by layer over a minute, a pond skins over on a cold night with water still under the ice, and meltwater refreezes on cold rock or metal. Ice floats: it rides with a tenth of itself out of the water, so a pond's skin lies flush with the surface and a big block shows a row or so; a block of Ice dropped into a pond comes down whole and bobs up, and one left high and dry comes down whole too. In the spring thaw a pond's ice breaks up into floes that drift with the wind and the current, while in a frost ice frozen to the shore stays put. The wind moves snow too: a steady wind over cold, dry snow strips it off the windward slopes and piles it in the lee, packed hard, and at a crest with a drop past it, it builds a cornice out over the edge, which breaks off in a thaw. Deep snow on a steep slope can let go as an avalanche that runs far out past the foot: a wind slab (packed snow lying on a lee slope) is the most dangerous, wet snow in a thaw slides too, cold settled snow mostly holds, and a forest holds the snow on its slope. Wood burns to ember, then charcoal (which can burn again, slowly) and ash. Water puts fires out, embers and all (it soaks down through ash to reach them), and wet grass and wood won't catch.</p>
+  <h4>Soil and plants</h4><p class="hint">Ecology: Dirt and sand hold moisture (Moisture view shows it). Rain and nearby water soak in, it seeps downward and runs downhill along the bedrock, and open ground dries in the sun. Where soaked ground has an open face (a cut bank, a cliff, a cave roof) water comes out as a spring, faster the higher the water table behind it, so dig into wet ground and the hole fills. Damp sand clumps: it stands in walls until it dries out, and slides again under water. Damp dirt is firm: it holds a bank twice as steep as dry dirt, which slumps like sand, and soaked dirt slumps again. Soil soaked down toward the rock can't hold a steep slope: it lets go as a landslide, a whole slab of hillside sliding down to the foot and running out past it, and leaves bare rock behind. It takes a lot of water to do it (heavy rain on steep hills, a storm), tree roots hold a slope, and grass helps a little. The steepest ground is bare rock to begin with. Rock open to the weather takes water into its cracks, and where it freezes and thaws (high ground, in autumn and spring) the ice wedges them wider until pieces break off as rubble and pile up as scree under the cliffs; rock under soil or scree is sheltered. Plant a Sapling on damp dirt, or sow Seeds on it (the brush drops one seed per click, or a row of them as you drag, spaced by the brush size): trees push real roots down toward wet soil, drink through them, and are anchored by them, so wash the soil away and the tree falls. Grown trees drop seeds in summer and autumn and forests spread themselves. How big a tree grows depends on its light and its soil together: out in the open on rich ground (old forest litter, ash) it grows into a giant, tall and spreading with thick limbs, on poor soil it stays small, and in the shade of a canopy or under an overhang it stays a stunted understory tree however rich the soil, until a gap opens over it. Scrub grows taller on richer ground too, and grass on spent soil stays short. Grass (Plant) lives on the water in the dirt under it: on damp ground it sends runners out over bare dirt and covers it, and its seed blows further off, so a meadow takes back ground a fire or a dead tree has cleared; it can't grow in the shade of a tree, and seeds that fall into a thick sward mostly get smothered. Grass and trees drink from the same soil, so a tree's roots dry out the grass round it (and reach drier soil than grass can use), and a tree that can't get water through a growing season wilts, drops its leaves and dies. From early summer to mid autumn is the dry season: unless the ground is soaked, grass stops drinking and cures to straw, and straw catches five times as readily as green grass, so a spring grass fire creeps and a late-summer one races across the hills. Green grass by water stays green, and straw greens up again when the rains come back. Wild plants each suit their own ground, so the land sorts itself by climate. Some stretches of the world are dry country, where the sun dries everything faster: east of where a new world opens the hills turn to scrub and then to a sand desert. Shrub is scrub: deep roots let it drink soil too dry for grass, so it stays green through the dry season on dry ground and seeds itself across it, but in a damp meadow its seedlings are smothered and under trees it dies of shade; dried out, it burns like straw. Cactus stores water: it drinks the sand fast after rain and loses almost none, so it lasts the long dry spells, grows tall and puts out arms, but it rots in damp ground and stands well apart from its neighbours. Reed grows in the soaked bed of a shallow pond or a waterlogged bank, up through the water to stand a few cells out of it, and spreads along the bed; in deep water it drowns, and where the pond dries out it dies back. Valley floors in the wet country hold ponds. Leaves fall as litter in autumn; litter, dead wood and old roots rot back into dirt. Soil has fertility as well as water (Soil view shows it, and rich dirt is darker): rotting litter and roots make rich humus, a river's silt settles rich, and ash soaks into the ground it lies on, fastest once rain wets it, so a burnt meadow comes back greener. Plants take the nutrients up as they grow, and grow by them: on rich soil grass thickens and spreads faster and its seed takes more often, trees grow faster and drop more seed, and reeds and shrubs grow faster (shrubs, the scrub of poor ground, care less). Rain soaking down through the soil carries nutrients with it, so heavy rain on bare ground washes the topsoil poor (sand holds none at all, and springs carry them off), while plant cover drinks the rain first and holds them. A new world's topsoil is richest at the surface and poorer in the dry country.</p>
+  <h4>Animals</h4><p class="hint">Animals live on the plants. Rabbits wander the meadows and scrub, grazing the grass and shrubs from the top down, so a grazed meadow grows back, though too many rabbits crop it bare. They starve where nothing grows, have young in spring and summer when they are well fed and not too crowded, run from fire, swim for the shore and won't walk off a cliff. Seed they eat in summer comes out in their droppings, with a little fertiliser, well away from where they ate it, so rabbits carry grass and scrub over rock and sand that windblown seed can't cross. Grasshoppers hop through the grass chewing the sap out of it and ride the wind when they jump. They breed through the warm months, fastest in a hot dry summer, when they can strip the straw in plagues. From late summer they lay eggs on the ground, and the frost kills the adults. The eggs lie through the winter and hatch when spring warms up. Foxes hunt the rabbits: a fox picks up a rabbit's scent from a long way off, creeps up on it and springs the last few cells, and a rabbit that sees a fox coming runs from it as it runs from fire, so a fox mostly catches the ones it surprises or corners. Foxes go round tree trunks, climb banks and out of holes, snap up a grasshopper when they are hungry, and starve when the rabbits are gone; when the screen has run out of foxes, a new one wanders in from the land outside once the rabbits are back (birds fly in the same way). In spring a well-fed fox digs a den, throwing the dirt out beside the hole, and raises cubs in it. Birds fly over the hills, dive on grasshoppers, pick up fallen tree seed and peck grass seed, and roost in trees at night. A seed a bird swallows comes out wherever it happens to be later, often far away, so trees spread over rock and water their own seed can't cross, and a flock of birds keeps a grasshopper plague down. In spring a fed bird lays an egg in a tall tree, and it hatches a while later.</p>
+  <h4>Weather</h4><p class="hint">Seasons and day/night drive it all: a day is a minute, a year is eight days, with snow on the hills in winter and a spring melt. Whether a cloud rains or snows depends on how cold the air is where it lets go and what the flakes fall through: in spring and autumn a tall cloud snows at its top, but the flakes melt on the way down and it rains on the valleys. Atmosphere: the air carries invisible vapour (Moisture view shows how close it is to saturation). Lakes and damp ground evaporate into it, sunny-day thermals carry it up until it condenses into cloud at a level base, cold nights pool chilled air in the hollows as fog, and saturated air leaves dew. There's a deep sky over the hills, so clouds have room to build, drift and rain out. The wind is a real flow field (Wind view): it rises over ridges, so the windward side gets the rain and the far side a rain shadow, and a fire draws air in along the ground as its heat rises. Weather comes in air masses that drift in from the west: warm, humid air and cold, dry air in turn, a few days apart (Heat view tints the air warmer or colder than usual). Cold air is denser, so the barometer on the stats line rises when cold air comes in and falls when warm air does, and it dips in the trough along a front. Where cold air drives into warm air (a cold front) it forces the warm air up into a line of tall shower clouds with heavy rain, tallest in summer; a warm front, where warm air rides in over cold, comes in gently. A deep storm cloud throws lightning at the highest thing under it: a hilltop, a tall tree, and a metal mast most of all (a lightning rod). No two years are alike: wet years and dry years come in runs, a drought year's summer is longer, hotter and drier (grasshopper plagues and fires follow), and some summers bring a heat wave (the clock says which year it is). The tallest storm clouds drop hail, which strips leaves and kills grasshoppers before it melts. The sun rises on the right and sets on the left, so a slope facing right gets the cool morning sun and one facing left the hot afternoon's: left-facing slopes dry out first and lose their snow first. It fuses sand to glass, and in the dry season it sets grass and trees alight; in the wet season it mostly scorches them. In the sandbox, Send a cold front brings one in from the west of the screen.</p>
+  <h4>Streams, dunes and wind</h4><p class="hint">Running water drags on its bed harder the deeper and steeper it runs: a fast stream lifts sand and dirt off its bed and carries them along, and drops them where it slows, so streams dig their channels deeper over time and build deltas and fans. A still pond leaves its floor alone. Wind moves the land too: a steady wind lifts dry sand off exposed slopes and drops it past the crest, so sand heaps creep downwind as dunes with a gentle back and a steep slip face (damp sand stays put). And it drives fire: a grass fire races off downwind and only creeps back into the wind, and embers throw sparks downwind that can carry it across a gap.</p>
+  <h4>Materials</h4><p class="hint">New materials: a puddle standing on soaked dirt churns it to Mud, a thick slurry that slumps flat and dries back into dirt in the sun. Clay is sticky while it is damp, so it stands in whatever shape you pile it, and water barely gets through it, so a clay-lined pond holds; bake it in a fire or against lava and it fires into Brick, which bears load, insulates, and shrugs off lava and acid. Sand melts into glowing molten glass that runs, then sets into glass where it cools (water quenches it at once); glass in lava melts again. Wet metal flakes to Rust, five times faster in salt water, and the flakes fall away and bare fresh metal, so a metal wall in the sea slowly corrodes through. Oil burns only where it meets the air, so a pool burns down from its surface, with sooty flames; water poured on burning oil flashes to steam and throws the oil up into the air still burning, so water spreads an oil fire instead of putting it out. Smoke rises while it is hot, then cools and spreads out, and gathers under a ceiling. Lava is thick and heaps into mounds as it cools, and water quenches it to a crust of rock where they touch; water beads into drops and holds together as puddles; oil spreads to a film on water. Salt dissolves into water as brine, which is heavier and settles under fresh water; drying brine leaves a salt crust. Acid is used up as it eats, and water dilutes it.</p>
+  <h4>The sea</h4><p class="hint">The sea: the world's west end is a salt sea (pan west from where a new world opens, past the hills). Its tide comes in and goes out twice a day, a few cells up and down the shore, and a swell rolls in over it, higher when the wind blows. The coast is one of three kinds: a sandy beach with dunes behind it that the wind works over, a salt marsh (a flat of soaked mud and reeds cut by creeks, flooded at every high tide and left in pools at low water, which dry to salt), or cliffs that the surf undercuts at the waterline until they fall into the sea as rubble, which it grinds to sand. The air off the sea is damper and milder, so the coast gets more fog and rain and softer winters; on a sunny day the land warms past the sea and draws a breeze in off it, and at night a lighter one blows back out.</p>
+  <h4>Engine</h4><p class="hint">Engine: the world is 6400 cells wide, twenty screens. A window of 960 by 960 cells (three screens across and four tall) simulates around the camera and streams along as you pan; land behind you is stored compactly and frozen until you return. The simulation can run on worker threads (the stats line says how many: browsers allow it only on cross-origin isolated pages, otherwise it runs on one thread with the same result).</p>
+</details>
 
 <script>
 // ============================================================================
@@ -4993,10 +5060,8 @@ const choose=t=>{
   current=t; for (const r of buttons){ r.b.setAttribute('aria-pressed',r.t===t); if ((r.t===SPOUT || r.t===FAN) && !game) r.b.innerHTML='<i></i>'+labelOf(r.t); }
   cv.style.cursor=t===PAN?'grab':'crosshair';
 };
-// the Play row: the sandbox and each scenario, opened in order as they are won
-const play=document.createElement('div'); play.className='group';
-{ const h=document.createElement('h2'); h.textContent='Play'; play.appendChild(h); }
-const playRack=document.createElement('div'); playRack.className='rack'; play.appendChild(playRack); groupsEl.appendChild(play);
+// the Play menu's rack: the sandbox and each scenario, opened in order as they are won
+const playRack=document.getElementById('playrack');
 const scnButtons=[];
 for (const [k,sc] of [[-1,null],...SCENARIOS.map((sc,k)=>[k,sc])]){
   const b=document.createElement('button'); b.className='el scn'; b.type='button';
@@ -5141,6 +5206,12 @@ function keyPan(){
 }
 
 // --- controls ---
+// the menus beside the rack (Play, World, View, Weather, Help): one open at a time, or none
+const MENUS=['play','world','view','weather','help']; let menuOpen=null;
+const menuEl=m=>document.getElementById(m==='weather' ? 'sbox' : 'menu-'+m), tabEl=m=>document.getElementById('tab-'+m);
+function showMenu(m){ menuOpen=m; for (const k of MENUS){ const on=k===m; menuEl(k).classList[on?'add':'remove']('on'); tabEl(k).setAttribute('aria-pressed',on); } }
+for (const k of MENUS) tabEl(k).addEventListener('click',()=>showMenu(menuOpen===k ? null : k));
+showMenu('play');   // (open on the scenarios, so a first visit sees there is a game to play)
 const brushEl=document.getElementById('brush'), brushV=document.getElementById('brushv');
 brushEl.addEventListener('input',()=>{brush=+brushEl.value; brushV.textContent=brush;});
 const setBrush=n=>{ brush=Math.max(1,Math.min(24,n)); brushEl.value=brush; brushV.textContent=brush; };
@@ -5205,7 +5276,7 @@ function setZoom(k){
 }
 zoomEl.addEventListener('click',()=>setZoom((zoomK+1)%ZOOMS.length));
 // sandbox tools: a flat world to build on, the calendar, and the wind
-const sbox=document.getElementById('sbox'), holdEl=document.getElementById('hold'), windEl=document.getElementById('windset');
+const sbox=document.getElementById('sbox'), sboxTab=document.getElementById('tab-weather'), holdEl=document.getElementById('hold'), windEl=document.getElementById('windset');
 const WINDS=[['natural',null],['calm',0],['east',0.5],['west',-0.5]]; let windK=0;
 const setWind=k=>{ windK=k; g.windHold=WINDS[k][1]; windEl.textContent='Wind: '+WINDS[k][0]; };
 const setHold=on=>{ g.hold=on; holdEl.setAttribute('aria-pressed',on); };
@@ -5219,10 +5290,13 @@ windEl.addEventListener('click',()=>setWind((windK+1)%WINDS.length));
 document.getElementById('front').addEventListener('click',()=>whenIdle(()=>{ g.sendFront(Math.max(0,camX-120)); msg('A cold front is coming in from the west: watch the pressure'); }));
 document.getElementById('clear').addEventListener('click',()=>whenIdle(()=>{ if (game) leaveScenario(true); beginUndo(); for (let i=0;i<g.type.length;i++) if (g.type[i]!==E) note(i); endUndo(); g.clear(); resetCensus(); msg('Cleared (Undo brings it back)'); }));
 document.getElementById('showchunks').addEventListener('click',e=>{showChunks=!showChunks; e.target.setAttribute('aria-pressed',showChunks);});
-document.getElementById('heatview').addEventListener('click',e=>{heatView=!heatView; e.target.setAttribute('aria-pressed',heatView);});
-document.getElementById('moistview').addEventListener('click',e=>{moistView=!moistView; e.target.setAttribute('aria-pressed',moistView);});
+const showTints=()=>{ document.getElementById('heatview').setAttribute('aria-pressed',heatView); document.getElementById('moistview').setAttribute('aria-pressed',moistView); document.getElementById('soilview').setAttribute('aria-pressed',soilView); };
+const setTint=(heat,moist,soil)=>{ heatView=heat; moistView=moist; soilView=soil; showTints(); };   // (one tint at a time: the renderer draws the first that is on)
+document.getElementById('heatview').addEventListener('click',()=>setTint(!heatView,false,false));
+document.getElementById('moistview').addEventListener('click',()=>setTint(false,!moistView,false));
+document.getElementById('soilview').addEventListener('click',()=>setTint(false,false,!soilView));
 document.getElementById('windview').addEventListener('click',e=>{windView=!windView; e.target.setAttribute('aria-pressed',windView);});
-document.getElementById('soilview').addEventListener('click',e=>{soilView=!soilView; e.target.setAttribute('aria-pressed',soilView);});
+document.getElementById('statsbtn').addEventListener('click',e=>{ const st=document.getElementById('stats'); st.classList.toggle('on'); e.target.setAttribute('aria-pressed',st.classList.contains('on')); });
 const lightEl=document.getElementById('lightmode');
 const showLight=()=>{ lightEl.textContent='Light: '+(constLight?'constant':'day/night'); lightEl.setAttribute('aria-pressed',constLight); };
 lightEl.addEventListener('click',()=>{ constLight=!constLight; showLight(); try{ localStorage.setItem('sandfall.light',constLight?'constant':'daynight'); }catch(e){} });
@@ -5308,7 +5382,7 @@ seedEl.addEventListener('keydown',e=>{ if (e.key==='Enter') openSeed(); });
 function readHash(){ const h=(typeof location!=='undefined' && location.hash||'').slice(1), o={}; for (const kv of h.split('&')){ const k=kv.indexOf('='); if (k>0) o[kv.slice(0,k)]=decodeURIComponent(kv.slice(k+1)); } return o; }
 function shareLink(frag){
   let url='#'+frag; try{ url=location.href.split('#')[0]+'#'+frag; history.replaceState(null,'',url); }catch(e){}
-  const show=()=>{ io.classList.add('open'); iotext.value=url; msg('Link ready to copy below'); };
+  const show=()=>{ showMenu('world'); io.classList.add('open'); iotext.value=url; msg('Link ready to copy in the World menu'); };
   try{ navigator.clipboard.writeText(url).then(()=>msg('Link copied ('+(url.length/1024).toFixed(1)+' KB)'),show); }catch(e){ show(); }
 }
 document.getElementById('sharelink').addEventListener('click',()=>whenIdle(()=>{
@@ -5487,13 +5561,13 @@ function startScenario(sc){ game=Game.start(g,sc); enterScenario(); msg(sc.name)
 function enterScenario(){
   setTimelapse(false); if (speed>4){ speed=4; speedEl.textContent='Speed ×4'; }
   designing=false; setZoom(zoomK); drawMinimap(); clearUndo();
-  setHold(false); setWind(0); Game.weather(g,game.sc); sbox.classList.add('off');   // a scenario runs on its own clock and weather
+  setHold(false); setWind(0); Game.weather(g,game.sc); sbox.classList.add('off'); sboxTab.classList.add('off'); if (menuOpen==='weather') showMenu(null);   // a scenario runs on its own clock and weather
   clampCam(); dims(); shown=null; banner.classList.remove('on');
   document.getElementById('mname').textContent=game.sc.name; document.getElementById('mbrief').textContent=game.sc.brief;
   mission.classList.add('on'); setCensus(censusOn); refreshRack(); showMission();
 }
 function leaveScenario(keepWorld){
-  game=null; designing=false; setZoom(zoomK); mission.classList.remove('on'); banner.classList.remove('on'); shown=null; sbox.classList.remove('off');
+  game=null; designing=false; setZoom(zoomK); mission.classList.remove('on'); banner.classList.remove('on'); shown=null; sbox.classList.remove('off'); sboxTab.classList.remove('off');
   if (!keepWorld) newWorld((Math.random()*1e9)|0);
   setCensus(censusOn); refreshRack();
 }

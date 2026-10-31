@@ -480,3 +480,17 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
 - Tests: `validate.js generator` (each knob moves the window it opens on the way it says, against Temperate on the same seed; a
   custom world saves and loads with its knobs), `ui.js` (the panel, Start from, a knob, Make world, save, Share link). The port
   contract has a `knobs` section and a table in docs/PORT.md.
+
+## Page layout
+
+- The page is a bench: the world on the left, sized to the window's height (4:3, at most 60% of the width), with the toolbar
+  (brush size and shape, undo, pause, speed, time-lapse, zoom, messages), the minimap, the cell readout and the census under it;
+  the element rack and the menus on the right. Under 900px wide it stacks: world, toolbar, rack, readouts.
+- Everything that is not an element lives in one of five menus beside the rack, open one at a time (`showMenu` in the page):
+  Play (sandbox, scenarios, Unlock all, the scenario editor), World (new world, biome, world generator, flat, clear, seed,
+  share link, save, load, export/import), View (one tint of heat, moisture or soil; wind and chunk overlays; light, census,
+  sound, the stats line), Weather (the sandbox's season, hold, wind and cold front; hidden in a scenario, `#sbox`) and Help
+  (the keys). The header shows only the clock and the barometer; the fps, chunk, thread and camera stats show under it when
+  View › Stats is on. The scenario editor and the world generator open under the menus. The manual is a folded
+  "How Sandfall works" at the foot of the page, split into headed sections. Every control keeps its id, so `tools/ui.js` drives
+  them as before.
