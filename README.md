@@ -521,6 +521,6 @@ Ten-year runs of the page's world (`tools/decade.js`, seeds 7 and 12345) on main
   topsoil dries from ~175 to 35-55 over ten years (the water cycle isn't closed), foxes hover at 0-3 and grasshoppers boom to
   60-110.
 - Tests: `validate.js` checks that were seed coin flips on main too were made robust: conifer spire and crown fire summed over
-  three seeds, `coal` reseeded, `dew` averaged over eight plots, and `smokehurt` checks the grass only (the rabbits breed in its
+  three seeds, `coal` reseeded, `dew` averaged over eight plots, the no-rain ramp in `groundwater` has dry air (its own vapour rained on it), and `smokehurt` checks the grass only (the rabbits breed in its
   minute, so the count was a coin flip; seeds 3, 5 and 6 failed on main). Perf (`ab.js`, seed 12345, ticks 1200-1800): main
   11.60 ms, this build 11.17 ms.

@@ -980,7 +980,7 @@ const scenarios = {
       for (let x = 0; x < W; x++) { const r = x < 100 ? 40 + Math.floor(x / 3) : H - 4; for (let y = r; y < H; y++) g.set(g.idx(x, y), STONE);
         if (x < 100) for (let y = r - 8; y < r; y++) { const i = g.idx(x, y); g.set(i, DIRT); g.life[i] = (40 << 8) | 60; } }
       for (let y = 0; y < H; y++) { g.set(g.idx(0, y), STONE); g.set(g.idx(W - 1, y), STONE); }
-      g.initAir();
+      g.initAir(); if (!rain) g.hum.fill(0);   // (no rain means none from the box's own air either: its vapour builds clouds that rain on the ramp, so a spring or two could come out by weather luck)
       const total = () => { let w = 0; for (let i = 0; i < g.type.length; i++) { const t = g.type[i]; if (t === WATER) w++; else if (t === CLOUD) w += 0.1; else if (t === DIRT) w += (g.life[i] & 255) / 100; } for (const h of g.hum) w += h; return w; };
       let after = 0;
       run(g, 4 * MIN, 4, f => { if (rain && f <= MIN) { const x = 2 + ((Sim.R() * 40) | 0); if (g.type[g.idx(x, 2)] === E) g.set(g.idx(x, 2), WATER); } if (f === MIN + 600) after = total(); });
