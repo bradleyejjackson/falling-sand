@@ -37,6 +37,7 @@ node tools/forest.js [seed] [seasons]   # N4: broadleaf trees and conifers each 
 node tools/rivers.js [seed] [half-seasons] [ox]   # N6: each river in the window: the stream on its bed, the pond, silt, the delta
 GEN=warm:8,coast:none node tools/presets.js [minutes] [seed] custom   # survey a custom world (knobs as in a share link's gen=); SNAP=dir for PNGs
 node tools/decade.js [seed] [years] [prefix]   # many years of the page's world: a census each season; with a prefix it saves yearly and resumes
+node tools/batch.js --seeds 1-8 a.html b.html   # decade.js over many seeds and builds at once (resumable), then a side-by-side report
 ```
 
 ## Engine (stage 4)
