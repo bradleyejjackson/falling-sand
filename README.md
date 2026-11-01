@@ -36,6 +36,7 @@ node tools/trees.js [seed] [seasons]   # tree heights and crowns each season, bi
 node tools/forest.js [seed] [seasons]   # N4: broadleaf trees and conifers each season, by site warmth (valley, slope, upland, high)
 node tools/rivers.js [seed] [half-seasons] [ox]   # N6: each river in the window: the stream on its bed, the pond, silt, the delta
 GEN=warm:8,coast:none node tools/presets.js [minutes] [seed] custom   # survey a custom world (knobs as in a share link's gen=); SNAP=dir for PNGs
+node tools/decade.js [seed] [years] [prefix]   # many years of the page's world: a census each season; with a prefix it saves yearly and resumes
 ```
 
 ## Engine (stage 4)
@@ -495,3 +496,31 @@ See [docs/ENGINE.md](docs/ENGINE.md) for the engine's data layout, tick order an
   View › Stats is on. The scenario editor and the world generator open under the menus. The manual is a folded
   "How Sandfall works" at the foot of the page, split into headed sections. Every control keeps its id, so `tools/ui.js` drives
   them as before.
+
+## Keeping the world alive for years
+
+Ten-year runs of the page's world (`tools/decade.js`, seeds 7 and 12345) on main lost every tree (seed 7, by year 3), every fish
+(both, by years 4 and 8) and every rabbit (seed 12345, year 3), and none came back. The causes and what changed:
+
+- Grown trees drank their root cells' neighbours dry and died of thirst even in wet years: a tree now drinks up to `ROOT_REACH`
+  cells from a root, and an old tree needs up to `THIRST_OLD` times more water to count as thirsty. A broadleaf tree burnt down
+  from a grown age resprouts from its stump after a wait (`t.sprout`, saved). Leaves catch fire at `LEAF_WET` of the dry-season
+  rate outside the dry season.
+- Rabbits stepped down 4 but climbed 2, piled into hollows and puddles and starved beside empty meadows: they now step up to
+  `RAB_STEP`, `hop()` over gaps up to `HOP_GAP`, and `pasture()` walks a hungry rabbit towards grass it can see (`RAB_SEEK`).
+- Grasshoppers laid about one egg each, so one bad summer ended them: a hatch is a pod of `HOP_POD`.
+- Fish left on wet ground by a dropping pool gasped and died: one flops back into water within `FISH_FLOP` cells.
+- Nothing came back once gone from the window: `migrate()` now also brings in rabbits, grasshoppers and fish in the growing
+  season when they run low, and some of its birds carry seed.
+- Bare soil dries more slowly once it is under `CRUST` moisture, and rich damp bare dirt sprouts grass from its seed bank
+  (`BANK_P`, `BANK_N`, generated worlds only).
+- A loaded save switched lightning off (only fronts were restored): long runs resumed from saves had no storms.
+- The census counts live trees only, not burnt stumps or cones waiting to open.
+- Results (spring census, year 10 unless said): seed 7 rabbits 47, hoppers 22, fish 1 (37 in summer of year 7), 1 broadleaf, no
+  conifers (lost to a year-2 fire); seed 12345 rabbits, hoppers, fish, birds and both tree kinds alive. Still open: the window's
+  topsoil dries from ~175 to 35-55 over ten years (the water cycle isn't closed), foxes hover at 0-3 and grasshoppers boom to
+  60-110.
+- Tests: `validate.js` checks that were seed coin flips on main too were made robust: conifer spire and crown fire summed over
+  three seeds, `coal` reseeded, `dew` averaged over eight plots, the no-rain ramp in `groundwater` has dry air (its own vapour rained on it), and `smokehurt` checks the grass only (the rabbits breed in its
+  minute, so the count was a coin flip; seeds 3, 5 and 6 failed on main). Perf (`ab.js`, seed 12345, ticks 1200-1800): main
+  11.60 ms, this build 11.17 ms.
