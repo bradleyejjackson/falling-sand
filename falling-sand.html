@@ -709,6 +709,11 @@ const Sim = (() => {
   const FALLS_AS = {[STONE]:RUBBLE,[GLASS]:RUBBLE,[ICE]:SNOW,[CHAR]:ASH,[BRICK]:RUBBLE,[WOOD]:LITTER};
   // ecology: a day is a minute at 60 fps and a year is eight days; the soil pass visits each row once every SLOW ticks
   const ROOT_DRY = 20;   // tree roots drink soil down to this (deeper and tougher than grass, which needs GRASS_DRINK): a tree outlasts a dry spell that browns the meadow
+  // soil water spreading by wetness (not draining under gravity) moves in proportion to the gap, times wick(m) of the soil it
+  // leaves: damp soil passes water on freely, dry soil hardly at all, so a soaking stops at a wetting front instead of spreading
+  // thin all the way down. The amount moved is rounded at random, so a gap of a few points still moves water now and then (it
+  // was rounded down, so water crept down where the gap was 4+ but came back up only where it was 8+: rain sank out of reach)
+  const wick = m => m>=HOLD ? 1 : m*m/(HOLD*HOLD);
   const CRUST = 60;   // open ground holding less moisture than this dries more slowly, in proportion: its dry crust shelters the soil under it, so a burn or a bare slope doesn't lose its water all the way down
   const THIRST = 450, THIRST_OLD = 2, ROOT_REACH = 2, SPROUT_AGE = 110, SPROUT_WET = 60;   // growth-season tree steps (TREE_TICK ticks each, so two days) a sapling survives without water (it wilts at half that); a grown one, past MATURE steps,
                                                        // up to 1+THIRST_OLD times as long. A root drinks the soil up to ROOT_REACH cells round it (its fine roots), so a tree doesn't drink its root cells' neighbours dry and die beside damp soil
@@ -3195,7 +3200,7 @@ const Sim = (() => {
       let b=-1;
       if (y+1<H){ const tb=T[i+W]; if (SOAKS[tb]) b=i+W; else if (tb!==E && KIND[tb]!==2 && KIND[tb]!==3){ const d=R()<0.5?-1:1;
         for (let q=0;q<2 && b<0;q++){ const nx=x+(q?-d:d); if (nx>=0 && nx<W && SOAKS[T[i+W+nx-x]]) b=i+W+nx-x; } } }
-      if (b>=0){ const kb=Math.min(k,PERM[T[b]]), lb=L[b], mb=lb&255, gr=(m-HOLDM[t])/2*kb, f=Math.min(Math.max((m-mb)/4*kb, gr)|0, MOIST-mb, m);
+      if (b>=0){ const kb=Math.min(k,PERM[T[b]]), lb=L[b], mb=lb&255, gr=(m-HOLDM[t])/2*kb, f=Math.min((Math.max((m-mb)/4*kb*wick(m), gr)+R())|0, MOIST-mb, m);
         if (f>0){ L[b]=lb+f; if (gr>0 && rich){ const n=leached(rich,Math.min(f,gr),m); rich-=n<<8; this.feed(b,n); } m-=f; } }   // (only what drains under gravity washes nutrients down; soil water spreading by wetness doesn't)
       const sx=R()<0.5?-1:1;
       if (x+sx>=0 && x+sx<W && SOAKS[T[i+sx]]){ const s=L[i+sx], ms=s&255, f=Math.min((m-ms)/4*Math.min(k,PERM[T[i+sx]])|0, MOIST-ms); if (f>0){ m-=f; L[i+sx]=s+f; } }
@@ -3210,7 +3215,8 @@ const Sim = (() => {
         }
       }
       const up=y>0?T[i-W]:STONE;
-      if (SOAKS[up]){ const a=L[i-W], ma=a&255, f=((m-ma)/8)|0; if (f>0){ m-=f; L[i-W]=a+f; } }   // wicking up is slower than draining down
+      if (SOAKS[up]){ const a=L[i-W], ma=a&255;   // wicking up is slower than draining down, and a dry crust on open ground takes none
+        if (ma>=CRUST || y<2 || !(T[i-2*W]===E || isGas(T[i-2*W]))){ const f=((m-ma)/8*wick(m)+R())|0; if (f>0){ m-=f; L[i-W]=a+f; } } }
       // open to the air: dry out into it (100 moisture is one water cell of vapour), or gather dew when it is saturated
       else if (up===E || isGas(up)){
         const a=this.airOver(x,y-1), rh=this.rh(a);
