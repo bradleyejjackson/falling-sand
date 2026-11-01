@@ -660,6 +660,17 @@ const scenarios = {
     check('dry dirt slumps to about 1 in 1', dry.h <= 30, `${dry.h} high, ${dry.w} wide`);
     check('damp dirt holds a 2 in 1 slope', damp.h >= 37 && damp.w <= 38, `${damp.h} high, ${damp.w} wide`);
   },
+  wickup() {
+    // dry topsoil over subsoil at field capacity wets up from below (it used to round small flows down to nothing, so water crept
+    // down but never came back up), while the very top, open to the air, keeps a dry crust; under still saturated air
+    Sim.reseed(5); const W = 40, H = 80, g = new Sim.Grid(W, H); g.clock = Sim.YEAR * 0.3; g.updateClimate(); g.hold = true; g.windHold = 0;
+    for (let y = 30; y < H; y++) for (let x = 0; x < W; x++) { const i = g.idx(x, y); if (y >= H - 2 || x === 0 || x === W - 1) { g.set(i, STONE); g.life[i] = 1; } else { g.set(i, DIRT); g.life[i] = (40 << 8) | (y < 40 ? 50 : 140); } }
+    g.initAir(); for (let c = 0; c < g.hum.length; c++) g.hum[c] = g.cap[c];
+    run(g, 2 * Sim.DAY);
+    const at = y => moisture(g, y, y + 1), root = moisture(g, 32, 38);
+    console.log(`  after two days: surface ${at(30).toFixed(0)}, rows 2-8 ${root.toFixed(0)} (from 50), row 40 ${at(40).toFixed(0)}`);
+    check('dry topsoil over damp subsoil wets up from below', root >= 57, root.toFixed(0));
+  },
   surfacedry() {
     // bare damp ground dries in the sun whatever row its surface lies in (the air is kept on a 4x4 grid: ground filling the lower
     // part of an air cell must still dry into the air over it)

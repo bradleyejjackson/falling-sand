@@ -524,3 +524,21 @@ Ten-year runs of the page's world (`tools/decade.js`, seeds 7 and 12345) on main
   three seeds, `coal` reseeded, `dew` averaged over eight plots, the no-rain ramp in `groundwater` has dry air (its own vapour rained on it), and `smokehurt` checks the grass only (the rabbits breed in its
   minute, so the count was a coin flip; seeds 3, 5 and 6 failed on main). Perf (`ab.js`, seed 12345, ticks 1200-1800): main
   11.60 ms, this build 11.17 ms.
+
+## Soil water wicks back up (phase 2)
+
+- The soil's water flows were rounded down to whole points: moisture spread down to a drier cell below only when the gap was 4+
+  and wicked up only when it was 8+, so gaps of a few points let rain creep down and never come back up. Now the amount is
+  rounded at random (a gap of 2 moves a point a quarter of the time), and spreading by wetness moves in proportion to `wick(m)`
+  of the soil it leaves (1 at field capacity `HOLD` and above, falling with the square of the moisture below it): a soaking
+  stops at a wetting front instead of spreading thin all the way down. Open ground whose top cell has dried under `CRUST`
+  takes no water wicked up from below: a thin dry skin over a damp root zone, as a bare field dries.
+- Measured over a year on 10-year saves (topsoil = the 10 soil cells under each column's surface): evaporation from the topsoil
+  is 1-5% of the rain soaking in; nearly all the rest drains below and fills the groundwater. The fall in topsoil moisture over
+  the first years of a run is mostly a generated world's wet start (~180) settling toward field capacity (70), not water
+  leaving the window.
+- Ten-year runs (`tools/decade.js`, seeds 7 and 12345) were no better than main's: the worlds diverge within a year (a wetter
+  first year brought more storms), and fire killed more trees (15-22 a run) than thirst (7-11).
+- Tests: `validate.js wickup` (dry topsoil over damp subsoil wets to 61 from 50 in two days; main stays at 49). The soil checks
+  (soak, surfacedry, groundwater, dew, sow, compete, river, sea, ...) pass. Perf (`ab.js`, ticks 1200-1800): seed 12345 main
+  9.40 ms / this 9.76, seed 7 9.58 / 9.46.
