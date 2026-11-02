@@ -303,7 +303,7 @@ const Sim = (() => {
   // or a burn's is) and wet to GRASS_DRINK, comes up in grass with chance BANK_P a visit in the growing season. Without it a big fire
   // left the hills bare for good: bare soil dries far below what grass seed needs (SOW_M), so nothing came back to shade it.
   const SAP0 = 200, CURED = 70, GRASS_DRINK = 40, SIP = 3, SAP_GAIN = 24, TRANSP = 8, SPREAD_M = 50, SPREAD_SAP = 150, SPREAD_P = 0.04, SPREAD_COST = 12,
-        DROUGHT_DIE = 0.001, DRY_NEED = 100, GREEN_K = 3, SHADE_DIE = 0.006, CURED_P = 0.3, SEED_IN_GRASS = 0.5,
+        DROUGHT_DIE = 0.001, DRY_NEED = 100, GREEN_K = 3, SHADE_DIE = 0.006, CURED_P = 0.3, SEED_IN_GRASS = 0.5, SEED_SHAKE = 0.02, SEED_LOSS = 0.0006, SEED_FAR = 0.4, SEED_FLY = 40,
         SOW_P = 0.006, SOW_REACH = 48, SOW_DROP = 16, SOW_M = 55, BANK_P = 0.0003, BANK_N = 90;   // grass seed: the chance a base blade sows a visit (times growth), how far it blows (and up or down), how damp the root zone must be
   // Wild plants (Grid.wild) each live on their own ground, so they sort themselves out by climate. A plant is a stem of cells standing
   // on soil: the cell on the soil (the base) drinks and grows the rest; a cell beside a stem is a branch (a shrub's crown, a cactus's
@@ -2271,6 +2271,10 @@ const Sim = (() => {
       const seg=t.segs[(R()*t.segs.length)|0]; if (!seg.alive || seg.root || seg.depth===0) return;
       const side=Math.sin(seg.ang)<0?-1:1, [ex,ey]=this.segEnd(t,seg,seg.len), y=ey+1;
       let x=ex+side*4; while (Math.abs(x-ex)<7 && this.inb(x,y) && this.owner[this.idx(x,y)]===t.id) x+=side;   // (past a big tree's wider leaf clumps)
+      // most fall near, but one in SEED_FAR rides the wind (or a bird) well clear of the parent's roots and shade, up to SEED_FLY columns on
+      if (R()<SEED_FAR){ x=Math.round(ex+side*(8+R()*SEED_FLY)); if (x<0 || x>=this.W) return;
+        let yy=Math.max(0,Math.round(ey)-20); while (yy<this.H-1 && yy<ey+80 && (this.type[this.idx(x,yy+1)]===E || isGas(this.type[this.idx(x,yy+1)]))) yy++;
+        const j=this.idx(x,yy); if (this.type[j]!==E) return; this.set(j,SEED); if (t.con) this.life[j]|=CONE; return; }
       if (!this.inb(x,y) || this.type[this.idx(x,y)]!==E) return;
       const i=this.idx(x,y); this.set(i,SEED); if (t.con) this.life[i]|=CONE; this.vx[i]=side*(1+R()*2)+this.uc[this.wc(x,y)]*12;
     }
@@ -3467,16 +3471,21 @@ const Sim = (() => {
       // anywhere else it slowly loses viability
       // (through a mat of grass it has to compete: it takes root only a quarter of the time, and clears the grass where it does)
       // (a conifer's seed (CONE) sprouts on drier ground, through a skin of ash, charcoal or litter, and early in the spring; either kind only where it can stand the cold)
-      const con=this.life[i]&CONE; let damp=0, g=0, ash=0;
-      const burn=c=>c===ASH || c===CHAR || c===LITTER;   // (what a fire leaves over the soil)
-      while (g<(con ? 4 : 3) && y+g+1<this.H && ((this.type[i+(g+1)*this.W]===PLANT && this.owner[i+(g+1)*this.W]===0) || (con && burn(this.type[i+(g+1)*this.W])))){ g++; if (burn(this.type[i+g*this.W])) ash++; }
+      // (either kind comes up through a mat of fallen leaves (LITTER), which doesn't smother it as grass does; and one caught up on a
+      // branch, in leaves or a shrub, or on another seed, is shaken loose sooner or later (SEED_SHAKE) and falls on to the ground)
+      const con=this.life[i]&CONE, W=this.W; let damp=0, g=0, ash=0;
+      if (y+1<this.H){ const b=this.type[i+W]; if ((b===WOOD || b===SHRUB || b===SEED || (b===PLANT && this.owner[i+W])) && R()<SEED_SHAKE){ const s=R()<0.5 ? -1 : 1;
+        for (const d of [s,-s]) if (x+d>=0 && x+d<W && this.type[i+d]===E){ this.swap(i,i+d); return; }
+        for (let j=i+W, k=0; k<40 && j<this.type.length; j+=W, k++){ const c=this.type[j]; if (c===E){ this.swap(i,j); return; } if (!(c===WOOD || c===SHRUB || (c===PLANT && this.owner[j]))) break; } } }   // (or down through the crown)
+      const burn=c=>c===LITTER || (con && (c===ASH || c===CHAR));   // (and a conifer's through what a fire leaves over the soil)
+      while (g<(con ? 4 : 3) && y+g+1<this.H && ((this.type[i+(g+1)*W]===PLANT && this.owner[i+(g+1)*W]===0) || burn(this.type[i+(g+1)*W]))){ g++; if (burn(this.type[i+g*W])) ash++; }
       for (let k=1;k<=3 && y+g+k<this.H;k++){ const j=i+(g+k)*this.W; if (this.type[j]!==DIRT) break; damp=Math.max(damp,this.life[j]&255); }
       if (damp>=(con ? CON_DAMP : 45) && (con ? this.growthCold : this.growth)>0.2 && this.hardy(con,y)>0.25){
         if ((this.life[i]&255)>1){ this.life[i]--; return; }
         if (g>ash && R()>=SEED_IN_GRASS){ this.set(i,E); return; }   // smothered
         if (this.canSprout(x,y)){ for (let k=0;k<g;k++) this.set(i+k*this.W,E); this.set(i+g*this.W,TIP); if (con) this.life[i+g*this.W]=CONE; return; }
       }
-      if (R()<(con ? 0.0005 : 0.002)) this.set(i,E);   // (a conifer's seed lies dormant longer, to the next spring after a fire)
+      if (R()<(con ? 0.0005 : SEED_LOSS)) this.set(i,E);   // (a conifer's seed lies dormant longer, to the next spring after a fire)
     }
     // wild plants (see SHRUB_DRY): the base cell, on the soil, drinks for the whole plant, grows it and sows it; a stem cell (on its own
     // kind) leaves that to the base, and a branch (beside a stem) withers once it is cut off from one
