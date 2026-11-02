@@ -1,5 +1,5 @@
 {
- "hash": "513ec646df0d",
+ "hash": "3df074ecaea3",
  "fields": [
   {
    "name": "type",
@@ -4528,7 +4528,7 @@
   "FOX_PAST": 4,
   "FOX_STUCK": 30,
   "FOX_JUMP": 8,
-  "FOX_MIGRATE": 20,
+  "FOX_MIGRATE": 12,
   "FOX_CLIMB": 0.15,
   "FOX_LEAP": 0.25,
   "FOX_LEAP_UP": 5,
@@ -4546,6 +4546,9 @@
   "FOX_NEAR": 24,
   "FOX_CROWD": 2,
   "RAB_WARY": 8,
+  "FOX_ROAM": 0.1,
+  "FOX_RANGE": 200,
+  "FOX_RANGE_Y": 40,
   "AGE_BIRD": 0.0005,
   "BIRD_E0": 160,
   "BIRD_BURN": 0.03,

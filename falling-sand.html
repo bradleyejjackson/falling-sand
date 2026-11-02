@@ -368,7 +368,8 @@ const Sim = (() => {
   //   (FOX_ROWS up and down) for the nearest rabbit and heads for it, creeping (FOX_PROWL a tick) until it is within FOX_SPRING
   //   columns, then springing at FOX_RUN cells a tick (with chance FOX_CHASE). A rabbit beside or under it is caught with chance
   //   FOX_CATCH, for FOX_GAIN energy (a hungry one snaps up a grasshopper beside it, FOX_SNACK, with chance FOX_SNACK_P a tick). A rabbit sees a running fox within RAB_WARY columns, but a creeping one only within RAB_NOSE,
-  //   and runs from it as from a fire. Under FOX_BREED it prowls (FOX_PROWL, seldom turning). It burns a point with chance FOX_BURN
+  //   and runs from it as from a fire. Under FOX_BREED it prowls (FOX_PROWL, seldom turning); smelling none, now and then (FOX_ROAM) it
+  //   turns toward the nearest rabbit within FOX_RANGE columns and FOX_RANGE_Y rows, as a fox ranges over its whole country. It burns a point with chance FOX_BURN
   //   a tick (FOX_REST of that in winter) and starves at 0, so foxes thin out when the rabbits go and the rabbits come back.
   //   In spring a fed, grown fox (FOX_BREED, FOX_ADULT) stops on soft ground and digs a den (FOX_DIG a tick: it paws the grass away
   //   and throws the dirt out two cells off) until it lies in a hole with earth on both sides; there, with fewer than FOX_CROWD foxes
@@ -396,8 +397,8 @@ const Sim = (() => {
   //   egg in the tree beside it (BIRD_LAY a tick): life EGG, which hatches with chance BIRD_HATCH a tick in the growing season, or
   //   chills and dies in winter. A dead bird falls as litter.
   const AGE_FOX = 0.0004, FOX_E0 = 180, FOX_BURN = 0.012, FOX_REST = 0.5, FOX_LOOK = 0.1, FOX_SCENT = 24, FOX_ROWS = 10, FOX_PROWL = 0.3, FOX_MOVE = 0.15, FOX_CHASE = 0.8,
-        FOX_RUN = 3, FOX_STEP = 4, FOX_SPRING = 6, FOX_PAST = 4, FOX_STUCK = 30, FOX_JUMP = 8, FOX_MIGRATE = 20, FOX_CLIMB = 0.15, FOX_LEAP = 0.25, FOX_LEAP_UP = 5, RAB_NOSE = 3, FOX_CATCH = 0.3, FOX_GAIN = 120, FOX_SNACK = 6, FOX_SNACK_P = 0.2, FOX_BREED = 170, FOX_ADULT = 2, FOX_DIG = 0.02, FOX_KIT_P = 0.0015, FOX_LITTER = 2,
-        FOX_KIT_E = 120, FOX_NEAR = 24, FOX_CROWD = 2, RAB_WARY = 8,
+        FOX_RUN = 3, FOX_STEP = 4, FOX_SPRING = 6, FOX_PAST = 4, FOX_STUCK = 30, FOX_JUMP = 8, FOX_MIGRATE = 12, FOX_CLIMB = 0.15, FOX_LEAP = 0.25, FOX_LEAP_UP = 5, RAB_NOSE = 3, FOX_CATCH = 0.3, FOX_GAIN = 120, FOX_SNACK = 6, FOX_SNACK_P = 0.2, FOX_BREED = 170, FOX_ADULT = 2, FOX_DIG = 0.02, FOX_KIT_P = 0.0015, FOX_LITTER = 2,
+        FOX_KIT_E = 120, FOX_NEAR = 24, FOX_CROWD = 2, RAB_WARY = 8, FOX_ROAM = 0.1, FOX_RANGE = 200, FOX_RANGE_Y = 40,
         AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, RAB_MIGRATE = 6, HOP_MIGRATE = 6, FISH_MIGRATE = 4, BIRD_THRU = 5, BIRD_SWITCH = 4,
         BIRD_LOW = 10, BIRD_HIGH = 26, BIRD_HUNGRY = 200, BIRD_MOVE = 0.6, BIRD_WIND = 3, BIRD_EAT = 0.2, BIRD_FULL = 250, BIRD_GAIN = 5, BIRD_SEED_E = 10, BIRD_GRAIN = 3, BIRD_PECK = 0.1, BIRD_FLY = 0.01,
         BIRD_DROP = 0.0008, BIRD_BREED = 190, NEST_H = 10, BIRD_NEAR = 24, BIRD_CROWD = 4, BIRD_LAY = 0.002, BIRD_HATCH = 0.0006, BIRD_EGG_DIE = 0.0005;
@@ -2800,7 +2801,8 @@ const Sim = (() => {
           const f=this.fireNear(x,y);
           stalk=false;
           if (f){ d=-f; run=flee=true; }
-          else if (en<FOX_BREED+40 || this.gf[GF_GROWTH]===0){ const k=this.seek(x,y,FOX_SCENT,y-FOX_ROWS,y+FOX_ROWS,PREY); if (k>=0){ const kx=k%W, dk=kx<x ? x-kx : kx-x; if (kx!==x) d=kx<x ? -1 : 1; run=dk<=FOX_SPRING; stalk=!run; } else run=false; }   // it creeps up, then springs
+          else if (en<FOX_BREED+40 || this.gf[GF_GROWTH]===0){ const k=this.seek(x,y,FOX_SCENT,y-FOX_ROWS,y+FOX_ROWS,PREY); if (k>=0){ const kx=k%W, dk=kx<x ? x-kx : kx-x; if (kx!==x) d=kx<x ? -1 : 1; run=dk<=FOX_SPRING; stalk=!run; }
+            else { run=false; if (R()<FOX_ROAM){ const f=this.seek(x,y,FOX_RANGE,y-FOX_RANGE_Y,y+FOX_RANGE_Y,PREY); if (f>=0 && f%W!==x) d=f%W<x ? -1 : 1; } } }   // it creeps up, then springs; with none about, it ranges toward where rabbits are (FOX_ROAM)
           else run=false;
         }
         const den=!afloat && x>0 && x<W-1 && this.ground(x-1,y) && this.ground(x+1,y) && b!==E && KIND[b]!==2;   // in a hole, earth both sides
