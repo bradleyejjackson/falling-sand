@@ -398,7 +398,7 @@ const Sim = (() => {
   const AGE_FOX = 0.0004, FOX_E0 = 180, FOX_BURN = 0.012, FOX_REST = 0.5, FOX_LOOK = 0.1, FOX_SCENT = 24, FOX_ROWS = 10, FOX_PROWL = 0.3, FOX_MOVE = 0.15, FOX_CHASE = 0.8,
         FOX_RUN = 3, FOX_STEP = 4, FOX_SPRING = 6, FOX_PAST = 4, FOX_STUCK = 30, FOX_JUMP = 8, FOX_MIGRATE = 20, FOX_CLIMB = 0.15, FOX_LEAP = 0.25, FOX_LEAP_UP = 5, RAB_NOSE = 3, FOX_CATCH = 0.3, FOX_GAIN = 120, FOX_SNACK = 6, FOX_SNACK_P = 0.2, FOX_BREED = 170, FOX_ADULT = 2, FOX_DIG = 0.02, FOX_KIT_P = 0.0015, FOX_LITTER = 2,
         FOX_KIT_E = 120, FOX_NEAR = 24, FOX_CROWD = 2, RAB_WARY = 8,
-        AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, RAB_MIGRATE = 6, RAB_GROUP = 3, RAB_EDGE = 80, HOP_MIGRATE = 6, FISH_MIGRATE = 4, BIRD_THRU = 5, BIRD_SWITCH = 4,
+        AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, RAB_MIGRATE = 6, HOP_MIGRATE = 6, FISH_MIGRATE = 4, BIRD_THRU = 5, BIRD_SWITCH = 4,
         BIRD_LOW = 10, BIRD_HIGH = 26, BIRD_HUNGRY = 200, BIRD_MOVE = 0.6, BIRD_WIND = 3, BIRD_EAT = 0.2, BIRD_FULL = 250, BIRD_GAIN = 5, BIRD_SEED_E = 10, BIRD_GRAIN = 3, BIRD_PECK = 0.1, BIRD_FLY = 0.01,
         BIRD_DROP = 0.0008, BIRD_BREED = 190, NEST_H = 10, BIRD_NEAR = 24, BIRD_CROWD = 4, BIRD_LAY = 0.002, BIRD_HATCH = 0.0006, BIRD_EGG_DIE = 0.0005;
   //  Fish (N12): lives in open water, fresh or salt. It swims (FISH_MOVE a tick, keeping its heading, turning at the shore, drifting up
@@ -710,10 +710,7 @@ const Sim = (() => {
   // ecology: a day is a minute at 60 fps and a year is eight days; the soil pass visits each row once every SLOW ticks
   const ROOT_DRY = 20;   // tree roots drink soil down to this (deeper and tougher than grass, which needs GRASS_DRINK): a tree outlasts a dry spell that browns the meadow
   const CRUST = 60;   // open ground holding less moisture than this dries more slowly, in proportion: its dry crust shelters the soil under it, so a burn or a bare slope doesn't lose its water all the way down
-  const THIRST = 450, THIRST_OLD = 2, ROOT_REACH = 2, SPROUT_AGE = 110, SPROUT_WET = 60;
-  // a burnt stump or a burnt conifer's cones wait for the ground by them to cool, 8 growth steps at a time, up to COOL_WAITS times
-  // (about a season): a stand fire burns for a day or two and its embers smoulder on, and 20 waits gave up on most stumps
-  const COOL_WAITS = 60;   // growth-season tree steps (TREE_TICK ticks each, so two days) a sapling survives without water (it wilts at half that); a grown one, past MATURE steps,
+  const THIRST = 450, THIRST_OLD = 2, ROOT_REACH = 2, SPROUT_AGE = 110, SPROUT_WET = 60;   // growth-season tree steps (TREE_TICK ticks each, so two days) a sapling survives without water (it wilts at half that); a grown one, past MATURE steps,
                                                        // up to 1+THIRST_OLD times as long. A root drinks the soil up to ROOT_REACH cells round it (its fine roots), so a tree doesn't drink its root cells' neighbours dry and die beside damp soil
   const TREE_WET = 1.2;   // root water to tree water (it was 1+richness/255, from before nutrients counted for growth)
   // A tree grows to a size set by its light and its soil together (Grid.vigour): t.sun follows how much of its crown has open sky
@@ -732,7 +729,7 @@ const Sim = (() => {
   // (they sprout on soil damp to CON_DAMP; a broadleaf seed wants 45), but rich soil does little more for them (soil counts up to
   // CON_SOIL_HI) and in warm lowland air they fare badly (past CON_HOT their vigour falls off and they live CON_HOT_SPAN as long).
   // Needles are resinous: they catch at CON_FUEL, so a crown fire runs through a stand, and a conifer the fire kills lets its
-  // cones open after it: CON_CONES seeds fall within CON_FLY columns of its foot once the ground has cooled (CON_OPEN growth steps later).
+  // cones open after it: CON_CONES seeds fall round its foot once the ground has cooled (CON_OPEN growth steps later).
   // The treeline: a site's warmth is its yearly mean air temperature (Grid.warmth: the lapse rate, without the season). A
   // broadleaf grows at full rate down to BROAD_FULL and not at all at BROAD_LINE; a conifer down to CON_FULL and CON_LINE. A seed
   // only sprouts where its kind manages over a quarter of its rate, so the high hills go conifer, then bare over CON_LINE.
@@ -740,7 +737,7 @@ const Sim = (() => {
   // Succession: conifers are the pioneers (they sprout on burnt or poor ground and grow fast while young, CON_YOUNG), but in a warm
   // valley a broadleaf on the soil they build up overtops and shades them, and as the short-lived pioneers die, broadleaf trees take the gaps.
   const CONE = 1<<8, CON_SUN_LO = 0.5, CON_DAMP = 30, CON_SOIL_HI = 1.1, CON_HOT = 13, CON_HOT_K = 0.12, CON_HOT_SPAN = 0.6, CON_FUEL = 0.1,
-        CON_CONES = 7, CON_FLY = 20, CON_OPEN = 40, CON_YOUNG = 1.4, CON_TIERS = 14, CON_PRUNE = 0.2,
+        CON_CONES = 7, CON_OPEN = 40, CON_YOUNG = 1.4, CON_TIERS = 14, CON_PRUNE = 0.2,
         BROAD_FULL = 11.5, BROAD_LINE = 9.5, CON_FULL = 9.5, CON_LINE = 8;
   const NEEDLE_FUEL = {p:CON_FUEL, to:EMBER, r:0};
   const CON_PIONEER = 0.12;   // the share of conifers among a new world's valley trees
@@ -2145,7 +2142,7 @@ const Sim = (() => {
         let burnt=0; for (const [i] of t.cells){ const c=this.type[i]; if (c===FIRE || c===EMBER || c===CHAR || c===ASH) burnt++; }
         this.releaseTree(t);
         if (burnt>=2 && t.con){ for (const s of segs) s.alive=false; t.dead=false; t.cones=CON_OPEN; }   // a conifer the fire killed: its cones open once the ground has cooled (stepTrees)
-        else if (burnt>=2 && (t.age>=SPROUT_AGE || t.stump) && t.age<=t.span){ for (const s of segs) s.alive=false; t.dead=false; t.sprout=CON_OPEN; }   // a broadleaf the fire killed sprouts again from its roots once the ground has cooled
+        else if (burnt>=2 && t.age>=SPROUT_AGE && t.age<=t.span){ for (const s of segs) s.alive=false; t.dead=false; t.sprout=CON_OPEN; }   // a broadleaf the fire killed sprouts again from its roots once the ground has cooled
         return false;
       }
       // anchoring: count root cells gripping soil that isn't ours. Wash the soil away and the tree comes down.
@@ -2160,7 +2157,7 @@ const Sim = (() => {
       if (anchors < Math.max(1, roots.length*0.1)){ t.falling=true; return true; }
       // thirst: a tree that can't drink through the growing season wilts (drops its leaves) and in the end dies of it, so where roots
       // crowd the same soil, or grass takes the rain first, the weaker drinkers go
-      const gr=t.con ? this.growthCold : this.growth, thirsty=(t.con ? THIRST*2 : THIRST)*(1+Math.min(THIRST_OLD,Math.max(t.age/MATURE,t.stump ? 1 : 0)));   // (and a grown tree has more to live on: it outlasts a drought year that kills the saplings)   // (a conifer's season runs longer, and it stands drought better: it only goes thirsty in the broadleaf trees' season)
+      const gr=t.con ? this.growthCold : this.growth, thirsty=(t.con ? THIRST*2 : THIRST)*(1+Math.min(THIRST_OLD,t.age/MATURE));   // (and a grown tree has more to live on: it outlasts a drought year that kills the saplings)   // (a conifer's season runs longer, and it stands drought better: it only goes thirsty in the broadleaf trees' season)
       if (this.growth>0.3 && t.water<=0) t.thirst=(t.thirst||0)+1; else if (t.water>2 && t.thirst) t.thirst=Math.max(0,t.thirst-2);
       if (t.thirst>thirsty){ this.droughtKills++; this.releaseTree(t); return false; }
       // leaves follow the season: they thin and fall as litter in autumn, and come back in spring
@@ -2389,21 +2386,21 @@ const Sim = (() => {
     openCones(t){   // a burnt conifer's cones open: its seeds (t.seeds, CON_CONES to begin with) fall about its foot where the ground has cooled, the rest a little later
       let left=0;
       for (let n=0;n<(t.seeds??CON_CONES);n++){
-        const x=t.x+Math.round((R()*2-1)*CON_FLY); if (x<0 || x>=this.W) continue;   // (winged seed: it carries past the stumps and shoots coming up round the old tree)
+        const x=t.x+Math.round((R()*2-1)*10); if (x<0 || x>=this.W) continue;
         let y=Math.max(0,t.y-24); while (y<t.y+16 && y<this.H-1 && (this.type[this.idx(x,y+1)]===E || isGas(this.type[this.idx(x,y+1)]))) y++;
         const i=this.idx(x,y), c=this.type[i]; if (y>=this.H-1 || (c!==E && !isGas(c)) || KIND[this.type[i+this.W]]===2) continue;
         if (this.temp[i]>100 || c===FIRE){ left++; continue; }   // (still burning there)
         this.set(i,SEED,Math.min(this.temp[i],40)); this.life[i]|=CONE;
       }
-      if (left && (t.waits=(t.waits||0)+1)<COOL_WAITS){ t.seeds=left; t.cones=8; } else t.dead=true;
+      if (left && (t.waits=(t.waits||0)+1)<20){ t.seeds=left; t.cones=8; } else t.dead=true;
     }
     resprout(t){   // a broadleaf burnt down: a shoot comes up from its roots by the old stump, where the ground has cooled, and drinks from the old roots for a start
       for (let n=0;n<8;n++){ const x=t.x+((R()*5)|0)-2; if (x<1 || x>=this.W-1) continue;
         let y=Math.max(0,t.y-12); while (y<t.y+8 && y<this.H-1 && (this.type[this.idx(x,y+1)]===E || isGas(this.type[this.idx(x,y+1)]) || this.type[this.idx(x,y+1)]===ASH)) y++;
         const i=this.idx(x,y), c=this.type[i]; if (y>=this.H-1 || (c!==E && !isGas(c) && c!==ASH)) continue;
-        if (this.temp[i]>100 || this.temp[i+this.W]>100){ if ((t.waits=(t.waits||0)+1)<COOL_WAITS){ t.sprout=8; return; } break; }   // (still hot: it waits)
+        if (this.temp[i]>100 || this.temp[i+this.W]>100){ if ((t.waits=(t.waits||0)+1)<20){ t.sprout=8; return; } break; }   // (still hot: it waits)
         if (c!==E) this.set(i,E,this.temp[i]);
-        if (this.plantTree(x,y,false)){ const s=this.trees[this.trees.length-1]; s.water=SPROUT_WET; s.stump=true; break; } }   // (on the old roots: it stands a drought as a grown tree does, and burnt again, however young, it sprouts again)
+        if (this.plantTree(x,y,false)){ const s=this.trees[this.trees.length-1]; s.water=SPROUT_WET; break; } }
       t.dead=true;
     }
     treesSave(){ return JSON.stringify(this.trees.map(t=>this.treeRecord(t,0))); }
@@ -2488,10 +2485,10 @@ const Sim = (() => {
       }
       for (const d of rec.trees){ const t=this.treeFrom(d,this.ox); this.trees.push(t); this.rasterTree(t); }
     }
-    treeRecord(t,ox){ return {id:t.id,x:t.x+ox,y:t.y,age:t.age,water:t.water,thirst:t.thirst||undefined,leaf:t.leaf,span:t.span,falling:t.falling||undefined,fert:t.fert,sun:t.sun,soil:t.soil,con:t.con||undefined,cones:t.cones||undefined,seeds:t.cones ? t.seeds : undefined,waits:t.cones||t.sprout ? t.waits : undefined,sprout:t.sprout||undefined,stump:t.stump||undefined,segs:t.segs}; }
+    treeRecord(t,ox){ return {id:t.id,x:t.x+ox,y:t.y,age:t.age,water:t.water,thirst:t.thirst||undefined,leaf:t.leaf,span:t.span,falling:t.falling||undefined,fert:t.fert,sun:t.sun,soil:t.soil,con:t.con||undefined,cones:t.cones||undefined,seeds:t.cones ? t.seeds : undefined,waits:t.cones||t.sprout ? t.waits : undefined,sprout:t.sprout||undefined,segs:t.segs}; }
     treeFrom(d,ox){
       const t={id:d.id,x:d.x-ox,y:d.y,age:d.age,water:d.water,thirst:d.thirst||0,leaf:d.leaf??1,span:d.span??2400,falling:d.falling,fert:d.fert??1,sun:d.sun??1,soil:d.soil??d.fert??1,cells:new Map(),scars:new Map(),segs:d.segs};
-      if (d.con) t.con=true; if (d.cones){ t.cones=d.cones; t.seeds=d.seeds; t.waits=d.waits; } if (d.sprout){ t.sprout=d.sprout; t.waits=d.waits; } if (d.stump) t.stump=true;
+      if (d.con) t.con=true; if (d.cones){ t.cones=d.cones; t.seeds=d.seeds; t.waits=d.waits; } if (d.sprout){ t.sprout=d.sprout; t.waits=d.waits; }
       if (!t.segs.some(s=>s.root)) t.segs.push(this.newRoot(-1,0,Math.PI,8,0));   // saved before trees had roots
       this.treeId=Math.max(this.treeId,t.id+1); return t;
     }
@@ -2861,17 +2858,12 @@ const Sim = (() => {
     migrate(){   // the world outside the window has foxes and birds too: one wanders in at its edge when the window has run out of them
       const T=this.type, W=this.W; let fox=0, bird=0, rab=0, hop=0, fish=0;
       for (let i=0;i<T.length;i++){ const t=T[i]; if (t===FOX) fox++; else if (t===BIRD) bird++; else if (t===RABBIT) rab++; else if (t===HOPPER) hop++; else if (t===FISH) fish++; }
-      const edge=(t,life,up,s=(R()<0.5 ? -1 : 1),dx=0)=>{ const x=s<0 ? 2+dx : W-3-dx; let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;
+      const edge=(t,life,up)=>{ const s=R()<0.5 ? -1 : 1, x=s<0 ? 2 : W-3; let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;
         if (y<up+2 || KIND[T[y*W+x]]===2) return; const i=(y-1-up)*W+x; this.set(i,t,this.ambRow[y-1-up]); this.life[i]=life; this.vx[i]=-s; };
       if (!fox && rab>=FOX_MIGRATE && R()<0.5) edge(FOX,FOX_E0|(FOX_ADULT<<8),0);
       if (bird<BIRD_MIGRATE && R()<0.5) edge(BIRD,BIRD_E0|(1<<8)|(R()<BIRD_SEEDED ? 1<<13 : 0),BIRD_LOW);   // (often with a tree seed in it from the woods outside)
       if (this.growth>0.5){   // and rabbits and grasshoppers, in the growing season (grasshoppers before they start laying)
-        if (rab<RAB_MIGRATE && R()<0.5) for (let k=0;k<20;k++){   // a few rabbits come in together onto grass near an edge (so not into the sea, onto bare rock or snow, where they died)
-          const s=R()<0.5 ? -1 : 1, dx=(R()*RAB_EDGE)|0, x=s<0 ? 2+dx : W-3-dx; let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;
-          if (y<2 || T[y*W+x]!==PLANT || this.owner[y*W+x]) continue;
-          for (let n=0;n<RAB_GROUP;n++){ const xn=x+n*(s<0 ? 2 : -2), j=(y-1)*W+xn; if (xn<1 || xn>=W-1 || T[j]!==E) continue; this.set(j,RABBIT,this.ambRow[y-1]); this.life[j]=RAB_E0|(RAB_ADULT<<8); this.vx[j]=-s; }
-          break;
-        }
+        if (rab<RAB_MIGRATE && R()<0.5) edge(RABBIT,RAB_E0|(RAB_ADULT<<8),0);
         if (!hop && this.yearPhase<0.4) for (let n=0;n<HOP_MIGRATE;n++){ const x=1+((R()*(W-2))|0); let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;   // (they come on the wind, so anywhere)
           if (y>=2 && (T[y*W+x]===PLANT || T[y*W+x]===SHRUB) && !this.owner[y*W+x]){ const i=(y-1)*W+x; this.set(i,HOPPER,this.ambRow[y-1]); this.life[i]=HOP_E0; } }
         if (fish<FISH_MIGRATE) for (let n=0;n<40;n++){ const x=1+((R()*(W-2))|0); let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;   // and a fish comes down a stream (or as spawn on a bird's feet) to water deep enough for it

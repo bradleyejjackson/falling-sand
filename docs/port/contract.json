@@ -1,5 +1,5 @@
 {
- "hash": "74219e462016",
+ "hash": "c310eeb507a2",
  "fields": [
   {
    "name": "type",
@@ -4357,7 +4357,6 @@
    "soil",
    "span",
    "sprout",
-   "stump",
    "sun",
    "thirst",
    "waits",
@@ -4556,8 +4555,6 @@
   "BIRD_MIGRATE": 4,
   "BIRD_SEEDED": 0.5,
   "RAB_MIGRATE": 6,
-  "RAB_GROUP": 3,
-  "RAB_EDGE": 80,
   "HOP_MIGRATE": 6,
   "FISH_MIGRATE": 4,
   "BIRD_THRU": 5,
@@ -4728,7 +4725,6 @@
   "ROOT_REACH": 2,
   "SPROUT_AGE": 110,
   "SPROUT_WET": 60,
-  "COOL_WAITS": 60,
   "TREE_WET": 1.2,
   "VIG_LO": 0.3,
   "VIG_HI": 1.6,
@@ -4755,7 +4751,6 @@
   "CON_HOT_SPAN": 0.6,
   "CON_FUEL": 0.1,
   "CON_CONES": 7,
-  "CON_FLY": 20,
   "CON_OPEN": 40,
   "CON_YOUNG": 1.4,
   "CON_TIERS": 14,
