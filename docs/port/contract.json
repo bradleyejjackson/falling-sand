@@ -1,5 +1,5 @@
 {
- "hash": "c310eeb507a2",
+ "hash": "513ec646df0d",
  "fields": [
   {
    "name": "type",
@@ -4412,6 +4412,10 @@
   "SHADE_DIE": 0.006,
   "CURED_P": 0.3,
   "SEED_IN_GRASS": 0.5,
+  "SEED_SHAKE": 0.02,
+  "SEED_LOSS": 0.0006,
+  "SEED_FAR": 0.4,
+  "SEED_FLY": 40,
   "SOW_P": 0.006,
   "SOW_REACH": 48,
   "SOW_DROP": 16,
