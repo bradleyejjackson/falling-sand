@@ -1,5 +1,5 @@
 {
- "hash": "3df074ecaea3",
+ "hash": "613844055b19",
  "fields": [
   {
    "name": "type",
@@ -4485,7 +4485,10 @@
   "RAB_KIT_P": 0.001,
   "RAB_KIT_E": 100,
   "RAB_NEAR": 24,
-  "RAB_CROWD": 5,
+  "RAB_CROWD": 6,
+  "RAB_NIBBLE": 40,
+  "RAB_BURROW": 0.8,
+  "RAB_PEEK": 0.02,
   "RAB_SEEK": 24,
   "RAB_SEEK_Y": 6,
   "RAB_SEEK_E": 140,
@@ -4547,6 +4550,7 @@
   "FOX_CROWD": 2,
   "RAB_WARY": 8,
   "FOX_ROAM": 0.1,
+  "FOX_FULL": 200,
   "FOX_RANGE": 200,
   "FOX_RANGE_Y": 40,
   "AGE_BIRD": 0.0005,
