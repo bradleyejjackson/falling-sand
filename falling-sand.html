@@ -352,8 +352,8 @@ const Sim = (() => {
   //   chance RAB_KIT_P a tick. It runs from fire (looking RAB_SCAN columns either way, with chance RAB_LOOK a tick) at RAB_RUN cells a tick, won't step
   //   onto ground or into air hotter than RAB_HOT, swims for the
   //   shore (RAB_SWIM energy a tick in water), digs itself out from under a heap, and burns at 70°. A dead rabbit is litter.
-  //   Seeing a fox, on dirt or sand, it bolts down its burrow (RAB_BURROW a tick: it goes to ground, under the earth), where a fox
-  //   can't catch it and from which it digs out only once no fox or fire is in sight (or now and then, RAB_PEEK). Hungry (under RAB_HUNGRY),
+  //   Seeing a fox, on soil or grass, it bolts down its burrow (RAB_BURROW a tick: it goes to ground, bit 15 of its life), where a fox
+  //   can't scent or catch it and it lies low, not moving or eating, until no fox is in sight (or now and then, RAB_PEEK). Hungry (under RAB_HUNGRY),
   //   it nibbles a green blade cropped to its base (RAB_NIBBLE of its sap, for half a bite), and it breeds with fewer than RAB_CROWD near.
   //  Grasshopper: hops (chance HOP_P a tick, up to 3 cells; the wind carries it while it is in the air) and chews the sap out of
   //   the grass, shrubs and reeds beside it (HOP_BITE sap for HOP_GAIN energy; a blade chewed dry is gone). It breeds in the warm
@@ -370,7 +370,7 @@ const Sim = (() => {
   //   over it or jumps the drop; hungry or hunting, it climbs a bank too high to step up with chance FOX_CLIMB. It hunts rabbits by scent: with chance FOX_LOOK a tick it sniffs FOX_SCENT columns either way
   //   (FOX_ROWS up and down) for the nearest rabbit and heads for it, creeping (FOX_PROWL a tick) until it is within FOX_SPRING
   //   columns, then springing at FOX_RUN cells a tick (with chance FOX_CHASE). A rabbit beside or under it is caught with chance
-  //   FOX_CATCH, for FOX_GAIN energy, unless it is full (FOX_FULL) (a hungry one snaps up a grasshopper beside it, FOX_SNACK, with chance FOX_SNACK_P a tick). A rabbit sees a running fox within RAB_WARY columns, but a creeping one only within RAB_NOSE,
+  //   FOX_CATCH, for FOX_GAIN energy, unless it is full (FOX_FULL) with fewer than FOX_GLUT rabbits within FOX_NEAR (among a swarm it kills on, as a fox in a henhouse) (a hungry one snaps up a grasshopper beside it, FOX_SNACK, with chance FOX_SNACK_P a tick). A rabbit sees a running fox within RAB_WARY columns, but a creeping one only within RAB_NOSE,
   //   and runs from it as from a fire. Under FOX_BREED it prowls (FOX_PROWL, seldom turning); smelling none, now and then (FOX_ROAM) it
   //   turns toward the nearest rabbit within FOX_RANGE columns and FOX_RANGE_Y rows, as a fox ranges over its whole country. It burns a point with chance FOX_BURN
   //   a tick (FOX_REST of that in winter) and starves at 0, so foxes thin out when the rabbits go and the rabbits come back.
@@ -401,7 +401,7 @@ const Sim = (() => {
   //   chills and dies in winter. A dead bird falls as litter.
   const AGE_FOX = 0.0004, FOX_E0 = 180, FOX_BURN = 0.012, FOX_REST = 0.5, FOX_LOOK = 0.1, FOX_SCENT = 24, FOX_ROWS = 10, FOX_PROWL = 0.3, FOX_MOVE = 0.15, FOX_CHASE = 0.8,
         FOX_RUN = 3, FOX_STEP = 4, FOX_SPRING = 6, FOX_PAST = 4, FOX_STUCK = 30, FOX_JUMP = 8, FOX_MIGRATE = 12, FOX_CLIMB = 0.15, FOX_LEAP = 0.25, FOX_LEAP_UP = 5, RAB_NOSE = 3, FOX_CATCH = 0.3, FOX_GAIN = 120, FOX_SNACK = 6, FOX_SNACK_P = 0.2, FOX_BREED = 170, FOX_ADULT = 2, FOX_DIG = 0.02, FOX_KIT_P = 0.0015, FOX_LITTER = 2,
-        FOX_KIT_E = 120, FOX_NEAR = 24, FOX_CROWD = 2, RAB_WARY = 8, FOX_ROAM = 0.1, FOX_FULL = 200, FOX_RANGE = 200, FOX_RANGE_Y = 40,
+        FOX_KIT_E = 120, FOX_NEAR = 24, FOX_CROWD = 2, RAB_WARY = 8, FOX_ROAM = 0.1, FOX_FULL = 200, FOX_GLUT = 8, FOX_RANGE = 200, FOX_RANGE_Y = 40,
         AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, RAB_MIGRATE = 6, HOP_MIGRATE = 6, FISH_MIGRATE = 4, BIRD_THRU = 5, BIRD_SWITCH = 4,
         BIRD_LOW = 10, BIRD_HIGH = 26, BIRD_HUNGRY = 200, BIRD_MOVE = 0.6, BIRD_WIND = 3, BIRD_EAT = 0.2, BIRD_FULL = 250, BIRD_GAIN = 5, BIRD_SEED_E = 10, BIRD_GRAIN = 3, BIRD_PECK = 0.1, BIRD_FLY = 0.01,
         BIRD_DROP = 0.0008, BIRD_BREED = 190, NEST_H = 10, BIRD_NEAR = 24, BIRD_CROWD = 4, BIRD_LAY = 0.002, BIRD_HATCH = 0.0006, BIRD_EGG_DIE = 0.0005;
@@ -2695,19 +2695,19 @@ const Sim = (() => {
       if (R()<AGE_RAB && ++age>AGE_MAX) en=0;
       if (en<=0){ this.set(i,LITTER,this.temp[i]); return; }   // starved, or old
       const up=y>0 ? T[i-W] : STONE, b=y+1<H ? T[i+W] : STONE;
+      if (v&EGG){   // gone to ground: it lies low in its burrow (a fox can't see or catch it) until no fox is in sight, or now and then (RAB_PEEK)
+        if (b!==E && KIND[b]!==3 && KIND[up]!==2 && (R()>=0.1 || (R()>=RAB_PEEK && this.seek(x,y,RAB_WARY,y-4,y+2,HUNTER)>=0))){ L[i]=Math.max(1,en)|(age<<8)|(gut<<13)|EGG; return; }
+      }
       if (KIND[up]===2){ if (R()<RAB_SWIM) en--; if (R()<0.5){ this.swap(i,i-W); j=i-W; } }   // under water: it swims up for air
       else if (b===E || KIND[b]===3){ this.swap(i,i+W); j=i+W; }   // falling
-      else if (KIND[up]===1){ if (R()<0.1 && (R()<RAB_PEEK || (this.seek(x,y,RAB_WARY,y-4,y+2,HUNTER)<0 && !this.fireNear(x,y-1)))){ this.swap(i,i-W); j=i-W; } }   // buried: it digs its way out, but gone to ground it lies low while a fox or a fire is about
+      else if (KIND[up]===1 && R()<0.1){ this.swap(i,i-W); j=i-W; }   // buried: it digs its way out
       else {
         const afloat=KIND[b]===2;
         if (afloat && R()<RAB_SWIM) en--;
         let d=VX[i]<0 ? -1 : VX[i]>0 ? 1 : (R()<0.5 ? -1 : 1), flee=VX[i]>=2 || VX[i]<=-2, seek=!flee && (VX[i]===1.5 || VX[i]===-1.5);
         let fox=false;
         if (R()<RAB_LOOK){ let f=this.fireNear(x,y); if (!f){ const k=this.seek(x,y,RAB_WARY,y-3,y+3,HUNTER), kx=k%this.W; if (k>=0 && (VX[k]>=2 || VX[k]<=-2 || (kx<x ? x-kx : kx-x)<=RAB_NOSE)){ f=kx<x ? -1 : 1; fox=true; } }   if (f){ d=-f; flee=true; } else if (flee && R()<0.2) flee=false; }
-        if (fox && !afloat && R()<RAB_BURROW){ const k=b===PLANT && !this.owner[i+W] && y+2<H ? i+2*W : i+W, s=T[k];   // it bolts down its burrow (through the grass it sits in): goes to ground under the earth
-          if (s===DIRT || s===SAND){ const rl=Math.max(1,en)|(age<<8)|(gut<<13);
-            if (k===i+W) this.swap(i,k); else { const sl=L[k], st=this.temp[k], rt=this.temp[i]; this.set(i+W,s,st); L[i+W]=sl; this.set(k,RABBIT,rt); this.set(i,E,this.temp[i]); }
-            L[k]=rl; VX[k]=0; return; } }
+        if (fox && !afloat && R()<RAB_BURROW && (SOAKS[b]===1 || (b===PLANT && !this.owner[i+W]))){ L[i]=Math.max(1,en)|(age<<8)|(gut<<13)|EGG; VX[i]=0; return; }   // it bolts down its burrow (see RAB_BURROW)
         if (!afloat){
           if (en<RAB_FULL && R()<RAB_EAT){
             const k = this.edible(i+W) ? i+W : x+d<0 || x+d>=W ? -1 : this.edible(i+d) ? i+d : y>0 && this.edible(i+d-W) ? i+d-W : -1;
@@ -2784,7 +2784,7 @@ const Sim = (() => {
     seek(x,y,rx,y0,y1,want){   // the nearest cell within rx columns and rows y0..y1 whose type is in want (null: a tree's wood or leaves): its index, or -1
       const W=this.W, T=this.type, O=this.owner, L=this.life; let best=-1, bd=1e9;
       for (let yy=Math.max(0,y0), e=Math.min(this.H-1,y1); yy<=e; yy++){ const dy=yy<y?y-yy:yy-y; if (dy>=bd) continue;
-        for (let xx=Math.max(0,x-rx), x1=Math.min(W-1,x+rx), q=yy*W+xx; xx<=x1; xx++, q++) if (want ? want[T[q]] && !O[q] && !((T[q]===HOPPER || T[q]===FISH) && L[q]&EGG) && !(T[q]===FISH && q>=W && T[q-W]!==E) : O[q] && T[q]===PLANT){ const dd=(xx<x?x-xx:xx-x)+dy; if (dd<bd){ bd=dd; best=q; } } }
+        for (let xx=Math.max(0,x-rx), x1=Math.min(W-1,x+rx), q=yy*W+xx; xx<=x1; xx++, q++) if (want ? want[T[q]] && !O[q] && !((T[q]===HOPPER || T[q]===FISH || T[q]===RABBIT) && L[q]&EGG) && !(T[q]===FISH && q>=W && T[q-W]!==E) : O[q] && T[q]===PLANT){ const dd=(xx<x?x-xx:xx-x)+dy; if (dd<bd){ bd=dd; best=q; } } }
       return best;
     }
     // a fox (see FOX_): life is energy | age<<8; vx is its heading, 2 or more while it is chasing or running
@@ -2806,7 +2806,7 @@ const Sim = (() => {
         if (afloat && R()<RAB_SWIM) en--;
         const a=VX[i]<0 ? -VX[i] : VX[i];
         let d=VX[i]<0 ? -1 : VX[i]>0 ? 1 : (R()<0.5 ? -1 : 1), run=a>=2, stalk=a===1.5, flee=false;
-        if (!afloat && en<FOX_FULL && this.pounce(i,x,d)){ en=Math.min(255,en+FOX_GAIN); run=false; }   // (a full fox lets a rabbit be)
+        if (!afloat && this.pounce(i,x,d,en>=FOX_FULL)){ en=Math.min(255,en+FOX_GAIN); run=false; }   // (a full fox lets a rabbit be)
         else if (!afloat && en<FOX_BREED && R()<FOX_SNACK_P){ const c=i+RDX8[(R()*8)|0]+RDY8[(R()*8)|0]*W; if (c>=0 && c<T.length && T[c]===HOPPER && !(L[c]&EGG)){ this.set(c,E,this.temp[c]); en+=FOX_SNACK; } }   // a grasshopper, if it is hungry
         if (R()<FOX_LOOK){
           const f=this.fireNear(x,y);
@@ -2833,7 +2833,7 @@ const Sim = (() => {
             VX[j]=d; L[j]=Math.max(0,en)|(age<<8)|(bred<<13); return;
           }
         }
-        if (run && !flee && R()<FOX_LEAP){ const m=this.leap(x,y,i); if (m>=0){ j=m; if (en<FOX_FULL && this.pounce(j,j%W,d)){ en=Math.min(255,en+FOX_GAIN); run=false; } } }   // the spring: up a bank, over a log
+        if (run && !flee && R()<FOX_LEAP){ const m=this.leap(x,y,i); if (m>=0){ j=m; if (this.pounce(j,j%W,d,en>=FOX_FULL)){ en=Math.min(255,en+FOX_GAIN); run=false; } } }   // the spring: up a bank, over a log
         const hungry=en<FOX_BREED; let stuck=this.vy[i];
         if (stuck>FOX_STUCK){ const m=this.scramble(x,y,i,d); if (m>=0) j=m; stuck=0; }   // shut in (a hole, a tree grown round it, a ledge): it scrambles out
         if (run ? R()<FOX_CHASE : R()<(afloat ? 0.2 : hungry || stalk ? FOX_PROWL : FOX_MOVE)){   // (hungry, it prowls: faster, and it keeps on its way)
@@ -2841,7 +2841,7 @@ const Sim = (() => {
           for (let n=run ? FOX_RUN : 1; n>0; n--){
             const jx=j%W, jy=(j/W)|0;
             if (jx+d<1 || jx+d>=W-1){ d=-d; break; }
-            if (run && n<FOX_RUN && en<FOX_FULL && this.pounce(j,jx,d)){ en=Math.min(255,en+FOX_GAIN); run=false; break; }   // caught on the run
+            if (run && n<FOX_RUN && this.pounce(j,jx,d,en>=FOX_FULL)){ en=Math.min(255,en+FOX_GAIN); run=false; break; }   // caught on the run
             let m=this.walk(jx,jy,j,d,run,FOX_STEP,FOX_PAST); if (m<0 && (hungry || run || stalk) && R()<FOX_CLIMB) m=this.scramble(jx,jy,j,d);   // (a bank too high to step up it may climb)
             if (m<0){ stuck++; if (!(run || stalk) || R()<0.3){ d=-d; run=stalk=false; } break; } j=m; stuck=Math.max(0,stuck-0.25);   // (pacing a pit, it fails as often as it steps)   // (running, it takes a drop or a swim after its prey, and tries again at what stops it)
           }
@@ -2888,10 +2888,11 @@ const Sim = (() => {
           const i=(y+1)*W+x; this.set(i,FISH,this.temp[i]); this.life[i]=FISH_E0|(1<<8); this.vx[i]=R()<0.5 ? -1 : 1; break; }
       }
     }
-    pounce(i,x,d){   // a fox at i catches a rabbit beside it (ahead first, level or a step up or down) or under it, with chance FOX_CATCH
+    pounce(i,x,d,full){   // a fox at i catches a rabbit beside it (ahead first, level or a step up or down) or under it, with chance FOX_CATCH
       const W=this.W, T=this.type;
-      for (const c of [i+d, i+d-W, i+d+W, i+W, i-d, i-d-W, i-d+W]){ if (c<0 || c>=T.length || T[c]!==RABBIT || (c>=W && KIND[T[c-W]]===1)) continue;   // (not one gone to ground under the earth)
+      for (const c of [i+d, i+d-W, i+d+W, i+W, i-d, i-d-W, i-d+W]){ if (c<0 || c>=T.length || T[c]!==RABBIT || (this.life[c]&EGG)) continue;   // (not one gone to ground)
         const cx=c%W; if (cx!==x && cx!==x-1 && cx!==x+1) continue;
+        if (full && this.near(x,(i/W)|0,RABBIT,FOX_NEAR,8)<FOX_GLUT) return false;   // (full, it lets a rabbit be, unless they swarm round it: see FOX_FULL)
         if (R()<FOX_CATCH){ this.set(c,E,this.temp[c]); return true; } return false; }
       return false;
     }
@@ -4750,10 +4751,10 @@ const Sim = (() => {
         for (const x0 of [236,272]){ b.rect(x0,108,x0+24,130,WOOD); b.rect(x0+2,110,x0+22,130,E); }   // the drying sheds
       } },
     { id:'plague', name:'Rabbit plague', seed:23, time:90*60, survive:true, season:0.1,
-      brief:'The rabbits have had a good year, and they are eating the meadow down to the soil. Bring in foxes to thin them out, but a meadow needs its rabbits too: keep the grass alive and at least twenty rabbits.',
+      brief:'The rabbits have had a good year, and they are eating the meadow down to the soil. Bring in foxes to thin them out, but a meadow needs its rabbits too: keep the grass alive and at least forty rabbits.',
       budget:{Fox:8}, unlocks:[],
-      goals:[{label:'Grass in the meadow', count:'Plant', rect:[0,0,320,200], min:151}, {label:'Rabbits', count:'Rabbit', rect:[0,0,320,200], min:20}],
-      fails:[{label:'Grass in the meadow', count:'Plant', rect:[0,0,320,200], max:150}, {label:'Rabbits', count:'Rabbit', rect:[0,0,320,200], max:19}],
+      goals:[{label:'Grass in the meadow', count:'Plant', rect:[0,0,320,200], min:151}, {label:'Rabbits', count:'Rabbit', rect:[0,0,320,200], min:40}],
+      fails:[{label:'Grass in the meadow', count:'Plant', rect:[0,0,320,200], max:150}, {label:'Rabbits', count:'Rabbit', rect:[0,0,320,200], max:39}],
       build(b){
         b.rect(0,170,320,200,STONE); b.rect(0,150,320,170,DIRT,DAMP);
         for (let x=0;x<320;x++){ const h=1+(R()*3|0); for (let y=149;y>149-h;y--) b.put(x,y,PLANT,(SAP0<<8)|1); if (x%2) b.put(x,149-h,RABBIT,50|(RAB_ADULT<<8)); }   // 160 hungry rabbits
