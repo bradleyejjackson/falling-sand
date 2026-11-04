@@ -373,9 +373,9 @@ const Sim = (() => {
   //   In spring a fed, grown fox (FOX_BREED, FOX_ADULT) stops on soft ground and digs a den (FOX_DIG a tick: it paws the grass away
   //   and throws the dirt out two cells off) until it lies in a hole with earth on both sides; there, with fewer than FOX_CROWD foxes
   //   within FOX_NEAR, it has a litter of FOX_LITTER cubs (FOX_KIT_P a tick, FOX_KIT_E each). A dead fox is litter.
-  //   In a generated world (Grid.migrate, once a day) a fox wanders in at the window's edge, half the time, when there is none in it
-  //   and at least FOX_MIGRATE rabbits, and a bird flies in when there are fewer than BIRD_MIGRATE (BIRD_SEEDED of them with a tree seed in it): the land outside has them too.
-  //   In the growing season a rabbit wanders in when there are fewer than RAB_MIGRATE, and in spring, with no grasshoppers or eggs left, HOP_MIGRATE come on
+  //   In a generated world (Grid.migrate, once a day) the land either side of the window keeps its own rabbits and foxes as numbers
+  //   (Grid.outside, see OUT_SPAN), which come and go across the window's edges, and a bird flies in when there are fewer than BIRD_MIGRATE
+  //   (BIRD_SEEDED of them with a tree seed in it). In spring, with no grasshoppers or eggs left, HOP_MIGRATE come on
   //   the wind and land on grass anywhere, and with fewer than FISH_MIGRATE fish a fish comes down a stream to water FISH_DEEP deep,
   //   so a fire or a hard year thins the animals out but never ends them for good.
   //  Bird: flies. In the air it keeps its heading (vx) and an aim (vy: -1 climbing, 0 level, 1 coming down); with chance BIRD_LOOK a
@@ -396,11 +396,13 @@ const Sim = (() => {
   //   egg in the tree beside it (BIRD_LAY a tick): life EGG, which hatches with chance BIRD_HATCH a tick in the growing season, or
   //   chills and dies in winter. A dead bird falls as litter.
   const AGE_FOX = 0.0004, FOX_E0 = 180, FOX_BURN = 0.012, FOX_REST = 0.5, FOX_LOOK = 0.1, FOX_SCENT = 24, FOX_ROWS = 10, FOX_PROWL = 0.3, FOX_MOVE = 0.15, FOX_CHASE = 0.8,
-        FOX_RUN = 3, FOX_STEP = 4, FOX_SPRING = 6, FOX_PAST = 4, FOX_STUCK = 30, FOX_JUMP = 8, FOX_MIGRATE = 20, FOX_CLIMB = 0.15, FOX_LEAP = 0.25, FOX_LEAP_UP = 5, RAB_NOSE = 3, FOX_CATCH = 0.3, FOX_GAIN = 120, FOX_SNACK = 6, FOX_SNACK_P = 0.2, FOX_BREED = 170, FOX_ADULT = 2, FOX_DIG = 0.02, FOX_KIT_P = 0.0015, FOX_LITTER = 2,
+        FOX_RUN = 3, FOX_STEP = 4, FOX_SPRING = 6, FOX_PAST = 4, FOX_STUCK = 30, FOX_JUMP = 8, FOX_CLIMB = 0.15, FOX_LEAP = 0.25, FOX_LEAP_UP = 5, RAB_NOSE = 3, FOX_CATCH = 0.3, FOX_GAIN = 120, FOX_SNACK = 6, FOX_SNACK_P = 0.2, FOX_BREED = 170, FOX_ADULT = 2, FOX_DIG = 0.02, FOX_KIT_P = 0.0015, FOX_LITTER = 2,
         FOX_KIT_E = 120, FOX_NEAR = 24, FOX_CROWD = 2, RAB_WARY = 8,
-        AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, RAB_MIGRATE = 6, HOP_MIGRATE = 6, FISH_MIGRATE = 4, BIRD_THRU = 5, BIRD_SWITCH = 4,
+        AGE_BIRD = 0.0005, BIRD_E0 = 160, BIRD_BURN = 0.03, BIRD_SIT = 0.008, BIRD_REST = 0.4, BIRD_LOOK = 0.05, BIRD_SCAN = 16, BIRD_SEE = 24, BIRD_HOP = 8, BIRD_FLEE = 2, BIRD_MIGRATE = 4, BIRD_SEEDED = 0.5, HOP_MIGRATE = 6, FISH_MIGRATE = 4, BIRD_THRU = 5, BIRD_SWITCH = 4,
         BIRD_LOW = 10, BIRD_HIGH = 26, BIRD_HUNGRY = 200, BIRD_MOVE = 0.6, BIRD_WIND = 3, BIRD_EAT = 0.2, BIRD_FULL = 250, BIRD_GAIN = 5, BIRD_SEED_E = 10, BIRD_GRAIN = 3, BIRD_PECK = 0.1, BIRD_FLY = 0.01,
         BIRD_DROP = 0.0008, BIRD_BREED = 190, NEST_H = 10, BIRD_NEAR = 24, BIRD_CROWD = 4, BIRD_LAY = 0.002, BIRD_HATCH = 0.0006, BIRD_EGG_DIE = 0.0005;
+  const OUT_SPAN = 2, OUT_RAB_K = 40, OUT_RAB_R = 0.35, OUT_EAT = 0.8, OUT_HALF = 25, OUT_CUB = 0.2, OUT_DIE = 0.04, OUT_FOX0 = 2, OUT_MIN = 2, OUT_MIN_FOX = 0.5,
+        OUT_BAND_RAB = 48, OUT_BAND_FOX = 160, OUT_GO = 0.3;
   //  Fish (N12): lives in open water, fresh or salt. It swims (FISH_MOVE a tick, keeping its heading, turning at the shore, drifting up
   //   and down) and grazes the pond's own small life, FISH_GRAZE a tick in the growing season (the water's weed and insects), more by
   //   reeds or a drowned plant (FISH_WEED), and eats the litter and grasshoppers that fall in (FISH_GAIN). It burns FISH_BURN a tick
@@ -987,7 +989,7 @@ const Sim = (() => {
       this.skyY=this.top+((Math.min(H-this.top,SURF_H)*0.4)|0);         // typical ground level, for the climate (see ambAt)
       this.trees=[]; this.treeId=1; this.springs=0; this.droughtKills=0; this.slides=0; this.avalanches=0; this.frostBroke=0; this.seaBroke=0; this.surf=0;                       // tree entities; and a count of the water springs have let out
       this.bfsQ=new Int32Array(0); this.bfsMark=new Int32Array(W*H); this.bfsStamp=0; this.pushing=[]; this.asked=[];   // the pressure search's scratch, and the cells still pushing (main thread)
-      this.ox=0; this.worldW=W; this.worldSeed=0; this.biome=0; this.store=new Map(); this.storedTrees=new Map();   // streaming: where the window sits in a wider world
+      this.ox=0; this.worldW=W; this.outside=null; this.worldSeed=0; this.biome=0; this.store=new Map(); this.storedTrees=new Map();   // streaming: where the window sits in a wider world
       // every property the passes use, set up front so a grid keeps one shape (V8 deoptimises the cell pass when it changes)
       this.tci=0; this.tcx=0; this.tcy=0; this.awakeTiles=0; this.job=null; this.blank=false; this.epoch=0; this.sketch=false; this.noise=null; this.scratch=null;
       this.sun=0; this.light=0; this.climate=0; this.warmK=0; this.growth=0; this.growthCold=0; this.foliage=0; this.seeding=false; this.dryness=0; this.yearPhase=0; this.dayPhase=0; this.seasonName=''; this.wet=0; this.heat=0; this.wetHold=null;
@@ -2499,12 +2501,12 @@ const Sim = (() => {
     // the stored regions as text for a save, and back
     storeSave(){
       const regions={}; for (const [k,r] of this.store) regions[k]={type:b64(r.type), life:b64(r.life), temp:b64(r.temp), owner:b64(r.owner), hum:b64(new Uint16Array(r.hum.buffer.slice(0))), trees:r.trees};
-      return JSON.stringify({ox:this.ox, worldW:this.worldW, seed:this.worldSeed, biome:this.biome||undefined, blank:this.blank||undefined, treeId:this.treeId, regions});
+      return JSON.stringify({ox:this.ox, worldW:this.worldW, seed:this.worldSeed, biome:this.biome||undefined, blank:this.blank||undefined, treeId:this.treeId, outside:this.outside||undefined, regions});
     }
     storeLoad(json, dy=0, deep=0){
       this.store.clear(); this.storedTrees.clear();
-      if (!json){ this.ox=0; this.worldW=this.W; this.biome=0; this.blank=true; return; }
-      const d=JSON.parse(json); this.ox=d.ox; this.worldW=d.worldW; this.worldSeed=d.seed; this.biome=d.biome && typeof d.biome==='object' ? customBiome(d.biome) : d.biome||0; this.blank=!!d.blank; this.treeId=Math.max(this.treeId,d.treeId||1);
+      if (!json){ this.ox=0; this.worldW=this.W; this.biome=0; this.blank=true; this.outside=null; return; }
+      const d=JSON.parse(json); this.ox=d.ox; this.worldW=d.worldW; this.worldSeed=d.seed; this.biome=d.biome && typeof d.biome==='object' ? customBiome(d.biome) : d.biome||0; this.blank=!!d.blank; this.treeId=Math.max(this.treeId,d.treeId||1); this.outside=d.outside||null;
       // (sky added over a shorter save's regions: empty air at the ambient temperature, and no vapour; and rock under them where the
       // world has got deeper since)
       const pad=(rle,f,g)=>{ if (!dy && !deep) return rle; const a=unrle16(rle), b=new Uint16Array(REGION*this.H), n=REGION*dy, m=n+a.length;
@@ -2859,20 +2861,52 @@ const Sim = (() => {
         if (clear){ this.swap(i,c); return c; } }
       return -1;
     }
-    migrate(){   // the world outside the window has foxes and birds too: one wanders in at its edge when the window has run out of them
-      const T=this.type, W=this.W; let fox=0, bird=0, rab=0, hop=0, fish=0;
-      for (let i=0;i<T.length;i++){ const t=T[i]; if (t===FOX) fox++; else if (t===BIRD) bird++; else if (t===RABBIT) rab++; else if (t===HOPPER) hop++; else if (t===FISH) fish++; }
-      const edge=(t,life,up)=>{ const s=R()<0.5 ? -1 : 1, x=s<0 ? 2 : W-3; let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;
-        if (y<up+2 || KIND[T[y*W+x]]===2) return; const i=(y-1-up)*W+x; this.set(i,t,this.ambRow[y-1-up]); this.life[i]=life; this.vx[i]=-s; };
-      if (!fox && rab>=FOX_MIGRATE && R()<0.5) edge(FOX,FOX_E0|(FOX_ADULT<<8),0);
+    migrate(){   // the world outside the window has animals too (see OUT_SPAN): each day the land either side lives its own life as numbers, and
+      // trades rabbits and foxes with the window across its edges; birds, grasshoppers and fish come in as before when the window runs short
+      const T=this.type, L=this.life, W=this.W; let bird=0, hop=0, fish=0;
+      for (let i=0;i<T.length;i++){ const t=T[i]; if (t===BIRD) bird++; else if (t===HOPPER) hop++; else if (t===FISH) fish++; }
+      const edge=(t,life,up,s=R()<0.5 ? -1 : 1)=>{ const x=s<0 ? 2 : W-3; let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;
+        if (y<up+2 || KIND[T[y*W+x]]===2) return false; const i=(y-1-up)*W+x; this.set(i,t,this.ambRow[y-1-up]); this.life[i]=life; this.vx[i]=-s; return true; };
+      this.outsideDay(edge);
       if (bird<BIRD_MIGRATE && R()<0.5) edge(BIRD,BIRD_E0|(1<<8)|(R()<BIRD_SEEDED ? 1<<13 : 0),BIRD_LOW);   // (often with a tree seed in it from the woods outside)
-      if (this.growth>0.5){   // and rabbits and grasshoppers, in the growing season (grasshoppers before they start laying)
-        if (rab<RAB_MIGRATE && R()<0.5) edge(RABBIT,RAB_E0|(RAB_ADULT<<8),0);
+      if (this.growth>0.5){   // and grasshoppers, in the growing season (before they start laying)
         if (!hop && this.yearPhase<0.4) for (let n=0;n<HOP_MIGRATE;n++){ const x=1+((R()*(W-2))|0); let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;   // (they come on the wind, so anywhere)
           if (y>=2 && (T[y*W+x]===PLANT || T[y*W+x]===SHRUB) && !this.owner[y*W+x]){ const i=(y-1)*W+x; this.set(i,HOPPER,this.ambRow[y-1]); this.life[i]=HOP_E0; } }
         if (fish<FISH_MIGRATE) for (let n=0;n<40;n++){ const x=1+((R()*(W-2))|0); let y=0; while (y<this.H-1 && (T[y*W+x]===E || KIND[T[y*W+x]]===3)) y++;   // and a fish comes down a stream (or as spawn on a bird's feet) to water deep enough for it
           let d=0; while (y+d<this.H && T[(y+d)*W+x]===WATER) d++; if (d<FISH_DEEP) continue;
           const i=(y+1)*W+x; this.set(i,FISH,this.temp[i]); this.life[i]=FISH_E0|(1<<8); this.vx[i]=R()<0.5 ? -1 : 1; break; }
+      }
+    }
+    outsideDay(edge){
+      // OUT: the land beyond each edge of the window, out to OUT_SPAN window-widths of it (less where the world ends sooner), keeps a count
+      // of rabbits and foxes. Each day, in the growing season, its rabbits breed toward OUT_RAB_K a window-width (OUT_RAB_R), and all
+      // year its foxes eat them (OUT_EAT a fox a day at most, half that with OUT_HALF rabbits a window-width), turn what they eat into
+      // cubs (OUT_CUB) and die off (OUT_DIE); the land past that keeps a few of each (OUT_MIN) to walk back in. Then each animal within
+      // its band of an edge (OUT_BAND_RAB, OUT_BAND_FOX columns) walks out with chance OUT_GO, and as many again come in, on average, as
+      // the same band's worth of the outside's numbers would send: so the window and the land round it even out, and neither is ever empty for long
+      const T=this.type, L=this.life, W=this.W, w=this.outside||(this.outside={w:[-1,-1], e:[-1,-1]});
+      const sides=[['w',-1,this.ox],['e',1,this.worldW-this.ox-W]];
+      for (const [k,s,cols] of sides){
+        const f=Math.min(OUT_SPAN,cols/W), p=w[k]; if (f<=0){ p[0]=p[1]=0; continue; }
+        if (p[0]<0){ p[0]=OUT_RAB_K*f*0.6; p[1]=OUT_FOX0*f; }   // (a new world's land round it, half full)
+        let [rab,fox]=p; const K=OUT_RAB_K*f;
+        if (this.growth>0.5) rab+=OUT_RAB_R*rab*(1-rab/K);
+        const eat=Math.min(rab, fox*OUT_EAT*rab/(rab+OUT_HALF*f)); rab-=eat;
+        fox+=OUT_CUB*eat*(this.growth>0.3 ? 1 : 0)-OUT_DIE*fox;
+        p[0]=Math.max(OUT_MIN*f,rab); p[1]=Math.max(OUT_MIN_FOX*f,fox);
+      }
+      // across the edges: out from the band, in from the outside
+      const out={w:[0,0], e:[0,0]};
+      for (let i=0;i<T.length;i++){ const t=T[i]; if (t!==RABBIT && t!==FOX) continue; const x=i%W, r=t===RABBIT ? 0 : 1, band=r ? OUT_BAND_FOX : OUT_BAND_RAB;
+        const k=x<band ? 'w' : x>=W-band ? 'e' : null; if (!k || !(w[k][0]>=0) || Math.min(OUT_SPAN,(k==='w' ? this.ox : this.worldW-this.ox-W)/W)<=0) continue;
+        if (r===0 && (L[i]&EGG)) continue;
+        if (R()<OUT_GO){ this.set(i,E,this.temp[i]); out[k][r]++; } }
+      for (const [k,s,cols] of sides){
+        const f=Math.min(OUT_SPAN,cols/W), p=w[k]; if (f<=0) continue;
+        p[0]+=out[k][0]; p[1]+=out[k][1];
+        for (let r=0;r<2;r++){ const band=r ? OUT_BAND_FOX : OUT_BAND_RAB, want=OUT_GO*band*p[r]/(f*W);
+          let n=Math.floor(want)+(R()<want%1 ? 1 : 0);
+          for (; n>0 && p[r]>=1; n--) if (edge(r ? FOX : RABBIT, r ? FOX_E0|(FOX_ADULT<<8) : RAB_E0|(RAB_ADULT<<8), 0, s)) p[r]--; }
       }
     }
     pounce(i,x,d){   // a fox at i catches a rabbit beside it (ahead first, level or a step up or down) or under it, with chance FOX_CATCH
@@ -4118,7 +4152,7 @@ const Sim = (() => {
       for (let y=0;y<H;y++){ const a=y*sw, b=y*W;
         for (const f of ['type','life','temp','shade','owner','fuse','vx','vy']) this[f].set(big[f].subarray(a,a+W),b); }
       for (let ay=0;ay<this.AH;ay++) this.hum.set(big.hum.subarray(ay*big.AW,ay*big.AW+this.AW),ay*this.AW);
-      for (const k of ['clock','ox','worldW','worldSeed','biome','blank','treeId','fronts','lightning','massX']) this[k]=big[k];
+      for (const k of ['clock','ox','worldW','worldSeed','biome','blank','treeId','fronts','lightning','massX','outside']) this[k]=big[k];
       this.store=big.store; this.storedTrees=big.storedTrees; this.updateClimate();
       this.trees=[]; for (const t of big.trees){ const n=this.treeFrom(this.treeRecord(t,0),0); this.trees.push(n); this.rasterTree(n); }
       this.fadeMasses(); if (this.fronts) this.updateMasses(false);
