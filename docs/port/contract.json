@@ -1,5 +1,5 @@
 {
- "hash": "62a9c70c7cf7",
+ "hash": "513ec646df0d",
  "fields": [
   {
    "name": "type",
@@ -4485,10 +4485,7 @@
   "RAB_KIT_P": 0.001,
   "RAB_KIT_E": 100,
   "RAB_NEAR": 24,
-  "RAB_CROWD": 6,
-  "RAB_NIBBLE": 40,
-  "RAB_BURROW": 0.8,
-  "RAB_PEEK": 0.02,
+  "RAB_CROWD": 5,
   "RAB_SEEK": 24,
   "RAB_SEEK_Y": 6,
   "RAB_SEEK_E": 140,
@@ -4531,7 +4528,7 @@
   "FOX_PAST": 4,
   "FOX_STUCK": 30,
   "FOX_JUMP": 8,
-  "FOX_MIGRATE": 12,
+  "FOX_MIGRATE": 20,
   "FOX_CLIMB": 0.15,
   "FOX_LEAP": 0.25,
   "FOX_LEAP_UP": 5,
@@ -4549,11 +4546,6 @@
   "FOX_NEAR": 24,
   "FOX_CROWD": 2,
   "RAB_WARY": 8,
-  "FOX_ROAM": 0.1,
-  "FOX_FULL": 200,
-  "FOX_GLUT": 8,
-  "FOX_RANGE": 200,
-  "FOX_RANGE_Y": 40,
   "AGE_BIRD": 0.0005,
   "BIRD_E0": 160,
   "BIRD_BURN": 0.03,
@@ -6208,7 +6200,7 @@
   {
    "id": "plague",
    "name": "Rabbit plague",
-   "brief": "The rabbits have had a good year, and they are eating the meadow down to the soil. Bring in foxes to thin them out, but a meadow needs its rabbits too: keep the grass alive and at least forty rabbits.",
+   "brief": "The rabbits have had a good year, and they are eating the meadow down to the soil. Bring in foxes to thin them out, but a meadow needs its rabbits too: keep the grass alive and at least twenty rabbits.",
    "time": 5400,
    "budget": {
     "Fox": 8
@@ -6234,7 +6226,7 @@
       320,
       200
      ],
-     "min": 40
+     "min": 20
     }
    ],
    "fails": [
@@ -6258,7 +6250,7 @@
       320,
       200
      ],
-     "max": 39
+     "max": 19
     }
    ],
    "unlocks": [],
