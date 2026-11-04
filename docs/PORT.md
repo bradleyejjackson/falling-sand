@@ -6,7 +6,7 @@ has to carry over unchanged: the fields, the element table and its per-element t
 tree record, the save format, the biome presets and the scenarios. Everything here that can be read out of the code is, by
 `tools/contract.js`, and checked against it, so the document can't drift from the game.
 
-Contract <!-- contract:hash -->`e10297603285`<!-- /contract:hash -->: <!-- contract:counts -->
+Contract <!-- contract:hash -->`7cb8dee61fc6`<!-- /contract:hash -->: <!-- contract:counts -->
 54 elements, 40 fields, 773 constants, 41 per-element tables, 3 element sets, 10 contact reactions, 20 conductance overrides, 6 biome presets, 22 generator knobs, 15 scenarios
 <!-- /contract:counts -->
 

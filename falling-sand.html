@@ -402,7 +402,7 @@ const Sim = (() => {
         BIRD_LOW = 10, BIRD_HIGH = 26, BIRD_HUNGRY = 200, BIRD_MOVE = 0.6, BIRD_WIND = 3, BIRD_EAT = 0.2, BIRD_FULL = 250, BIRD_GAIN = 5, BIRD_SEED_E = 10, BIRD_GRAIN = 3, BIRD_PECK = 0.1, BIRD_FLY = 0.01,
         BIRD_DROP = 0.0008, BIRD_BREED = 190, NEST_H = 10, BIRD_NEAR = 24, BIRD_CROWD = 4, BIRD_LAY = 0.002, BIRD_HATCH = 0.0006, BIRD_EGG_DIE = 0.0005;
   const OUT_SPAN = 2, OUT_RAB_K = 40, OUT_RAB_R = 0.35, OUT_EAT = 0.8, OUT_HALF = 25, OUT_CUB = 0.2, OUT_DIE = 0.04, OUT_FOX0 = 2, OUT_MIN = 2, OUT_MIN_FOX = 0.5,
-        OUT_BAND_RAB = 48, OUT_BAND_FOX = 160, OUT_GO = 0.3;
+        OUT_BAND_RAB = 96, OUT_BAND_FOX = 160, OUT_GO = 0.3;
   //  Fish (N12): lives in open water, fresh or salt. It swims (FISH_MOVE a tick, keeping its heading, turning at the shore, drifting up
   //   and down) and grazes the pond's own small life, FISH_GRAZE a tick in the growing season (the water's weed and insects), more by
   //   reeds or a drowned plant (FISH_WEED), and eats the litter and grasshoppers that fall in (FISH_GAIN). It burns FISH_BURN a tick
@@ -2883,7 +2883,7 @@ const Sim = (() => {
       // year its foxes eat them (OUT_EAT a fox a day at most, half that with OUT_HALF rabbits a window-width), turn what they eat into
       // cubs (OUT_CUB) and die off (OUT_DIE); the land past that keeps a few of each (OUT_MIN) to walk back in. Then each animal within
       // its band of an edge (OUT_BAND_RAB, OUT_BAND_FOX columns) walks out with chance OUT_GO, and as many again come in, on average, as
-      // the same band's worth of the outside's numbers would send: so the window and the land round it even out, and neither is ever empty for long
+      // the same band's worth of the outside's numbers would send (foxes fewer where the window has fewer rabbits than the land outside, and a hungry fox goes twice as readily): so the window and the land round it even out, and neither is ever empty for long
       const T=this.type, L=this.life, W=this.W, w=this.outside||(this.outside={w:[-1,-1], e:[-1,-1]});
       const sides=[['w',-1,this.ox],['e',1,this.worldW-this.ox-W]];
       for (const [k,s,cols] of sides){
@@ -2900,11 +2900,12 @@ const Sim = (() => {
       for (let i=0;i<T.length;i++){ const t=T[i]; if (t!==RABBIT && t!==FOX) continue; const x=i%W, r=t===RABBIT ? 0 : 1, band=r ? OUT_BAND_FOX : OUT_BAND_RAB;
         const k=x<band ? 'w' : x>=W-band ? 'e' : null; if (!k || !(w[k][0]>=0) || Math.min(OUT_SPAN,(k==='w' ? this.ox : this.worldW-this.ox-W)/W)<=0) continue;
         if (r===0 && (L[i]&EGG)) continue;
-        if (R()<OUT_GO){ this.set(i,E,this.temp[i]); out[k][r]++; } }
+        if (R()<(r && (L[i]&255)<FOX_BREED ? 2*OUT_GO : OUT_GO)){ this.set(i,E,this.temp[i]); out[k][r]++; } }   // (a hungry fox moves on sooner)
+      let rabIn=0; for (let i=0;i<T.length;i++) if (T[i]===RABBIT) rabIn++;
       for (const [k,s,cols] of sides){
         const f=Math.min(OUT_SPAN,cols/W), p=w[k]; if (f<=0) continue;
         p[0]+=out[k][0]; p[1]+=out[k][1];
-        for (let r=0;r<2;r++){ const band=r ? OUT_BAND_FOX : OUT_BAND_RAB, want=OUT_GO*band*p[r]/(f*W);
+        for (let r=0;r<2;r++){ const band=r ? OUT_BAND_FOX : OUT_BAND_RAB, want=OUT_GO*band*p[r]/(f*W)*(r ? Math.min(1,rabIn*f/Math.max(1,p[0])) : 1);   // (foxes come where the rabbits are: as many as the window's rabbits, beside the outside's, would draw)
           let n=Math.floor(want)+(R()<want%1 ? 1 : 0);
           for (; n>0 && p[r]>=1; n--) if (edge(r ? FOX : RABBIT, r ? FOX_E0|(FOX_ADULT<<8) : RAB_E0|(RAB_ADULT<<8), 0, s)) p[r]--; }
       }

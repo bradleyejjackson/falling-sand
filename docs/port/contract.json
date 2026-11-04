@@ -1,5 +1,5 @@
 {
- "hash": "e10297603285",
+ "hash": "7cb8dee61fc6",
  "fields": [
   {
    "name": "type",
@@ -4591,7 +4591,7 @@
   "OUT_FOX0": 2,
   "OUT_MIN": 2,
   "OUT_MIN_FOX": 0.5,
-  "OUT_BAND_RAB": 48,
+  "OUT_BAND_RAB": 96,
   "OUT_BAND_FOX": 160,
   "OUT_GO": 0.3,
   "AGE_FISH": 0.0006,
