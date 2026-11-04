@@ -525,3 +525,16 @@ Ten-year runs of the page's world (`tools/decade.js`, seeds 7 and 12345) on main
   three seeds, `coal` reseeded, `dew` averaged over eight plots, the no-rain ramp in `groundwater` has dry air (its own vapour rained on it), and `smokehurt` checks the grass only (the rabbits breed in its
   minute, so the count was a coin flip; seeds 3, 5 and 6 failed on main). Perf (`ab.js`, seed 12345, ticks 1200-1800): main
   11.60 ms, this build 11.17 ms.
+
+### The land outside the window
+
+- The window is a slice of a much wider world, but animals only lived in the window, so a species gone from it came back only
+  through fixed top-up rules. Now `Grid.outside` keeps rabbit and fox numbers for the land up to `OUT_SPAN` window-widths either
+  side (saved with the world). Once a day (`migrate()` calls `outsideDay()`) its rabbits breed toward `OUT_RAB_K` a window-width
+  in the growing season, its foxes eat them with a saturating appetite (`OUT_EAT`, `OUT_HALF`), turn what they eat into cubs
+  (`OUT_CUB`) and die off (`OUT_DIE`); a few of each always remain further out (`OUT_MIN`, `OUT_MIN_FOX`).
+- Animals cross the edges both ways: each rabbit or fox within its band of an edge (`OUT_BAND_RAB`, `OUT_BAND_FOX`) walks out
+  with chance `OUT_GO` (twice that for a hungry fox), and the outside sends in, on average, what the same band of its own density
+  would. The old "a fox when none and 20 rabbits" / "a rabbit when under 6" rules are gone.
+- Results (`tools/batch.js`, 8 seeds x 10 years, spring census, vs main): foxes gone at year 10 in 2 worlds vs 5, missing 29
+  seed-years vs 45; rabbits missing 9 seed-years vs 19; trees 11.0 vs 8.1 at year 10.
