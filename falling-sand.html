@@ -2883,7 +2883,7 @@ const Sim = (() => {
       // year its foxes eat them (OUT_EAT a fox a day at most, half that with OUT_HALF rabbits a window-width), turn what they eat into
       // cubs (OUT_CUB) and die off (OUT_DIE); the land past that keeps a few of each (OUT_MIN) to walk back in. Then each animal within
       // its band of an edge (OUT_BAND_RAB, OUT_BAND_FOX columns) walks out with chance OUT_GO, and as many again come in, on average, as
-      // the same band's worth of the outside's numbers would send (foxes fewer where the window has fewer rabbits than the land outside, and a hungry fox goes twice as readily): so the window and the land round it even out, and neither is ever empty for long
+      // the same band's worth of the outside's numbers would send (a hungry fox goes twice as readily): so the window and the land round it even out, and neither is ever empty for long
       const T=this.type, L=this.life, W=this.W, w=this.outside||(this.outside={w:[-1,-1], e:[-1,-1]});
       const sides=[['w',-1,this.ox],['e',1,this.worldW-this.ox-W]];
       for (const [k,s,cols] of sides){
@@ -2901,11 +2901,10 @@ const Sim = (() => {
         const k=x<band ? 'w' : x>=W-band ? 'e' : null; if (!k || !(w[k][0]>=0) || Math.min(OUT_SPAN,(k==='w' ? this.ox : this.worldW-this.ox-W)/W)<=0) continue;
         if (r===0 && (L[i]&EGG)) continue;
         if (R()<(r && (L[i]&255)<FOX_BREED ? 2*OUT_GO : OUT_GO)){ this.set(i,E,this.temp[i]); out[k][r]++; } }   // (a hungry fox moves on sooner)
-      let rabIn=0; for (let i=0;i<T.length;i++) if (T[i]===RABBIT) rabIn++;
       for (const [k,s,cols] of sides){
         const f=Math.min(OUT_SPAN,cols/W), p=w[k]; if (f<=0) continue;
         p[0]+=out[k][0]; p[1]+=out[k][1];
-        for (let r=0;r<2;r++){ const band=r ? OUT_BAND_FOX : OUT_BAND_RAB, want=OUT_GO*band*p[r]/(f*W)*(r ? Math.min(1,rabIn*f/Math.max(1,p[0])) : 1);   // (foxes come where the rabbits are: as many as the window's rabbits, beside the outside's, would draw)
+        for (let r=0;r<2;r++){ const band=r ? OUT_BAND_FOX : OUT_BAND_RAB, want=OUT_GO*band*p[r]/(f*W);
           let n=Math.floor(want)+(R()<want%1 ? 1 : 0);
           for (; n>0 && p[r]>=1; n--) if (edge(r ? FOX : RABBIT, r ? FOX_E0|(FOX_ADULT<<8) : RAB_E0|(RAB_ADULT<<8), 0, s)) p[r]--; }
       }
